@@ -1,9 +1,9 @@
 /* NETRUNNER DECK // GRID BREACH */
 
 const NR_CONFIG = {
-  easy: { size: 5, extraOpenings: 4, timeLimit: 10 },
-  medium: { size: 8, extraOpenings: 2, timeLimit: 10 },
-  hard: { size: 8, extraOpenings: 0, timeLimit: 10 }
+  easy: { size: 8, extraOpenings: 8, timeLimit: 10 },
+  medium: { size: 16, extraOpenings: 4, timeLimit: 10 },
+  hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4 }
 };
 
 const NR_COLORS = {
@@ -91,6 +91,10 @@ function getEl(id) {
   return document.getElementById(id);
 }
 
+function coordKey(x, y) {
+  return `${x},${y}`;
+}
+
 function setDifficulty(level) {
   if (!NR_CONFIG[level]) return;
   nrDifficulty = level;
@@ -167,6 +171,114 @@ function buildPlayableGrid(size, extraOpenings) {
   return grid;
 }
 
+function findPath(grid) {
+  const size = grid.length;
+  const queue = [{ x: 0, y: 0 }];
+  const visited = new Set([coordKey(0, 0)]);
+  const parents = new Map();
+  const moves = [
+    [0, -1],
+    [1, 0],
+    [0, 1],
+    [-1, 0]
+  ];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current.x === size - 1 && current.y === size - 1) {
+      const path = [];
+      let key = coordKey(current.x, current.y);
+      while (key) {
+        const [x, y] = key.split(',').map(Number);
+        path.push({ x, y });
+        key = parents.get(key);
+      }
+      return path.reverse();
+    }
+
+    moves.forEach(([dx, dy]) => {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const nextKey = coordKey(nx, ny);
+      if (nx < 0 || ny < 0 || nx >= size || ny >= size) return;
+      if (grid[ny][nx] === 1 || visited.has(nextKey)) return;
+      visited.add(nextKey);
+      parents.set(nextKey, coordKey(current.x, current.y));
+      queue.push({ x: nx, y: ny });
+    });
+  }
+
+  return [];
+}
+
+function buildStairCandidates(size) {
+  const candidates = [];
+  const stepRuns = [
+    { dx: 1, dy: 1 },
+    { dx: -1, dy: 1 }
+  ];
+
+  for (let y = 1; y < size - 3; y += 2) {
+    for (let x = 1; x < size - 3; x += 2) {
+      stepRuns.forEach(({ dx, dy }) => {
+        const cells = [];
+        let cx = x;
+        let cy = y;
+        for (let step = 0; step < 3; step += 1) {
+          const nextX = cx + dx;
+          const nextY = cy + dy;
+          cells.push({ x: cx, y: cy });
+          cells.push({ x: nextX, y: cy });
+          cx = nextX;
+          cy = nextY;
+        }
+        if (cells.every((cell) => cell.x > 0 && cell.y > 0 && cell.x < size - 1 && cell.y < size - 1)) {
+          candidates.push(cells);
+        }
+      });
+    }
+  }
+
+  return shuffle(candidates);
+}
+
+function applyStairPatterns(grid, patternCount) {
+  let protectedPath = findPath(grid);
+  if (!protectedPath.length) return grid;
+  const protectedSet = new Set(protectedPath.map((node) => coordKey(node.x, node.y)));
+  const candidates = buildStairCandidates(grid.length);
+  let placed = 0;
+
+  for (const cells of candidates) {
+    if (placed >= patternCount) break;
+    const changed = [];
+
+    for (const cell of cells) {
+      const key = coordKey(cell.x, cell.y);
+      if (protectedSet.has(key) || grid[cell.y][cell.x] === 1) continue;
+      changed.push(cell);
+      grid[cell.y][cell.x] = 1;
+    }
+
+    if (!changed.length) continue;
+
+    const nextPath = findPath(grid);
+    if (!nextPath.length) {
+      changed.forEach((cell) => {
+        grid[cell.y][cell.x] = 0;
+      });
+      continue;
+    }
+
+    protectedPath = nextPath;
+    protectedSet.clear();
+    protectedPath.forEach((node) => protectedSet.add(coordKey(node.x, node.y)));
+    placed += 1;
+  }
+
+  return grid;
+}
+
 function generateMaze() {
   const config = NR_CONFIG[nrDifficulty];
   nrSize = config.size;
@@ -179,6 +291,9 @@ function generateMaze() {
   nrFailed = false;
   nrCountdown = config.timeLimit;
   nrGrid = buildPlayableGrid(nrSize, config.extraOpenings);
+  if (config.stairPatterns) {
+    nrGrid = applyStairPatterns(nrGrid, config.stairPatterns);
+  }
 
   clearResultOverlay();
   restartTimer();
@@ -276,7 +391,7 @@ function drawGrid() {
   const wrap = canvas.parentElement;
   const ctx = canvas.getContext('2d');
   const available = Math.min((wrap?.clientWidth || 420) - 24, (wrap?.clientHeight || 420) - 24, 520);
-  const cell = Math.max(32, Math.floor(available / nrSize));
+  const cell = Math.max(18, Math.floor(available / nrSize));
   const width = cell * nrSize;
   const height = cell * nrSize;
 
