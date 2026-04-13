@@ -2,7 +2,7 @@
 
 const NR_CONFIG = {
   easy: { size: 8, extraOpenings: 8, timeLimit: 10 },
-  medium: { size: 12, extraOpenings: 7, timeLimit: 10 },
+  medium: { size: 12, extraOpenings: 7, timeLimit: 10, maxOpen: 220},
   hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4, minPath: 40, maxOpen: 118 }
 };
 
