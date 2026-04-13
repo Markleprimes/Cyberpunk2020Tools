@@ -1,494 +1,442 @@
-/* ══════════════════════════════════════════════════
-   NETRUNNER DECK — Hacking Maze Module
-   Cyberpunk 2020 Dossier
-══════════════════════════════════════════════════ */
+/* NETRUNNER DECK // GRID BREACH */
 
-/* ── CONFIG ── */
-const NR_DIFFICULTY = {
-  easy:   { cols: 9,  rows: 7,  timeLimit: 0 },
-  medium: { cols: 13, rows: 10, timeLimit: 60 },
-  hard:   { cols: 17, rows: 13, timeLimit: 45 }
+const NR_CONFIG = {
+  easy: { size: 5, extraOpenings: 4, timeLimit: 10 },
+  medium: { size: 8, extraOpenings: 2, timeLimit: 10 },
+  hard: { size: 8, extraOpenings: 0, timeLimit: 10 }
 };
 
 const NR_COLORS = {
-  bg:         '#0b0103',
-  panel:      '#17070b',
-  wall:       '#591019',
-  wallGlow:   '#8a1822',
-  path:       '#1a0a0d',
-  pathLine:   '#3b0d14',
-  grid:       '#2a0a0f',
-  player:     '#e01434',
-  playerGlow: 'rgba(224,20,52,0.7)',
-  start:      '#00d98b',
-  startGlow:  'rgba(0,217,139,0.6)',
-  end:        '#ff4d6d',
-  endGlow:    'rgba(255,77,109,0.6)',
-  visited:    '#1e0c10',
-  visitedLine:'rgba(224,20,52,0.25)',
-  trail:      'rgba(224,20,52,0.18)',
-  text:       '#f4c5cc',
-  textDim:    '#85505a'
+  bg: '#090103',
+  grid: '#2a0a0f',
+  open: '#15070a',
+  blocked: '#050505',
+  blockedGlow: 'rgba(255,255,255,0.08)',
+  visited: 'rgba(224,20,52,0.12)',
+  visitedLine: 'rgba(224,20,52,0.28)',
+  player: '#00d98b',
+  playerGlow: 'rgba(0,217,139,0.65)',
+  goal: '#ff4d6d',
+  goalGlow: 'rgba(255,77,109,0.65)',
+  border: '#6b111d'
 };
 
-/* ── STATE ── */
-let nrDifficulty  = 'easy';
-let nrMaze        = null;   // 2D array of cell objects
-let nrCols        = 0;
-let nrRows        = 0;
-let nrPlayer      = { x: 0, y: 0 };
-let nrStart       = { x: 0, y: 0 };
-let nrEnd         = { x: 0, y: 0 };
-let nrVisited     = null;   // 2D boolean
-let nrTrail       = [];     // [{x,y}]
-let nrComplete    = false;
-let nrFailed      = false;
-let nrTimerSec    = 0;
-let nrTimerLimit  = 0;
-let nrTimerHandle = null;
-let nrAnimFrame   = null;
-let nrCanvasW     = 0;
-let nrCanvasH     = 0;
-let nrCellSize    = 0;
-
-/* ── TERMINAL ── */
-const TERM_LINES = [
+const NR_BOOT_LINES = [
   'CMD.DeckTerminal///CONNECT///>START',
   'CMD.Buffer///Daemon.BreachData///',
   'CMD.Buffer///Daemon.ICE.Pick///',
   'CMD.Buffer///Daemon.bash.Vostok///',
   'CMD.Buffer::Token.Lumin::bash///',
   'CMD.Buffer::IP::///directory.main;',
-  'CMD.Buffer::download::///импорт.джейлбрейкер///',
+  'CMD.Buffer::download::///import.jailbreaker///',
   'priM.stack::ztech::///tool.mz;',
   'content.file::edge1.2.6///',
-  'CMD.Breach::terminate::ICE///',
-  'CMD.DeckTerminal///DISCONNECT///>END',
+  'CMD.Breach::terminate::ICE///'
 ];
-const TERM_SUCCESS = 'CMD.DeckTerminal///BREACH///>SUCCESS';
-const TERM_FAIL    = 'CMD.DeckTerminal///BREACH///>FAIL';
 
-let _termQueue  = [];
-let _termIndex  = 0;
-let _termHandle = null;
-let _termRunning = false;
+const NR_TERM_PATTERNS = [
+  () => `CMD.Buffer///${pick(NR_DAEMONS)}///${pick(NR_ACTIONS)}///`,
+  () => `CMD.Trace::${pick(NR_TRACES)}::///${pick(NR_TARGETS)};`,
+  () => `content.file::${pick(NR_FILES)}///${pick(NR_SUFFIXES)}`,
+  () => `priM.stack::${pick(NR_STACKS)}::///${pick(NR_TOOLS)};`,
+  () => `CMD.Route::${pick(NR_NODES)}::///${pick(NR_DESTINATIONS)};`,
+  () => `CMD.Buffer::${pick(NR_BUFFERS)}::${pick(NR_ACTIONS)}///`,
+  () => `ICE.scan::${pick(NR_TRACES)}::///${pick(NR_ALERTS)};`,
+  () => `SYS.exec::${pick(NR_TOOLS)}::///${pick(NR_TARGETS)};`
+];
 
-function termClear() {
-  const el = document.getElementById('nr-terminal');
-  if (!el) return;
-  el.innerHTML = '<span class="nr-term-cursor"></span>';
+const NR_DAEMONS = ['Daemon.BreachData', 'Daemon.ICE.Pick', 'Daemon.Mask.Shroud', 'Daemon.Vault.Relay', 'Daemon.Spoof.Signal', 'Daemon.NullIndex'];
+const NR_ACTIONS = ['bash', 'fork', 'splice', 'crack', 'patch', 'echo', 'inject'];
+const NR_TRACES = ['Token.Lumin', 'stack.ztech', 'auth.delta', 'cache.ghost', 'ghost.rail', 'vhost.zero'];
+const NR_TARGETS = ['directory.main', 'relay.shadow', 'vault.edge', 'node.blackwall', 'trace.backdoor', 'auth.archive'];
+const NR_FILES = ['edge1.2.6', 'mask4.7.0', 'ghost2.4.9', 'vault9.1.3', 'prism0.8.2', 'shunt3.6.1'];
+const NR_SUFFIXES = ['download', 'mirror', 'override', 'extract', 'verify', 'decrypt'];
+const NR_STACKS = ['ztech', 'mox', 'orbital', 'voodoo', 'sovoil', 'biotechnica'];
+const NR_TOOLS = ['tool.mz', 'latch.exe', 'fork.bin', 'ghost.sh', 'delta.cmd', 'mask.pkg'];
+const NR_NODES = ['A-01', 'B-13', 'D-77', 'H-02', 'X-09', 'Q-44'];
+const NR_DESTINATIONS = ['uplink.alpha', 'uplink.gamma', 'grid.lock', 'grid.fuse', 'vault.loop', 'core.black'];
+const NR_BUFFERS = ['heap.zero', 'cipher.lace', 'signal.knot', 'delta.ice', 'relay.crown', 'mirror.heap'];
+const NR_ALERTS = ['quiet', 'trace', 'lockout', 'countermeasure', 'jammed', 'masked'];
+
+const NR_SUCCESS_LINE = 'CMD.DeckTerminal///BREACH///>SUCCESS';
+const NR_FAIL_LINE = 'CMD.DeckTerminal///BREACH///>FAIL';
+
+let nrDifficulty = 'easy';
+let nrGrid = [];
+let nrSize = 5;
+let nrPlayer = { x: 0, y: 0 };
+let nrGoal = { x: 4, y: 4 };
+let nrVisited = [];
+let nrTrail = [];
+let nrComplete = false;
+let nrFailed = false;
+let nrCountdown = 60;
+let nrTimerHandle = null;
+let nrTerminalHandle = null;
+
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
 }
 
-function termPrint(text, cls = '', delay = 0) {
-  _termQueue.push({ text, cls, delay });
-  if (!_termRunning) termFlush();
-}
-
-function termFlush() {
-  if (!_termQueue.length) { _termRunning = false; return; }
-  _termRunning = true;
-  const { text, cls, delay } = _termQueue.shift();
-  clearTimeout(_termHandle);
-  _termHandle = setTimeout(() => {
-    const el = document.getElementById('nr-terminal');
-    if (!el) { termFlush(); return; }
-    const cursor = el.querySelector('.nr-term-cursor');
-    const span = document.createElement('span');
-    span.className = 'nr-term-line' + (cls ? ' ' + cls : '');
-    span.textContent = text;
-    el.insertBefore(span, cursor);
-    el.scrollTop = el.scrollHeight;
-    termFlush();
-  }, delay);
-}
-
-function termRunSequence(lines, baseDelay = 220) {
-  termClear();
-  lines.forEach((line, i) => {
-    const isDim = line.startsWith('CMD.Buffer');
-    termPrint(line, isDim ? 'dim' : '', i * baseDelay);
-  });
-}
-
-function termSuccess() {
-  clearTimeout(_termHandle);
-  _termQueue = [];
-  _termRunning = false;
-  const el = document.getElementById('nr-terminal');
-  if (!el) return;
-  const cursor = el.querySelector('.nr-term-cursor');
-  const span = document.createElement('span');
-  span.className = 'nr-term-line success';
-  span.textContent = TERM_SUCCESS;
-  el.insertBefore(span, cursor);
-  el.scrollTop = el.scrollHeight;
-}
-
-function termFail() {
-  clearTimeout(_termHandle);
-  _termQueue = [];
-  _termRunning = false;
-  const el = document.getElementById('nr-terminal');
-  if (!el) return;
-  const cursor = el.querySelector('.nr-term-cursor');
-  const span = document.createElement('span');
-  span.className = 'nr-term-line fail';
-  span.textContent = TERM_FAIL;
-  el.insertBefore(span, cursor);
-  el.scrollTop = el.scrollHeight;
-}
-
-/* ── TAB SWITCH ── */
-function switchSheetTab(tab) {
-  document.getElementById('tab-content-dossier').style.display   = tab === 'dossier'    ? '' : 'none';
-  document.getElementById('tab-content-netrunner').style.display = tab === 'netrunner'  ? '' : 'none';
-  document.getElementById('tab-dossier').classList.toggle('active',    tab === 'dossier');
-  document.getElementById('tab-netrunner').classList.toggle('active', tab === 'netrunner');
-  if (tab === 'netrunner') {
-    setTimeout(() => {
-      if (!nrMaze) generateMaze();
-      else resizeAndDraw();
-    }, 40);
-  }
-}
-
-/* ── DIFFICULTY ── */
-function setDifficulty(level) {
-  nrDifficulty = level;
-  ['easy','medium','hard'].forEach(d => {
-    document.getElementById('nr-diff-' + d).classList.toggle('active', d === level);
-  });
-  generateMaze();
-}
-
-/* ── MAZE GENERATION (Recursive Backtracker) ── */
-function generateMaze() {
-  const cfg  = NR_DIFFICULTY[nrDifficulty];
-  nrCols     = cfg.cols;
-  nrRows     = cfg.rows;
-  nrComplete = false;
-  nrFailed   = false;
-  nrTrail    = [];
-  clearInterval(nrTimerHandle);
-
-  // Build cell grid: each cell has walls [N,E,S,W]
-  nrMaze = Array.from({ length: nrRows }, (_, y) =>
-    Array.from({ length: nrCols }, (_, x) => ({
-      x, y,
-      walls: [true, true, true, true], // N E S W
-      visited: false
-    }))
-  );
-  nrVisited = Array.from({ length: nrRows }, () => Array(nrCols).fill(false));
-
-  // Carve paths
-  carveMaze(0, 0);
-
-  // Start = top-left, End = bottom-right
-  nrStart  = { x: 0, y: 0 };
-  nrEnd    = { x: nrCols - 1, y: nrRows - 1 };
-  nrPlayer = { x: 0, y: 0 };
-  nrVisited[0][0] = true;
-  nrTrail  = [{ x: 0, y: 0 }];
-
-  // Timer
-  nrTimerLimit = cfg.timeLimit;
-  nrTimerSec   = 0;
-  updateTimerDisplay();
-  if (nrTimerLimit > 0) {
-    const box = document.getElementById('nr-timer');
-    if (box) box.className = 'nr-timer-box running';
-    nrTimerHandle = setInterval(tickTimer, 1000);
-  } else {
-    const box = document.getElementById('nr-timer');
-    if (box) { box.className = 'nr-timer-box'; box.textContent = '∞'; }
-  }
-
-  // Hide overlay
-  const overlay = document.getElementById('nr-maze-overlay');
-  if (overlay) overlay.innerHTML = '';
-
-  // Terminal
-  termRunSequence(TERM_LINES, 200);
-
-  resizeAndDraw();
-}
-
-function carveMaze(x, y) {
-  const dirs = shuffle([
-    [0, -1, 0, 2],  // N: dy=-1, remove N(0) from cur, S(2) from neighbor
-    [1,  0, 1, 3],  // E: dx=+1, remove E(1) from cur, W(3) from neighbor
-    [0,  1, 2, 0],  // S: dy=+1, remove S(2) from cur, N(0) from neighbor
-    [-1, 0, 3, 1],  // W: dx=-1, remove W(3) from cur, E(1) from neighbor
-  ]);
-  nrMaze[y][x].visited = true;
-  for (const [dx, dy, wallA, wallB] of dirs) {
-    const nx = x + dx, ny = y + dy;
-    if (nx < 0 || ny < 0 || nx >= nrCols || ny >= nrRows) continue;
-    if (nrMaze[ny][nx].visited) continue;
-    nrMaze[y][x].walls[wallA]   = false;
-    nrMaze[ny][nx].walls[wallB] = false;
-    carveMaze(nx, ny);
-  }
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
+function shuffle(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
 
-/* ── TIMER ── */
-function tickTimer() {
-  nrTimerSec++;
-  updateTimerDisplay();
-  if (nrTimerSec >= nrTimerLimit) {
-    clearInterval(nrTimerHandle);
-    if (!nrComplete) {
-      nrFailed = true;
-      showResult(false);
-      termFail();
+function getEl(id) {
+  return document.getElementById(id);
+}
+
+function setDifficulty(level) {
+  if (!NR_CONFIG[level]) return;
+  nrDifficulty = level;
+  ['easy', 'medium', 'hard'].forEach((key) => {
+    const button = getEl(`nr-diff-${key}`);
+    if (button) button.classList.toggle('active', key === level);
+  });
+  generateMaze();
+}
+
+function buildPlayableGrid(size, extraOpenings) {
+  const grid = Array.from({ length: size }, () => Array(size).fill(1));
+  const stack = [{ x: 0, y: 0 }];
+  const dirs = [
+    [0, -2],
+    [2, 0],
+    [0, 2],
+    [-2, 0]
+  ];
+
+  grid[0][0] = 0;
+
+  while (stack.length) {
+    const current = stack[stack.length - 1];
+    const nextChoices = shuffle(dirs).filter(([dx, dy]) => {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      return nx >= 0 && ny >= 0 && nx < size && ny < size && grid[ny][nx] === 1;
+    });
+
+    if (!nextChoices.length) {
+      stack.pop();
+      continue;
+    }
+
+    const [dx, dy] = nextChoices[0];
+    const nx = current.x + dx;
+    const ny = current.y + dy;
+    const mx = current.x + dx / 2;
+    const my = current.y + dy / 2;
+
+    grid[my][mx] = 0;
+    grid[ny][nx] = 0;
+    stack.push({ x: nx, y: ny });
+  }
+
+  grid[size - 1][size - 1] = 0;
+  if (size % 2 === 0) {
+    grid[size - 1][size - 2] = 0;
+    grid[size - 2][size - 1] = 0;
+  }
+
+  let opened = 0;
+  let attempts = 0;
+  while (opened < extraOpenings && attempts < 120) {
+    attempts += 1;
+    const x = Math.floor(Math.random() * size);
+    const y = Math.floor(Math.random() * size);
+    if ((x === 0 && y === 0) || (x === size - 1 && y === size - 1) || grid[y][x] === 0) continue;
+
+    const openNeighbors = [
+      [x, y - 1],
+      [x + 1, y],
+      [x, y + 1],
+      [x - 1, y]
+    ].filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < size && ny < size && grid[ny][nx] === 0).length;
+
+    if (openNeighbors >= 1) {
+      grid[y][x] = 0;
+      opened += 1;
     }
   }
+
+  return grid;
+}
+
+function generateMaze() {
+  const config = NR_CONFIG[nrDifficulty];
+  nrSize = config.size;
+  nrPlayer = { x: 0, y: 0 };
+  nrGoal = { x: nrSize - 1, y: nrSize - 1 };
+  nrVisited = Array.from({ length: nrSize }, () => Array(nrSize).fill(false));
+  nrVisited[0][0] = true;
+  nrTrail = [{ x: 0, y: 0 }];
+  nrComplete = false;
+  nrFailed = false;
+  nrCountdown = config.timeLimit;
+  nrGrid = buildPlayableGrid(nrSize, config.extraOpenings);
+
+  clearResultOverlay();
+  restartTimer();
+  restartTerminalLoop();
+  drawGrid();
+}
+
+function restartTimer() {
+  clearInterval(nrTimerHandle);
+  updateTimerDisplay();
+  nrTimerHandle = setInterval(() => {
+    nrCountdown -= 1;
+    updateTimerDisplay();
+    if (nrCountdown <= 0) {
+      clearInterval(nrTimerHandle);
+      clearInterval(nrTerminalHandle);
+      nrFailed = true;
+      appendTerminalLine(NR_FAIL_LINE, 'fail');
+      showResult(false);
+    }
+  }, 1000);
 }
 
 function updateTimerDisplay() {
-  const box = document.getElementById('nr-timer');
-  if (!box) return;
-  if (nrTimerLimit === 0) { box.textContent = '∞'; return; }
-  const remaining = Math.max(0, nrTimerLimit - nrTimerSec);
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  box.textContent = `${m}:${String(s).padStart(2, '0')}`;
-  if (remaining <= 10) box.className = 'nr-timer-box expired';
+  const timer = getEl('nr-timer');
+  if (!timer) return;
+  const safeTime = Math.max(0, nrCountdown);
+  const minutes = Math.floor(safeTime / 60);
+  const seconds = safeTime % 60;
+  timer.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+  timer.classList.remove('running', 'expired');
+  if (nrFailed || safeTime <= 10) timer.classList.add('expired');
+  else timer.classList.add('running');
 }
 
-/* ── RESIZE & DRAW ── */
-function resizeAndDraw() {
-  const wrap = document.getElementById('nr-maze-canvas')?.parentElement;
-  if (!wrap || !nrMaze) return;
-  const maxW = wrap.clientWidth  - 24;
-  const maxH = wrap.clientHeight - 24 || 420;
-  const cellW = Math.floor(maxW / nrCols);
-  const cellH = Math.floor(maxH / nrRows);
-  nrCellSize  = Math.max(18, Math.min(cellW, cellH, 52));
-
-  const canvas = document.getElementById('nr-maze-canvas');
-  nrCanvasW = nrCellSize * nrCols;
-  nrCanvasH = nrCellSize * nrRows;
-  canvas.width  = nrCanvasW;
-  canvas.height = nrCanvasH;
-  canvas.style.width  = nrCanvasW + 'px';
-  canvas.style.height = nrCanvasH + 'px';
-
-  drawMaze();
+function restartTerminalLoop() {
+  clearInterval(nrTerminalHandle);
+  const terminal = getEl('nr-terminal');
+  if (!terminal) return;
+  terminal.innerHTML = '<span class="nr-term-cursor"></span>';
+  NR_BOOT_LINES.forEach((line) => appendTerminalLine(line, line.startsWith('CMD.Buffer') ? 'dim' : ''));
+  nrTerminalHandle = setInterval(() => {
+    if (nrComplete || nrFailed) return;
+    appendTerminalLine(buildRandomTerminalLine(), Math.random() > 0.55 ? 'dim' : '');
+  }, 260);
 }
 
-function drawMaze() {
-  const canvas = document.getElementById('nr-maze-canvas');
-  if (!canvas || !nrMaze) return;
-  const ctx  = canvas.getContext('2d');
-  const cs   = nrCellSize;
-  const half = cs / 2;
+function buildRandomTerminalLine() {
+  return pick(NR_TERM_PATTERNS)();
+}
 
-  // Background
+function appendTerminalLine(text, extraClass = '') {
+  const terminal = getEl('nr-terminal');
+  if (!terminal) return;
+  const cursor = terminal.querySelector('.nr-term-cursor');
+  const line = document.createElement('span');
+  line.className = `nr-term-line${extraClass ? ` ${extraClass}` : ''}`;
+  line.textContent = text;
+  terminal.insertBefore(line, cursor);
+  const lines = terminal.querySelectorAll('.nr-term-line');
+  if (lines.length > 28) lines[0].remove();
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function clearResultOverlay() {
+  const overlay = getEl('nr-maze-overlay');
+  if (overlay) overlay.innerHTML = '';
+}
+
+function failRun(reasonLine) {
+  if (nrComplete || nrFailed) return;
+  nrFailed = true;
+  clearInterval(nrTimerHandle);
+  clearInterval(nrTerminalHandle);
+  appendTerminalLine(reasonLine, 'fail');
+  appendTerminalLine(NR_FAIL_LINE, 'fail');
+  showResult(false);
+}
+
+function showResult(success) {
+  const overlay = getEl('nr-maze-overlay');
+  if (!overlay) return;
+  overlay.innerHTML = '';
+  const message = document.createElement('div');
+  message.className = `nr-result-msg ${success ? 'success' : 'fail'}`;
+  message.innerHTML = success ? '///BREACH<br>SUCCESS///' : '///ICE<br>DETECTED///';
+  overlay.appendChild(message);
+  if (success) appendTerminalLine(NR_SUCCESS_LINE, 'success');
+}
+
+function drawGrid() {
+  const canvas = getEl('nr-maze-canvas');
+  if (!canvas || !nrGrid.length) return;
+
+  const wrap = canvas.parentElement;
+  const ctx = canvas.getContext('2d');
+  const available = Math.min((wrap?.clientWidth || 420) - 24, (wrap?.clientHeight || 420) - 24, 520);
+  const cell = Math.max(32, Math.floor(available / nrSize));
+  const width = cell * nrSize;
+  const height = cell * nrSize;
+
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = NR_COLORS.bg;
-  ctx.fillRect(0, 0, nrCanvasW, nrCanvasH);
+  ctx.fillRect(0, 0, width, height);
 
-  // Grid lines (subtle)
-  ctx.strokeStyle = NR_COLORS.grid;
-  ctx.lineWidth   = 0.5;
-  for (let x = 0; x <= nrCols; x++) {
-    ctx.beginPath(); ctx.moveTo(x * cs, 0); ctx.lineTo(x * cs, nrCanvasH); ctx.stroke();
-  }
-  for (let y = 0; y <= nrRows; y++) {
-    ctx.beginPath(); ctx.moveTo(0, y * cs); ctx.lineTo(nrCanvasW, y * cs); ctx.stroke();
-  }
+  for (let y = 0; y < nrSize; y += 1) {
+    for (let x = 0; x < nrSize; x += 1) {
+      const px = x * cell;
+      const py = y * cell;
+      const isBlocked = nrGrid[y][x] === 1;
+      const isGoal = nrGoal.x === x && nrGoal.y === y;
+      const isPlayer = nrPlayer.x === x && nrPlayer.y === y;
 
-  // Cell fills
-  for (let y = 0; y < nrRows; y++) {
-    for (let x = 0; x < nrCols; x++) {
-      if (nrVisited[y][x]) {
+      ctx.fillStyle = isBlocked ? NR_COLORS.blocked : NR_COLORS.open;
+      ctx.fillRect(px + 2, py + 2, cell - 4, cell - 4);
+
+      if (nrVisited[y][x] && !isBlocked && !isGoal && !isPlayer) {
         ctx.fillStyle = NR_COLORS.visited;
-        ctx.fillRect(x * cs + 1, y * cs + 1, cs - 2, cs - 2);
+        ctx.fillRect(px + 5, py + 5, cell - 10, cell - 10);
+      }
+
+      ctx.strokeStyle = NR_COLORS.grid;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
+
+      if (isBlocked) {
+        ctx.shadowColor = NR_COLORS.blockedGlow;
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = '#171717';
+        ctx.strokeRect(px + 4, py + 4, cell - 8, cell - 8);
+        ctx.shadowBlur = 0;
       }
     }
   }
 
-  // Trail
   if (nrTrail.length > 1) {
-    ctx.strokeStyle = NR_COLORS.visitedLine;
-    ctx.lineWidth   = Math.max(2, cs * 0.18);
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
     ctx.beginPath();
-    ctx.moveTo(nrTrail[0].x * cs + half, nrTrail[0].y * cs + half);
-    for (let i = 1; i < nrTrail.length; i++) {
-      ctx.lineTo(nrTrail[i].x * cs + half, nrTrail[i].y * cs + half);
+    ctx.strokeStyle = NR_COLORS.visitedLine;
+    ctx.lineWidth = Math.max(3, cell * 0.14);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.moveTo(nrTrail[0].x * cell + cell / 2, nrTrail[0].y * cell + cell / 2);
+    for (let i = 1; i < nrTrail.length; i += 1) {
+      ctx.lineTo(nrTrail[i].x * cell + cell / 2, nrTrail[i].y * cell + cell / 2);
     }
     ctx.stroke();
   }
 
-  // Walls
-  ctx.lineWidth   = Math.max(2, cs * 0.13);
-  ctx.lineCap     = 'square';
-  for (let y = 0; y < nrRows; y++) {
-    for (let x = 0; x < nrCols; x++) {
-      const cell = nrMaze[y][x];
-      const px   = x * cs;
-      const py   = y * cs;
+  drawNode(ctx, nrGoal.x, nrGoal.y, cell, NR_COLORS.goal, NR_COLORS.goalGlow);
+  drawNode(ctx, nrPlayer.x, nrPlayer.y, cell, NR_COLORS.player, NR_COLORS.playerGlow);
 
-      // Glow for outer border walls only
-      const isOuter = x === 0 || y === 0 || x === nrCols - 1 || y === nrRows - 1;
-      ctx.strokeStyle = isOuter ? NR_COLORS.wallGlow : NR_COLORS.wall;
-
-      if (cell.walls[0]) { // N
-        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + cs, py); ctx.stroke();
-      }
-      if (cell.walls[1]) { // E
-        ctx.beginPath(); ctx.moveTo(px + cs, py); ctx.lineTo(px + cs, py + cs); ctx.stroke();
-      }
-      if (cell.walls[2]) { // S
-        ctx.beginPath(); ctx.moveTo(px, py + cs); ctx.lineTo(px + cs, py + cs); ctx.stroke();
-      }
-      if (cell.walls[3]) { // W
-        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py + cs); ctx.stroke();
-      }
-    }
-  }
-
-  // Start cell (green)
-  drawNodeCell(ctx, nrStart.x, nrStart.y, cs, NR_COLORS.start, NR_COLORS.startGlow, '▶');
-
-  // End cell (red)
-  drawNodeCell(ctx, nrEnd.x, nrEnd.y, cs, NR_COLORS.end, NR_COLORS.endGlow, '■');
-
-  // Player
-  if (!nrComplete && !nrFailed) {
-    drawPlayer(ctx, nrPlayer.x, nrPlayer.y, cs);
-  }
+  ctx.strokeStyle = NR_COLORS.border;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
 }
 
-function drawNodeCell(ctx, x, y, cs, color, glowColor, symbol) {
-  const px = x * cs + 2;
-  const py = y * cs + 2;
-  const sz = cs - 4;
-
-  // Background fill
-  ctx.fillStyle = color + '22';
-  ctx.fillRect(px, py, sz, sz);
-
-  // Glow border
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur  = 8;
-  ctx.strokeStyle = color;
-  ctx.lineWidth   = 2;
-  ctx.strokeRect(px + 1, py + 1, sz - 2, sz - 2);
-  ctx.shadowBlur  = 0;
-
-  // Symbol
-  const fontSize = Math.max(8, Math.floor(cs * 0.38));
-  ctx.fillStyle  = color;
-  ctx.font       = `bold ${fontSize}px 'Share Tech Mono', monospace`;
-  ctx.textAlign  = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(symbol, x * cs + cs / 2, y * cs + cs / 2);
-}
-
-function drawPlayer(ctx, x, y, cs) {
-  const cx = x * cs + cs / 2;
-  const cy = y * cs + cs / 2;
-  const r  = Math.max(4, cs * 0.28);
-
-  // Outer glow
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.5);
-  grad.addColorStop(0,   'rgba(224,20,52,0.5)');
-  grad.addColorStop(0.5, 'rgba(224,20,52,0.15)');
-  grad.addColorStop(1,   'rgba(224,20,52,0)');
-  ctx.fillStyle = grad;
+function drawNode(ctx, x, y, cell, color, glow) {
+  const cx = x * cell + cell / 2;
+  const cy = y * cell + cell / 2;
+  const radius = Math.max(8, cell * 0.22);
+  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.6);
+  halo.addColorStop(0, glow);
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 2.5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, radius * 2.6, 0, Math.PI * 2);
   ctx.fill();
 
-  // Core diamond
-  ctx.fillStyle   = NR_COLORS.player;
-  ctx.shadowColor = NR_COLORS.playerGlow;
-  ctx.shadowBlur  = 12;
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(cx,       cy - r);
-  ctx.lineTo(cx + r,   cy);
-  ctx.lineTo(cx,       cy + r);
-  ctx.lineTo(cx - r,   cy);
-  ctx.closePath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.shadowBlur = 0;
 
-  // Inner dot
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(2, r * 0.28), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(2, radius * 0.28), 0, Math.PI * 2);
   ctx.fill();
 }
 
-/* ── PLAYER MOVEMENT ── */
-function movePlayer(dir) {
-  if (nrComplete || nrFailed || !nrMaze) return;
+function movePlayer(direction) {
+  if (nrComplete || nrFailed || !nrGrid.length) return;
 
-  const { x, y } = nrPlayer;
-  const cell      = nrMaze[y][x];
+  const moves = {
+    up: [0, -1],
+    down: [0, 1],
+    left: [-1, 0],
+    right: [1, 0]
+  };
+  const move = moves[direction];
+  if (!move) return;
 
-  const moves = { up: [0,-1,0,2], right: [1,0,1,3], down: [0,1,2,0], left: [-1,0,3,1] };
-  const [dx, dy, wallIdx] = moves[dir];
+  const nextX = nrPlayer.x + move[0];
+  const nextY = nrPlayer.y + move[1];
+  if (nextX < 0 || nextY < 0 || nextX >= nrSize || nextY >= nrSize) {
+    failRun('ICE.wall///>COLLISION');
+    return;
+  }
+  if (nrGrid[nextY][nextX] === 1) {
+    failRun('ICE.wall///>COLLISION');
+    return;
+  }
+  if (nrVisited[nextY][nextX]) {
+    failRun('TRACE.loop///>SELF-DETECTED');
+    return;
+  }
 
-  if (cell.walls[wallIdx]) return; // blocked
+  nrPlayer = { x: nextX, y: nextY };
+  nrVisited[nextY][nextX] = true;
+  nrTrail.push({ x: nextX, y: nextY });
 
-  const nx = x + dx;
-  const ny = y + dy;
-  if (nx < 0 || ny < 0 || nx >= nrCols || ny >= nrRows) return;
-
-  nrPlayer = { x: nx, y: ny };
-  nrVisited[ny][nx] = true;
-  nrTrail.push({ x: nx, y: ny });
-
-  // Check win
-  if (nx === nrEnd.x && ny === nrEnd.y) {
+  if (nextX === nrGoal.x && nextY === nrGoal.y) {
     nrComplete = true;
     clearInterval(nrTimerHandle);
+    clearInterval(nrTerminalHandle);
     showResult(true);
-    termSuccess();
   }
 
-  drawMaze();
+  drawGrid();
 }
 
-// Keyboard support
-document.addEventListener('keydown', (e) => {
-  if (document.getElementById('tab-content-netrunner')?.style.display === 'none') return;
-  const map = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right',
-                w:'up', s:'down', a:'left', d:'right',
-                W:'up', S:'down', A:'left', D:'right' };
-  if (map[e.key]) { e.preventDefault(); movePlayer(map[e.key]); }
-});
+function initNetrunner() {
+  window.addEventListener('keydown', (event) => {
+    const activeTag = document.activeElement?.tagName;
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+    const map = {
+      ArrowUp: 'up',
+      ArrowDown: 'down',
+      ArrowLeft: 'left',
+      ArrowRight: 'right',
+      w: 'up',
+      a: 'left',
+      s: 'down',
+      d: 'right',
+      W: 'up',
+      A: 'left',
+      S: 'down',
+      D: 'right'
+    };
+    if (map[event.key]) {
+      event.preventDefault();
+      movePlayer(map[event.key]);
+    }
+  });
 
-/* ── RESULT OVERLAY ── */
-function showResult(success) {
-  const overlay = document.getElementById('nr-maze-overlay');
-  if (!overlay) return;
-  const div = document.createElement('div');
-  div.className = 'nr-result-msg ' + (success ? 'success' : 'fail');
-  div.innerHTML = success
-    ? '///BREACH<br>SUCCESS///'
-    : '///ICE<br>DETECTED///';
-  overlay.innerHTML = '';
-  overlay.appendChild(div);
-  drawMaze();
+  window.addEventListener('resize', () => {
+    if (nrGrid.length) drawGrid();
+  });
+
+  generateMaze();
 }
 
-/* ── RESIZE HANDLER ── */
-window.addEventListener('resize', () => {
-  if (document.getElementById('tab-content-netrunner')?.style.display !== 'none') {
-    resizeAndDraw();
-  }
-});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initNetrunner, { once: true });
+} else {
+  initNetrunner();
+}

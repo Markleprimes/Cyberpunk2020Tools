@@ -906,7 +906,7 @@ function serializeInventoryBlock(){
 }
 function downloadTxt(){
   const names=[];
-  const n=document.getElementById('char-name').textContent;if(n&&n!=='—')names.push(n);
+const n=document.getElementById('char-name').textContent;if(n&&n!=='--')names.push(n);
   document.querySelectorAll('.alias-tag').forEach(el=>names.push(el.textContent));
   const statLines=Object.entries(sheetStats).map(([k,v])=>`  ${k}=${v}`).join(', ');
   const career=document.getElementById('char-career').textContent;

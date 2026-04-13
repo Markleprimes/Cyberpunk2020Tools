@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17,13 +17,13 @@
   </div>
   <div class="corner-tag">
     REV 2.4.1<br>NIGHT CITY UPLINK<br>
-    <span class="online">● JACKED IN</span>
+    <span class="online">JACKED IN</span>
   </div>
 </header>
 
 <!-- UPLOAD -->
 <div id="upload-zone">
-  <span class="upload-icon">📁</span>
+  <span class="upload-icon">[ TXT ]</span>
   <h2>Upload Character File</h2>
   <p>DROP YOUR .TXT DOSSIER HERE OR CLICK TO BROWSE</p>
   <input type="file" id="file-input" accept=".txt">
@@ -57,7 +57,7 @@
   <div class="name-banner">
     <div>
       <div class="name-heading">
-        <div class="name-main" id="char-name">—</div>
+        <div class="name-main" id="char-name">--</div>
         <button class="name-image-btn" type="button" onclick="document.getElementById('banner-image-input').click()">IMG</button>
         <input type="file" id="banner-image-input" accept="image/*" style="display:none">
       </div>
@@ -67,20 +67,13 @@
   </div>
 
   <div class="sheet-actions">
-    <button class="action-btn green" onclick="downloadTxt()">↓ DOWNLOAD .TXT</button>
-    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">↑ RELOAD FILE</button>
+    <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .TXT</button>
+    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">RELOAD FILE</button>
     <input type="file" id="file-input2" accept=".txt" style="display:none">
-    <button class="action-btn red" onclick="resetSheet()">↩ NEW CHARACTER</button>
+    <button class="action-btn red" onclick="resetSheet()">NEW CHARACTER</button>
   </div>
 
-  <!-- TAB NAV -->
-  <div class="sheet-tab-nav">
-    <button class="sheet-tab active" id="tab-dossier" onclick="switchSheetTab('dossier')">◈ DOSSIER</button>
-    <button class="sheet-tab" id="tab-netrunner" onclick="switchSheetTab('netrunner')">⬡ NETRUNNER DECK</button>
-  </div>
-
-  <!-- TAB: DOSSIER -->
-  <div id="tab-content-dossier">
+  <div class="sheet-section">
 
   <!-- STATS -->
   <div class="panel" style="margin-bottom:18px;">
@@ -95,26 +88,26 @@
       <div class="body-stun-row">
         <div class="bs-item">
           <div class="bs-label">BODY LEVEL</div>
-          <div class="bs-value red-glass" id="body-level-val">—</div>
+          <div class="bs-value red-glass" id="body-level-val">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('bodylevel',1)">+</button>
-            <button class="ctrl-btn minus" onclick="changeBS('bodylevel',-1)">−</button>
+            <button class="ctrl-btn minus" onclick="changeBS('bodylevel',-1)">-</button>
           </div>
         </div>
         <div class="bs-item">
           <div class="bs-label">BODY WEIGHT</div>
-          <div class="bs-value" id="body-val">—</div>
+          <div class="bs-value" id="body-val">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('weight',1)">+</button>
-            <button class="ctrl-btn minus" onclick="changeBS('weight',-1)">−</button>
+            <button class="ctrl-btn minus" onclick="changeBS('weight',-1)">-</button>
           </div>
         </div>
         <div class="bs-item">
           <div class="bs-label">STUN POINTS</div>
-          <div class="bs-value red-glass" id="stun-val">—</div>
+          <div class="bs-value red-glass" id="stun-val">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('stun',1)">+</button>
-            <button class="ctrl-btn minus" onclick="changeBS('stun',-1)">−</button>
+            <button class="ctrl-btn minus" onclick="changeBS('stun',-1)">-</button>
           </div>
         </div>
       </div>
@@ -128,7 +121,7 @@
           <div class="rep-label">STREET CRED</div>
           <div class="rep-btn-row">
             <button class="ctrl-btn" onclick="event.stopPropagation();changeRep(1)">+</button>
-            <button class="ctrl-btn minus" onclick="event.stopPropagation();changeRep(-1)">−</button>
+            <button class="ctrl-btn minus" onclick="event.stopPropagation();changeRep(-1)">-</button>
           </div>
           </div>
         </div>
@@ -143,7 +136,7 @@
           <div class="wallet-label">EDDIES</div>
           <div class="rep-btn-row">
             <button class="ctrl-btn" onclick="changeWallet(1)">+</button>
-            <button class="ctrl-btn minus" onclick="changeWallet(-1)">−</button>
+            <button class="ctrl-btn minus" onclick="changeWallet(-1)">-</button>
           </div>
         </div>
       </div>
@@ -159,22 +152,22 @@
         <span class="sp-value" id="sp-display">0</span>
         <div class="rep-btn-row">
           <button class="ctrl-btn" onclick="changeUpgradePoints(1)">+</button>
-          <button class="ctrl-btn minus" onclick="changeUpgradePoints(-1)">−</button>
+          <button class="ctrl-btn minus" onclick="changeUpgradePoints(-1)">-</button>
         </div>
       </div>
       <div class="skill-list" id="skill-list"></div>
       <div class="add-skill-bar">
-        <input class="add-skill-input" id="new-skill-name" type="text" placeholder="Custom skill name…" maxlength="50">
-        <button class="add-skill-btn" onclick="addCustomSkill()">＋ ADD</button>
+        <input class="add-skill-input" id="new-skill-name" type="text" placeholder="Custom skill name..." maxlength="50">
+        <button class="add-skill-btn" onclick="addCustomSkill()">ADD</button>
       </div>
     </div>
     <div class="panel">
       <div class="panel-title">Inventory</div>
       <div id="inventory-list" class="inventory-list"></div>
       <div class="inventory-actions">
-        <button class="add-skill-btn" type="button" onclick="openInventoryEditor()">＋ ADD ITEM</button>
-        <button class="add-skill-btn" onclick="document.getElementById('item-file-input').click()" style="border-color:rgba(59,184,255,.35);color:var(--accent-b);background:rgba(59,184,255,.08);">＋ LOAD ITEM .TXT</button>
-        <button class="add-skill-btn" type="button" onclick="downloadInventoryTxt()" style="border-color:rgba(255,177,74,.3);color:var(--accent-y);background:rgba(255,177,74,.08);">↓ DOWNLOAD ITEM .TXT</button>
+        <button class="add-skill-btn" type="button" onclick="openInventoryEditor()">ADD ITEM</button>
+        <button class="add-skill-btn" onclick="document.getElementById('item-file-input').click()" style="border-color:rgba(59,184,255,.35);color:var(--accent-b);background:rgba(59,184,255,.08);">LOAD ITEM .TXT</button>
+        <button class="add-skill-btn" type="button" onclick="downloadInventoryTxt()" style="border-color:rgba(255,177,74,.3);color:var(--accent-y);background:rgba(255,177,74,.08);">DOWNLOAD ITEM .TXT</button>
         <input type="file" id="item-file-input" accept=".txt" style="display:none">
       </div>
     </div>
@@ -185,7 +178,7 @@
     <div class="panel-title">Damage &amp; Armor</div>
     <div class="limb-grid" id="limb-grid"></div>
     <div class="wound-status-panel" id="wound-panel">
-      <div class="wound-title">⚠ WOUND STATUS</div>
+      <div class="wound-title">WOUND STATUS</div>
       <div class="wound-rows" id="wound-rows"></div>
     </div>
   </div>
@@ -224,7 +217,7 @@
         <div class="modifier-bar">
           <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
           <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
-          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">＋ ADD MODIFIER</button>
+          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD MODIFIER</button>
           <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR MODIFIERS</button>
         </div>
         <div class="modifier-list" id="modifier-list"></div>
@@ -252,37 +245,38 @@
         </div>
       </div>
     </div>
-  </div><!-- end tab-content-dossier -->
+  </div>
 
-  <!-- TAB: NETRUNNER DECK -->
-  <div id="tab-content-netrunner" style="display:none;">
+  <!-- NETRUNNER DECK -->
+  <div class="panel section-panel netrunner-shell">
+    <div class="panel-title">Netrunner Deck</div>
     <div class="netrunner-layout">
 
       <!-- LEFT: Difficulty + Move Buttons -->
       <div class="nr-left">
         <div class="nr-section-label">DIFFICULTY</div>
         <div class="nr-diff-btns">
-          <button class="nr-diff-btn active" id="nr-diff-easy"   onclick="setDifficulty('easy')">EASY</button>
-          <button class="nr-diff-btn"         id="nr-diff-medium" onclick="setDifficulty('medium')">MED.</button>
-          <button class="nr-diff-btn"         id="nr-diff-hard"   onclick="setDifficulty('hard')">HARD</button>
+          <button class="nr-diff-btn active" id="nr-diff-easy" type="button" onclick="setDifficulty('easy')">EASY</button>
+          <button class="nr-diff-btn" id="nr-diff-medium" type="button" onclick="setDifficulty('medium')">MEDIUM</button>
+          <button class="nr-diff-btn" id="nr-diff-hard" type="button" onclick="setDifficulty('hard')">HARD</button>
         </div>
         <div class="nr-section-label" style="margin-top:22px;">MOVE</div>
         <div class="nr-move-pad">
-          <div class="nr-move-row"><button class="nr-move-btn" onclick="movePlayer('up')">▲</button></div>
+          <div class="nr-move-row"><button class="nr-move-btn" type="button" onclick="movePlayer('up')">UP</button></div>
           <div class="nr-move-row">
-            <button class="nr-move-btn" onclick="movePlayer('left')">◀</button>
-            <button class="nr-move-btn" onclick="movePlayer('down')">▼</button>
-            <button class="nr-move-btn" onclick="movePlayer('right')">▶</button>
+            <button class="nr-move-btn" type="button" onclick="movePlayer('left')">LEFT</button>
+            <button class="nr-move-btn" type="button" onclick="movePlayer('down')">DOWN</button>
+            <button class="nr-move-btn" type="button" onclick="movePlayer('right')">RIGHT</button>
           </div>
         </div>
-        <button class="nr-gen-btn" onclick="generateMaze()">⟳ NEW BREACH</button>
+        <button class="nr-gen-btn" type="button" onclick="generateMaze()">NEW BREACH</button>
       </div>
 
       <!-- CENTER: Console + Maze -->
       <div class="nr-center">
         <div class="nr-header-bar">
           <span class="nr-console-label">///Console.///</span>
-          <span class="nr-dots">⠿ ⠿ ⠿ ⠿</span>
+          <span class="nr-dots">.... .... .... ....</span>
           <span class="nr-breach-timer">Breach Timer <span class="nr-timer-box" id="nr-timer">0:00</span></span>
         </div>
         <div class="nr-maze-wrap">
@@ -298,7 +292,7 @@
       </div>
 
     </div>
-  </div><!-- end tab-content-netrunner -->
+  </div>
 
 </div><!-- end sheet -->
 
