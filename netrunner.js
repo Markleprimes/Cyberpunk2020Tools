@@ -2,7 +2,7 @@
 
 const NR_CONFIG = {
   easy: { size: 8, extraOpenings: 8, timeLimit: 10 },
-  medium: { size: 12, extraOpenings: 7, timeLimit: 10, maxOpen: 220},
+  medium: { size: 12, extraOpenings: 7, timeLimit: 10 },
   hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4, minPath: 40, maxOpen: 118 }
 };
 
@@ -560,19 +560,16 @@ function initNetrunner() {
   window.addEventListener('keydown', (event) => {
     const activeTag = document.activeElement?.tagName;
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+    if (event.key === 'r' || event.key === 'R') {
+      event.preventDefault();
+      generateMaze();
+      return;
+    }
     const map = {
       ArrowUp: 'up',
       ArrowDown: 'down',
       ArrowLeft: 'left',
-      ArrowRight: 'right',
-      w: 'up',
-      a: 'left',
-      s: 'down',
-      d: 'right',
-      W: 'up',
-      A: 'left',
-      S: 'down',
-      D: 'right'
+      ArrowRight: 'right'
     };
     if (map[event.key]) {
       event.preventDefault();
