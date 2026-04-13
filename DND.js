@@ -11,6 +11,7 @@ let currentRoll = { sides: null, qty: 1, rolls: [], result: 0 };
 let _rollTimer = null;
 let bannerImageData = '';
 let inventoryEditState = null;
+let aimHitWeapons = [];
 const LIMBS = ['Head','Torso','R.Arm','L.Arm','R.Leg','L.Leg'];
 let limbSP  = {Head:0,Torso:0,'R.Arm':0,'L.Arm':0,'R.Leg':0,'L.Leg':0};
 let limbDMG = {Head:0,Torso:0,'R.Arm':0,'L.Arm':0,'R.Leg':0,'L.Leg':0};
@@ -40,8 +41,10 @@ document.getElementById('item-file-input').addEventListener('change',e=>{if(e.ta
 document.getElementById('banner-image-input').addEventListener('change',e=>{if(e.target.files[0])readBannerImage(e.target.files[0]);});
 document.getElementById('create-character-modal').addEventListener('click',e=>{if(e.target===document.getElementById('create-character-modal'))closeCreateCharacterModal();});
 document.getElementById('inventory-editor-modal').addEventListener('click',e=>{if(e.target===document.getElementById('inventory-editor-modal'))closeInventoryEditor();});
+document.getElementById('aim-hit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('aim-hit-modal'))closeAimHitModal();});
 document.getElementById('create-char-career').addEventListener('keydown',e=>{if(e.key==='Enter')createNewCharacter();});
 document.getElementById('inventory-item-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveInventoryItem();});
+document.getElementById('aim-bonus-input').addEventListener('keydown',e=>{if(e.key==='Enter')submitAimHitModal();});
 
 function readFile(file){
   if(!file.name.endsWith('.txt')){showError('ERROR: Only .txt files are supported.');return;}
@@ -339,6 +342,9 @@ function escapeHtml(value){
 function escapeJsString(value){
   return String(value).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
+function normalizeLookup(value){
+  return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
 function fileSafeNameFromData(data){
   return (data?.name?.[0]||'UNKNOWN').toString().toUpperCase();
 }
@@ -452,6 +458,36 @@ function getEffectiveStatValue(key){
   const base=sheetStats[key]||0;
   const debuff=computeStatDebuffs()[key];
   return debuff ? Math.max(0,Math.floor(base*debuff.mult)-debuff.flat) : base;
+}
+function getSkillValueByNames(...names){
+  const targets=names.map(normalizeLookup).filter(Boolean);
+  let best=0;
+  sheetSkills.forEach(skill=>{
+    const lookup=normalizeLookup(skill.name);
+    if(targets.some(target=>lookup===target||lookup.includes(target)||target.includes(lookup))){
+      best=Math.max(best,skill.value||0);
+    }
+  });
+  return best;
+}
+function getItemNumericField(item,...fieldNames){
+  const targets=fieldNames.map(normalizeLookup).filter(Boolean);
+  for(const [key,value] of Object.entries(item.fields||{})){
+    const lookup=normalizeLookup(key);
+    if(targets.some(target=>lookup===target||lookup.includes(target)||target.includes(lookup))){
+      const parsed=parseRollableValue(value);
+      if(parsed!==null)return parsed;
+    }
+  }
+  return null;
+}
+function setPresetRoll(label,modifiers,sides=10){
+  const rollQty=document.getElementById('roll-qty');
+  if(rollQty)rollQty.value=1;
+  rollModifiers=modifiers.filter(mod=>parseRollableValue(mod.value)!==null).map(mod=>({source:mod.source||'PRESET',label:mod.label,value:parseRollableValue(mod.value)}));
+  renderRollLab();
+  showActionLog(`${label} PRESET LOCKED`);
+  rollDie(sides);
 }
 
 /* ══════════════ SKILLS ══════════════ */
@@ -682,15 +718,56 @@ function addCustomRollModifier(){
   showActionLog(`ADDED CUSTOM MODIFIER ${label.toUpperCase()}`);
 }
 function rollFacedown(){
-  const rollQty=document.getElementById('roll-qty');
-  if(rollQty)rollQty.value=1;
-  rollModifiers=[
+  setPresetRoll('FACEDOWN',[
     {source:'PRESET',label:'COOL',value:getEffectiveStatValue('COOL')},
     {source:'PRESET',label:'Reputation',value:repValue}
-  ];
-  renderRollLab();
-  showActionLog('FACEDOWN PRESET LOCKED: COOL + REP + 1D10');
-  rollDie(10);
+  ],10);
+}
+function rollInitiationCheck(){
+  setPresetRoll('INITAITION CHECK',[
+    {source:'PRESET',label:'REF',value:getEffectiveStatValue('REF')}
+  ],10);
+}
+function rollAmbush(){
+  setPresetRoll('AMBUSH',[
+    {source:'PRESET',label:'Stealth',value:getSkillValueByNames('Stealth')},
+    {source:'PRESET',label:'INT',value:getEffectiveStatValue('INT')}
+  ],10);
+}
+function rollAmbushCounter(){
+  setPresetRoll('AMBUSH COUNTER',[
+    {source:'PRESET',label:'Awareness',value:getSkillValueByNames('Awareness','AwarenessNotice')}
+  ],10);
+}
+function rollSuppressiveFireSave(){
+  setPresetRoll('SUPRESSIVE FIRE SAVE',[
+    {source:'PRESET',label:'Athletics',value:getSkillValueByNames('Athletics','Athletic')},
+    {source:'PRESET',label:'REF',value:getEffectiveStatValue('REF')}
+  ],10);
+}
+function openAimHitModal(){
+  const weapons=(inventory.weapon||[]).filter(item=>getItemNumericField(item,'Accuracy')!==null);
+  if(!weapons.length){showError('ADD OR LOAD A WEAPON WITH AN ACCURACY VALUE FIRST.');return;}
+  aimHitWeapons=weapons;
+  const select=document.getElementById('aim-weapon-select');
+  select.innerHTML=weapons.map((weapon,idx)=>`<option value="${idx}">${escapeHtml(weapon.name||`Weapon ${idx+1}`)} (ACC ${getItemNumericField(weapon,'Accuracy')})</option>`).join('');
+  document.getElementById('aim-bonus-input').value=0;
+  document.getElementById('aim-hit-modal').classList.add('show');
+  document.getElementById('aim-bonus-input').focus();
+}
+function closeAimHitModal(){
+  document.getElementById('aim-hit-modal').classList.remove('show');
+}
+function submitAimHitModal(){
+  const weapon=aimHitWeapons[parseInt(document.getElementById('aim-weapon-select').value,10)];
+  if(!weapon){showError('SELECT A WEAPON FIRST.');return;}
+  const accuracy=getItemNumericField(weapon,'Accuracy');
+  const aim=Math.max(0,parseInt(document.getElementById('aim-bonus-input').value,10)||0);
+  closeAimHitModal();
+  setPresetRoll('AIM HIT',[
+    {source:'PRESET',label:`${weapon.name} Accuracy`,value:accuracy},
+    {source:'PRESET',label:'Aim',value:aim}
+  ],10);
 }
 function rollDie(sides){
   clearInterval(_rollTimer);
@@ -920,6 +997,7 @@ function resetSheet(){
     rollModifiers=[];currentRoll={sides:null,qty:1,rolls:[],result:0};clearInterval(_rollTimer);
     renderBannerImage();
     closeInventoryEditor();
+    closeAimHitModal();
     LIMBS.forEach(l=>{limbSP[l]=0;limbDMG[l]=0;});
     closeModal();
   });
