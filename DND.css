@@ -344,3 +344,42 @@ header{display:flex;align-items:flex-end;gap:20px;margin-bottom:36px;border-bott
 .nr-term-line.dim{color:rgba(0,217,139,.4);}
 .nr-term-cursor{display:inline-block;width:7px;height:.9em;background:rgba(0,217,139,.7);vertical-align:text-bottom;animation:blink .7s infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+.action-btn.new-btn {
+  border-color: var(--accent-y);
+  color: var(--accent-y);
+}
+.action-btn.new-btn:hover {
+  background: var(--accent-y);
+  color: var(--bg);
+  box-shadow: var(--glow-y);
+}
+
+.create-form{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.create-field-label{
+  font-family:'Share Tech Mono',monospace;
+  font-size:.65rem;
+  color:var(--text-dim);
+  letter-spacing:.1em;
+  margin-bottom:4px;
+}
+
+.create-field-input{
+  width:100%;
+  background:rgba(0,0,0,.5);
+  border:1px solid var(--border);
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:.8rem;
+  padding:8px 10px;
+  outline:none;
+}
+
+.create-field-input:focus{
+  border-color:var(--accent);
+}
