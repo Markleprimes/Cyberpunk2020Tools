@@ -22,27 +22,14 @@ const INVENTORY_ORDER=['weapon','cyberware','miscellaneous','buff'];
 const DEFAULT_STATS=['REF','INT','COOL','ATTR','TECH','LUCK','EMPT'];
 
 /* ══════════════ FORMAT TOGGLE ══════════════ */
-document.getElementById('show-format').addEventListener('click',()=>{
-  const h=document.getElementById('format-hint'),b=document.getElementById('show-format');
-  const shown=h.style.display==='block';
-  h.style.display=shown?'none':'block';
-  b.textContent=shown?'show expected format':'hide format';
-});
 
 /* ══════════════ UPLOAD ══════════════ */
-const zone=document.getElementById('upload-zone');
-zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});
-zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
-zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)readFile(f);});
-zone.addEventListener('click',e=>{if(e.target.id!=='show-format'&&e.target.tagName!=='BUTTON')document.getElementById('file-input').click();});
-document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);});
+/* FILE INPUTS */
 document.getElementById('file-input2').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);});
 document.getElementById('item-file-input').addEventListener('change',e=>{if(e.target.files[0])readItemFile(e.target.files[0]);});
 document.getElementById('banner-image-input').addEventListener('change',e=>{if(e.target.files[0])readBannerImage(e.target.files[0]);});
-document.getElementById('create-character-modal').addEventListener('click',e=>{if(e.target===document.getElementById('create-character-modal'))closeCreateCharacterModal();});
 document.getElementById('inventory-editor-modal').addEventListener('click',e=>{if(e.target===document.getElementById('inventory-editor-modal'))closeInventoryEditor();});
 document.getElementById('aim-hit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('aim-hit-modal'))closeAimHitModal();});
-document.getElementById('create-char-career').addEventListener('keydown',e=>{if(e.key==='Enter')createNewCharacter();});
 document.getElementById('inventory-item-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveInventoryItem();});
 document.getElementById('aim-bonus-input').addEventListener('keydown',e=>{if(e.key==='Enter')submitAimHitModal();});
 
@@ -74,18 +61,11 @@ function showActionLog(msg){
   clearTimeout(_toastTimer);
   _toastTimer=setTimeout(()=>toast.classList.remove('show'),2000);
 }
-function openCreateCharacterModal(){
-  document.getElementById('create-character-modal').classList.add('show');
-  document.getElementById('create-char-name').focus();
-}
-function closeCreateCharacterModal(){
-  document.getElementById('create-character-modal').classList.remove('show');
-}
-function buildEmptyCharacterData(name,alias,career){
+function buildBlankSheetData(name='--',aliases=[],career='UNKNOWN'){
   const stats={};
   DEFAULT_STATS.forEach(stat=>{stats[stat]=0;});
   return {
-    name:[name,...(alias?[alias]:[])],
+    name:[name,...aliases.filter(Boolean)],
     stats,
     career:[career],
     careerSkill:{point:0},
@@ -175,18 +155,6 @@ function saveInventoryItem(){
   closeInventoryEditor();
   renderInventory();
   showActionLog(`${existing?'UPDATED':'ADDED'} ${name.toUpperCase()} IN INVENTORY`);
-}
-function createNewCharacter(){
-  const name=document.getElementById('create-char-name').value.trim();
-  const alias=document.getElementById('create-char-alias').value.trim();
-  const career=document.getElementById('create-char-career').value.trim();
-  if(!name||!career){showError('ENTER A CHARACTER NAME AND CAREER TO START A NEW DOSSIER.');return;}
-  closeCreateCharacterModal();
-  document.getElementById('create-char-name').value='';
-  document.getElementById('create-char-alias').value='';
-  document.getElementById('create-char-career').value='';
-  renderSheet(buildEmptyCharacterData(name,alias,career));
-  showActionLog(`CREATED DOSSIER FOR ${name.toUpperCase()}`);
 }
 
 /* ══════════════ PARSER ══════════════ */
@@ -357,7 +325,7 @@ function parseRollableValue(value){
 
 /* ══════════════ RENDER ══════════════ */
 function renderSheet(data){
-  document.getElementById('status-bar').style.display='none';
+document.getElementById('status-bar').style.display='none';
   document.getElementById('char-name').textContent=data.name[0]||'Unknown';
   document.getElementById('char-aliases').innerHTML=data.name.slice(1).map(a=>`<span class="alias-tag">${a}</span>`).join('');
   document.getElementById('char-career').textContent=data.career[0]||'???';
@@ -395,7 +363,6 @@ function renderSheet(data){
   LIMBS.forEach(l=>{limbSP[l]=parseInt(data.armor[l])||0;limbDMG[l]=parseInt(data.damage[l])||0;});
   renderLimbs();
 
-  document.getElementById('upload-zone').style.display='none';
   document.getElementById('sheet').style.display='block';
 }
 
@@ -984,21 +951,18 @@ document.getElementById('modal').addEventListener('click',e=>{if(e.target===docu
 
 /* ══════════════ RESET ══════════════ */
 function resetSheet(){
-  showModal('NEW CHARACTER?','Discard current character and load a new file?',()=>{
-    document.getElementById('sheet').style.display='none';
-    document.getElementById('upload-zone').style.display='block';
-    document.getElementById('file-input').value='';
+  showModal('CLEAR DOSSIER?','Discard current character and reset the dossier to blank values?',()=>{
     document.getElementById('file-input2').value='';
     document.getElementById('item-file-input').value='';
     document.getElementById('banner-image-input').value='';
     document.getElementById('status-bar').style.display='none';
-    sheetStats={};sheetSkills=[];repValue=0;walletValue=0;upgradePoints=0;
-    bodyLevelVal=0;weightVal=0;stunVal=0;inventory={};bannerImageData='';
-    rollModifiers=[];currentRoll={sides:null,qty:1,rolls:[],result:0};clearInterval(_rollTimer);
-    renderBannerImage();
     closeInventoryEditor();
     closeAimHitModal();
-    LIMBS.forEach(l=>{limbSP[l]=0;limbDMG[l]=0;});
+    clearInterval(_rollTimer);
+    renderSheet(buildBlankSheetData());
     closeModal();
+    showActionLog('CLEARED DOSSIER');
   });
 }
+
+renderSheet(buildBlankSheetData());
