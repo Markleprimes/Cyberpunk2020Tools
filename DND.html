@@ -213,7 +213,6 @@
           </div>
         </div>
         <div class="modifier-bar">
-          <button class="add-skill-btn" type="button" onclick="rollFacedown()" style="border-color:rgba(255,77,109,.32);color:var(--accent-r);background:rgba(255,77,109,.08);">FACEDOWN</button>
           <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
           <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
           <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">＋ ADD MODIFIER</button>
@@ -230,6 +229,18 @@
           <div class="roll-box-title">Last Die</div>
           <div class="roll-box-value" id="last-die-label">NONE</div>
         </div>
+        <div class="roll-box">
+          <div class="roll-box-title">Presets</div>
+          <div class="preset-list">
+            <button class="preset-btn" type="button" onclick="rollFacedown()">Facedown</button>
+            <button class="preset-btn" type="button" onclick="rollInitiationCheck()">Initaition Check</button>
+            <button class="preset-btn" type="button" onclick="rollAmbush()">Ambush</button>
+            <button class="preset-btn" type="button" onclick="rollAmbushCounter()">Ambush Counter</button>
+            <button class="preset-btn" type="button" onclick="openAimHitModal()">Aim Hit</button>
+            <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
+          </div>
+          <div class="roll-box-note">Each preset replaces the current modifier stack with its own formula, then rolls 1d10.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -237,6 +248,28 @@
 </div><!-- end sheet -->
 
 <div class="action-toast" id="action-toast"></div>
+
+<!-- AIM HIT MODAL -->
+<div class="modal-overlay" id="aim-hit-modal">
+  <div class="modal-box create-modal-box">
+    <h3>AIM HIT</h3>
+    <div class="create-form">
+      <label>
+        <div class="create-field-label">Weapon</div>
+        <select class="create-field-input" id="aim-weapon-select"></select>
+      </label>
+      <label>
+        <div class="create-field-label">Aim Bonus</div>
+        <input class="create-field-input" id="aim-bonus-input" type="number" min="0" step="1" value="0" />
+      </label>
+      <div class="create-form-note">Uses selected weapon Accuracy + your entered Aim bonus + 1d10.</div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeAimHitModal()">CANCEL</button>
+      <button class="action-btn red" type="button" onclick="submitAimHitModal()">ROLL</button>
+    </div>
+  </div>
+</div>
 
 <!-- INVENTORY EDITOR MODAL -->
 <div class="modal-overlay" id="inventory-editor-modal">
