@@ -2,8 +2,8 @@
 
 const NR_CONFIG = {
   easy: { size: 8, extraOpenings: 8, timeLimit: 10 },
-  medium: { size: 16, extraOpenings: 4, timeLimit: 10 },
-  hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4 }
+  medium: { size: 16, extraOpenings: 7, timeLimit: 10 },
+  hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4, minPath: 40, maxOpen: 118 }
 };
 
 const NR_COLORS = {
@@ -279,6 +279,41 @@ function applyStairPatterns(grid, patternCount) {
   return grid;
 }
 
+function countOpenCells(grid) {
+  return grid.reduce((total, row) => total + row.filter((cell) => cell === 0).length, 0);
+}
+
+function buildHardGrid(config) {
+  let bestGrid = null;
+  let bestScore = -Infinity;
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    let grid = buildPlayableGrid(config.size, config.extraOpenings);
+    if (config.stairPatterns) {
+      grid = applyStairPatterns(grid, config.stairPatterns);
+    }
+
+    const path = findPath(grid);
+    if (!path.length) continue;
+
+    const openCells = countOpenCells(grid);
+    const pathDelta = Math.abs(path.length - config.minPath);
+    const openDelta = Math.abs(openCells - config.maxOpen);
+    const score = (path.length >= config.minPath ? 40 : 0) - pathDelta - (openDelta * 0.6);
+
+    if (path.length >= config.minPath && openCells <= config.maxOpen) {
+      return grid;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestGrid = grid;
+    }
+  }
+
+  return bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
+}
+
 function generateMaze() {
   const config = NR_CONFIG[nrDifficulty];
   nrSize = config.size;
@@ -290,8 +325,10 @@ function generateMaze() {
   nrComplete = false;
   nrFailed = false;
   nrCountdown = config.timeLimit;
-  nrGrid = buildPlayableGrid(nrSize, config.extraOpenings);
-  if (config.stairPatterns) {
+  nrGrid = nrDifficulty === 'hard'
+    ? buildHardGrid(config)
+    : buildPlayableGrid(nrSize, config.extraOpenings);
+  if (config.stairPatterns && nrDifficulty !== 'hard') {
     nrGrid = applyStairPatterns(nrGrid, config.stairPatterns);
   }
 
