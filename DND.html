@@ -73,6 +73,15 @@
     <button class="action-btn red" onclick="resetSheet()">↩ NEW CHARACTER</button>
   </div>
 
+  <!-- TAB NAV -->
+  <div class="sheet-tab-nav">
+    <button class="sheet-tab active" id="tab-dossier" onclick="switchSheetTab('dossier')">◈ DOSSIER</button>
+    <button class="sheet-tab" id="tab-netrunner" onclick="switchSheetTab('netrunner')">⬡ NETRUNNER DECK</button>
+  </div>
+
+  <!-- TAB: DOSSIER -->
+  <div id="tab-content-dossier">
+
   <!-- STATS -->
   <div class="panel" style="margin-bottom:18px;">
     <div class="panel-title">Core Statistics</div>
@@ -243,7 +252,53 @@
         </div>
       </div>
     </div>
-  </div>
+  </div><!-- end tab-content-dossier -->
+
+  <!-- TAB: NETRUNNER DECK -->
+  <div id="tab-content-netrunner" style="display:none;">
+    <div class="netrunner-layout">
+
+      <!-- LEFT: Difficulty + Move Buttons -->
+      <div class="nr-left">
+        <div class="nr-section-label">DIFFICULTY</div>
+        <div class="nr-diff-btns">
+          <button class="nr-diff-btn active" id="nr-diff-easy"   onclick="setDifficulty('easy')">EASY</button>
+          <button class="nr-diff-btn"         id="nr-diff-medium" onclick="setDifficulty('medium')">MED.</button>
+          <button class="nr-diff-btn"         id="nr-diff-hard"   onclick="setDifficulty('hard')">HARD</button>
+        </div>
+        <div class="nr-section-label" style="margin-top:22px;">MOVE</div>
+        <div class="nr-move-pad">
+          <div class="nr-move-row"><button class="nr-move-btn" onclick="movePlayer('up')">▲</button></div>
+          <div class="nr-move-row">
+            <button class="nr-move-btn" onclick="movePlayer('left')">◀</button>
+            <button class="nr-move-btn" onclick="movePlayer('down')">▼</button>
+            <button class="nr-move-btn" onclick="movePlayer('right')">▶</button>
+          </div>
+        </div>
+        <button class="nr-gen-btn" onclick="generateMaze()">⟳ NEW BREACH</button>
+      </div>
+
+      <!-- CENTER: Console + Maze -->
+      <div class="nr-center">
+        <div class="nr-header-bar">
+          <span class="nr-console-label">///Console.///</span>
+          <span class="nr-dots">⠿ ⠿ ⠿ ⠿</span>
+          <span class="nr-breach-timer">Breach Timer <span class="nr-timer-box" id="nr-timer">0:00</span></span>
+        </div>
+        <div class="nr-maze-wrap">
+          <canvas id="nr-maze-canvas"></canvas>
+          <div class="nr-maze-overlay" id="nr-maze-overlay"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: CMD Terminal -->
+      <div class="nr-right">
+        <div class="nr-terminal-label">CMD.///Buffer.!</div>
+        <div class="nr-terminal-screen" id="nr-terminal"></div>
+      </div>
+
+    </div>
+  </div><!-- end tab-content-netrunner -->
 
 </div><!-- end sheet -->
 
@@ -353,5 +408,6 @@
 
 </div><!-- wrapper -->
 <script src="DND.js"></script>
+<script src="netrunner.js"></script>
 </body>
 </html>
