@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css">
+<link rel="stylesheet" href="DND.css?v=20260413d">
 </head>
 <body>
 <div class="wrapper">
@@ -21,34 +21,6 @@
   </div>
 </header>
 
-<!-- UPLOAD -->
-<div id="upload-zone">
-  <span class="upload-icon">[ TXT ]</span>
-  <h2>Upload Character File</h2>
-  <p>DROP YOUR .TXT DOSSIER HERE OR CLICK TO BROWSE</p>
-  <input type="file" id="file-input" accept=".txt">
-  <button class="upload-btn" onclick="document.getElementById('file-input').click()">SELECT FILE</button>
-  <button class="upload-btn upload-secondary" type="button" onclick="openCreateCharacterModal()">CREATE NEW CHARACTER</button>
-  <br>
-  <button id="show-format">show expected format</button>
-  <div class="format-hint" id="format-hint">
-<strong>name:</strong> { "Primary Name", "Street Name", "Handle" }<br>
-<strong>stats:</strong> { REF=10, INT=8, COOL=8, ATTR=6, TECH=5, LUCK=4, EMPT=4 }<br>
-<strong>career:</strong> { "Solo" }<br>
-<strong>careerSkill:</strong> {<br>
-&nbsp;&nbsp;point=8<br>&nbsp;&nbsp;Awareness/Notice=6<br>&nbsp;&nbsp;Handgun=5<br>}<br>
-<strong>reputation:</strong> { rep=3 }<br>
-<strong>wallet:</strong> { eddies=2500 }<br>
-<strong>physicalBody:</strong> {<br>
-&nbsp;&nbsp;bodylevel=3<br>&nbsp;&nbsp;weight=54<br>&nbsp;&nbsp;stunpoint=7<br>}<br>
-<strong>weapon:</strong> { weapon1:{ name="Very Heavy Pistol", Type="Weapon", Damage/Ammo="4D6", info:{ "Reliable sidearm." } } }<br>
-<strong>cyberware:</strong> { cyberware1:{ name="Neural Processor", Type="Cyberware", info:{ "Interface hardware." } } }<br>
-<strong>armor:</strong> {<br>
-&nbsp;&nbsp;Head=10, Torso=15, R.Arm=8, L.Arm=8, R.Leg=10, L.Leg=10<br>}<br>
-<strong>damage:</strong> {<br>
-&nbsp;&nbsp;Head=0, Torso=0, R.Arm=0, L.Arm=0, R.Leg=0, L.Leg=0<br>}
-  </div>
-</div>
 <div id="status-bar"></div>
 
 <!-- SHEET -->
@@ -68,9 +40,9 @@
 
   <div class="sheet-actions">
     <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .TXT</button>
-    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">RELOAD FILE</button>
+    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
     <input type="file" id="file-input2" accept=".txt" style="display:none">
-    <button class="action-btn red" onclick="resetSheet()">NEW CHARACTER</button>
+    <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
   </div>
 
   <div class="sheet-section">
@@ -260,16 +232,18 @@
           <button class="nr-diff-btn" id="nr-diff-medium" type="button" onclick="setDifficulty('medium')">MEDIUM</button>
           <button class="nr-diff-btn" id="nr-diff-hard" type="button" onclick="setDifficulty('hard')">HARD</button>
         </div>
-        <div class="nr-section-label" style="margin-top:22px;">MOVE</div>
-        <div class="nr-move-pad">
-          <div class="nr-move-row"><button class="nr-move-btn" type="button" onclick="movePlayer('up')">UP</button></div>
-          <div class="nr-move-row">
-            <button class="nr-move-btn" type="button" onclick="movePlayer('left')">LEFT</button>
-            <button class="nr-move-btn" type="button" onclick="movePlayer('down')">DOWN</button>
-            <button class="nr-move-btn" type="button" onclick="movePlayer('right')">RIGHT</button>
-          </div>
+        <div class="nr-section-label" style="margin-top:22px;">KEYBINDS</div>
+        <div class="nr-info-list">
+          <div class="nr-info-row"><span class="nr-key">R</span><span class="nr-info-copy">Generate new breach</span></div>
+          <div class="nr-info-row"><span class="nr-key">ARROWS</span><span class="nr-info-copy">Move runner</span></div>
         </div>
-        <button class="nr-gen-btn" type="button" onclick="generateMaze()">NEW BREACH</button>
+        <div class="nr-section-label" style="margin-top:22px;">RULES</div>
+        <div class="nr-info-list nr-rules-list">
+          <div class="nr-rule-copy">10 seconds per breach.</div>
+          <div class="nr-rule-copy">Hit a wall and you die.</div>
+          <div class="nr-rule-copy">Touch your own path and you die.</div>
+          <div class="nr-rule-copy">Reach the red node to win.</div>
+        </div>
       </div>
 
       <!-- CENTER: Console + Maze -->
@@ -362,32 +336,6 @@
   </div>
 </div>
 
-<!-- CREATE CHARACTER MODAL -->
-<div class="modal-overlay" id="create-character-modal">
-  <div class="modal-box create-modal-box">
-    <h3>NEW CHARACTER</h3>
-    <div class="create-form">
-      <label>
-        <div class="create-field-label">Character Name</div>
-        <input class="create-field-input" id="create-char-name" type="text" maxlength="60" placeholder="V, Kaito, Johnny..." />
-      </label>
-      <label>
-        <div class="create-field-label">Optional Name</div>
-        <input class="create-field-input" id="create-char-alias" type="text" maxlength="60" placeholder="Street name / handle" />
-      </label>
-      <label>
-        <div class="create-field-label">Career</div>
-        <input class="create-field-input" id="create-char-career" type="text" maxlength="40" placeholder="Solo, Netrunner, Techie..." />
-      </label>
-      <div class="create-form-note">Starts a blank dossier with all values at 0 and no career skills loaded.</div>
-    </div>
-    <div class="modal-btns" style="margin-top:18px;">
-      <button class="action-btn" type="button" onclick="closeCreateCharacterModal()">CANCEL</button>
-      <button class="action-btn red" type="button" onclick="createNewCharacter()">CREATE</button>
-    </div>
-  </div>
-</div>
-
 <!-- CONFIRM MODAL -->
 <div class="modal-overlay" id="modal">
   <div class="modal-box">
@@ -401,7 +349,7 @@
 </div>
 
 </div><!-- wrapper -->
-<script src="DND.js"></script>
-<script src="netrunner.js"></script>
+<script src="DND.js?v=20260413d"></script>
+<script src="netrunner.js?v=20260413d"></script>
 </body>
 </html>
