@@ -448,6 +448,11 @@ function computeStatDebuffs(){
   }
   return debuffs;
 }
+function getEffectiveStatValue(key){
+  const base=sheetStats[key]||0;
+  const debuff=computeStatDebuffs()[key];
+  return debuff ? Math.max(0,Math.floor(base*debuff.mult)-debuff.flat) : base;
+}
 
 /* ══════════════ SKILLS ══════════════ */
 function renderSkills(){
@@ -675,6 +680,17 @@ function addCustomRollModifier(){
   valueInput.value='';
   renderRollLab();
   showActionLog(`ADDED CUSTOM MODIFIER ${label.toUpperCase()}`);
+}
+function rollFacedown(){
+  const rollQty=document.getElementById('roll-qty');
+  if(rollQty)rollQty.value=1;
+  rollModifiers=[
+    {source:'PRESET',label:'COOL',value:getEffectiveStatValue('COOL')},
+    {source:'PRESET',label:'Reputation',value:repValue}
+  ];
+  renderRollLab();
+  showActionLog('FACEDOWN PRESET LOCKED: COOL + REP + 1D10');
+  rollDie(10);
 }
 function rollDie(sides){
   clearInterval(_rollTimer);
