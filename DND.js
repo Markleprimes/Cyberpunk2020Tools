@@ -966,3 +966,32 @@ function resetSheet(){
 }
 
 renderSheet(buildBlankSheetData());
+
+function openNewCharacterModal(){
+  document.getElementById('new-char-modal').classList.add('show');
+}
+
+function closeNewCharacterModal(){
+  document.getElementById('new-char-modal').classList.remove('show');
+}
+
+function submitNewCharacter(){
+  const name = document.getElementById('new-name').value.trim();
+  const street = document.getElementById('new-street').value.trim();
+  const career = document.getElementById('new-career').value.trim();
+
+  if(!name || !career){
+    showError("NAME AND CAREER REQUIRED");
+    return;
+  }
+
+  document.getElementById('char-name').textContent = name;
+  document.getElementById('char-career').textContent = career;
+
+  document.getElementById('char-aliases').innerHTML =
+    street ? `<span class="alias-tag">${street}</span>` : "";
+
+  closeNewCharacterModal();
+  showActionLog("NEW CHARACTER CREATED");
+}
+
