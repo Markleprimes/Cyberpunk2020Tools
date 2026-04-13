@@ -383,3 +383,20 @@ header{display:flex;align-items:flex-end;gap:20px;margin-bottom:36px;border-bott
 .create-field-input:focus{
   border-color:var(--accent);
 }
+
+.online-dot{
+  display:inline-block;
+  width:6px;
+  height:6px;
+  background:var(--accent-g);
+  border-radius:50%;
+  margin-right:6px;
+  box-shadow:0 0 6px rgba(0,217,139,.6);
+  animation:blinkDot 1.2s infinite;
+  vertical-align:middle;
+}
+
+@keyframes blinkDot{
+  0%,100%{opacity:1;}
+  50%{opacity:0.2;}
+}
