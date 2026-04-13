@@ -113,16 +113,18 @@
     <div class="panel" style="grid-column:4/5;">
       <div class="panel-title">Reputation</div>
       <div class="rep-row">
-        <div class="rep-number" id="rep-number">0</div>
-        <div class="rep-side">
+        <div class="rep-main" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)">
+          <div class="rep-number" id="rep-number">0</div>
+          <div class="rep-side">
           <div class="rep-label">STREET CRED</div>
           <div class="rep-btn-row">
-            <button class="ctrl-btn" onclick="changeRep(1)">+</button>
-            <button class="ctrl-btn minus" onclick="changeRep(-1)">−</button>
+            <button class="ctrl-btn" onclick="event.stopPropagation();changeRep(1)">+</button>
+            <button class="ctrl-btn minus" onclick="event.stopPropagation();changeRep(-1)">−</button>
+          </div>
           </div>
         </div>
       </div>
-      <div class="rep-pips" id="rep-pips"></div>
+      <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)"></div>
     </div>
     <div class="panel" style="grid-column:5/6;">
       <div class="panel-title">Wallet</div>
@@ -211,6 +213,7 @@
           </div>
         </div>
         <div class="modifier-bar">
+          <button class="add-skill-btn" type="button" onclick="rollFacedown()" style="border-color:rgba(255,77,109,.32);color:var(--accent-r);background:rgba(255,77,109,.08);">FACEDOWN</button>
           <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
           <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
           <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">＋ ADD MODIFIER</button>
