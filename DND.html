@@ -43,9 +43,40 @@
     <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
     <input type="file" id="file-input2" accept=".txt" style="display:none">
     <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
+    <button class="action-btn" onclick="openNewCharacterModal()" style="border-color:rgba(255,177,74,.4);color:var(--accent-y);">NEW</button>
   </div>
 
   <div class="sheet-section">
+  
+<div class="modal-overlay" id="new-char-modal">
+  <div class="modal-box create-modal-box">
+    <h3>NEW CHARACTER</h3>
+
+    <div class="create-form">
+      
+      <label>
+        <div class="create-field-label">Name</div>
+        <input class="create-field-input" id="new-name" type="text">
+      </label>
+
+      <label>
+        <div class="create-field-label">Street Name (Optional)</div>
+        <input class="create-field-input" id="new-street" type="text">
+      </label>
+
+      <label>
+        <div class="create-field-label">Career</div>
+        <input class="create-field-input" id="new-career" type="text">
+      </label>
+
+    </div>
+
+    <div class="modal-btns">
+      <button class="action-btn" onclick="closeNewCharacterModal()">CANCEL</button>
+      <button class="action-btn red" onclick="submitNewCharacter()">CREATE</button>
+    </div>
+  </div>
+</div>
 
   <!-- STATS -->
   <div class="panel" style="margin-bottom:18px;">
