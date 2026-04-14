@@ -1,9 +1,22 @@
 /* NETRUNNER DECK // GRID BREACH */
 
-const NR_CONFIG = {
-  easy: { size: 8, extraOpenings: 8, timeLimit: 10 },
-  medium: { size: 12, extraOpenings: 7, timeLimit: 10 },
-  hard: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 4, minPath: 40, maxOpen: 118 }
+const NR_MODE_TIERS = {
+  easy: [1, 3],
+  medium: [4, 6],
+  hard: [7, 10]
+};
+
+const NR_TIER_CONFIGS = {
+  1: { size: 8, extraOpenings: 10, timeLimit: 10, attempts: 8 },
+  2: { size: 8, extraOpenings: 8, timeLimit: 10, minPath: 14, maxOpen: 48, attempts: 12 },
+  3: { size: 8, extraOpenings: 6, timeLimit: 10, minPath: 18, maxOpen: 44, attempts: 14 },
+  4: { size: 12, extraOpenings: 10, timeLimit: 10, minPath: 20, maxOpen: 92, attempts: 14 },
+  5: { size: 12, extraOpenings: 8, timeLimit: 10, minPath: 26, maxOpen: 86, attempts: 18 },
+  6: { size: 12, extraOpenings: 6, timeLimit: 10, stairPatterns: 1, minPath: 32, maxOpen: 80, attempts: 22 },
+  7: { size: 16, extraOpenings: 5, timeLimit: 10, stairPatterns: 2, minPath: 38, maxOpen: 132, attempts: 22 },
+  8: { size: 16, extraOpenings: 4, timeLimit: 10, stairPatterns: 3, minPath: 44, maxOpen: 126, attempts: 24 },
+  9: { size: 16, extraOpenings: 3, timeLimit: 10, stairPatterns: 4, minPath: 50, maxOpen: 120, attempts: 28 },
+  10: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 5, minPath: 56, maxOpen: 114, attempts: 32 }
 };
 
 const NR_COLORS = {
@@ -73,9 +86,18 @@ let nrFailed = false;
 let nrCountdown = 60;
 let nrTimerHandle = null;
 let nrTerminalHandle = null;
+let nrStarted = false;
+let nrBreachAudio = null;
+let nrMoveAudio = null;
+let nrTier = 1;
+const NR_AUDIO_OUTRO_TIME = 10.15;
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * ((max - min) + 1)) + min;
 }
 
 function shuffle(list) {
@@ -96,13 +118,24 @@ function coordKey(x, y) {
 }
 
 function setDifficulty(level) {
-  if (!NR_CONFIG[level]) return;
+  if (!NR_MODE_TIERS[level]) return;
+  nrStarted = true;
   nrDifficulty = level;
   ['easy', 'medium', 'hard'].forEach((key) => {
     const button = getEl(`nr-diff-${key}`);
     if (button) button.classList.toggle('active', key === level);
   });
+  startBreachMusic();
   generateMaze();
+}
+
+function rollTierForMode(mode) {
+  const range = NR_MODE_TIERS[mode] || NR_MODE_TIERS.easy;
+  return randomInt(range[0], range[1]);
+}
+
+function getTierConfig(tier) {
+  return { ...NR_TIER_CONFIGS[tier] };
 }
 
 function buildPlayableGrid(size, extraOpenings) {
@@ -283,11 +316,11 @@ function countOpenCells(grid) {
   return grid.reduce((total, row) => total + row.filter((cell) => cell === 0).length, 0);
 }
 
-function buildHardGrid(config) {
+function buildRankedGrid(config) {
   let bestGrid = null;
   let bestScore = -Infinity;
 
-  for (let attempt = 0; attempt < 24; attempt += 1) {
+  for (let attempt = 0; attempt < (config.attempts || 20); attempt += 1) {
     let grid = buildPlayableGrid(config.size, config.extraOpenings);
     if (config.stairPatterns) {
       grid = applyStairPatterns(grid, config.stairPatterns);
@@ -297,11 +330,13 @@ function buildHardGrid(config) {
     if (!path.length) continue;
 
     const openCells = countOpenCells(grid);
-    const pathDelta = Math.abs(path.length - config.minPath);
-    const openDelta = Math.abs(openCells - config.maxOpen);
-    const score = (path.length >= config.minPath ? 40 : 0) - pathDelta - (openDelta * 0.6);
+    const targetPath = config.minPath || 0;
+    const targetOpen = config.maxOpen ?? Number.POSITIVE_INFINITY;
+    const pathDelta = Math.abs(path.length - targetPath);
+    const openDelta = Math.abs(openCells - targetOpen);
+    const score = (path.length >= targetPath ? 60 : 0) + (openCells <= targetOpen ? 24 : 0) - pathDelta - (openDelta * 0.6);
 
-    if (path.length >= config.minPath && openCells <= config.maxOpen) {
+    if (path.length >= targetPath && openCells <= targetOpen) {
       return grid;
     }
 
@@ -315,7 +350,8 @@ function buildHardGrid(config) {
 }
 
 function generateMaze() {
-  const config = NR_CONFIG[nrDifficulty];
+  nrTier = rollTierForMode(nrDifficulty);
+  const config = getTierConfig(nrTier);
   nrSize = config.size;
   nrPlayer = { x: 0, y: 0 };
   nrGoal = { x: nrSize - 1, y: nrSize - 1 };
@@ -325,12 +361,9 @@ function generateMaze() {
   nrComplete = false;
   nrFailed = false;
   nrCountdown = config.timeLimit;
-  nrGrid = nrDifficulty === 'hard'
-    ? buildHardGrid(config)
+  nrGrid = (config.minPath || config.maxOpen || config.stairPatterns)
+    ? buildRankedGrid(config)
     : buildPlayableGrid(nrSize, config.extraOpenings);
-  if (config.stairPatterns && nrDifficulty !== 'hard') {
-    nrGrid = applyStairPatterns(nrGrid, config.stairPatterns);
-  }
 
   clearResultOverlay();
   restartTimer();
@@ -350,6 +383,7 @@ function restartTimer() {
       nrFailed = true;
       appendTerminalLine(NR_FAIL_LINE, 'fail');
       showResult(false);
+      jumpToBreachOutro();
     }
   }, 1000);
 }
@@ -362,8 +396,113 @@ function updateTimerDisplay() {
   const seconds = safeTime % 60;
   timer.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
   timer.classList.remove('running', 'expired');
+  if (!nrStarted) return;
   if (nrFailed || safeTime <= 10) timer.classList.add('expired');
   else timer.classList.add('running');
+}
+
+function startBreachMusic() {
+  if (!nrBreachAudio) {
+    nrBreachAudio = new Audio('audio/neonBreach.mp3');
+    nrBreachAudio.loop = false;
+    nrBreachAudio.preload = 'auto';
+    nrBreachAudio.volume = 0.6;
+  }
+  try {
+    nrBreachAudio.currentTime = 0;
+  } catch (_err) {}
+  const playPromise = nrBreachAudio.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {});
+  }
+}
+
+function jumpToBreachOutro() {
+  if (!nrBreachAudio) return;
+  try {
+    nrBreachAudio.currentTime = NR_AUDIO_OUTRO_TIME;
+  } catch (_err) {}
+  const playPromise = nrBreachAudio.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {});
+  }
+}
+
+function playMoveBeep() {
+  if (!nrMoveAudio) {
+    nrMoveAudio = new Audio('audio/beep.mp3');
+    nrMoveAudio.preload = 'auto';
+    nrMoveAudio.volume = 0.55;
+  }
+  try {
+    nrMoveAudio.currentTime = 0;
+  } catch (_err) {}
+  const playPromise = nrMoveAudio.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {});
+  }
+}
+
+function showIdleOverlay() {
+  const overlay = getEl('nr-maze-overlay');
+  if (!overlay) return;
+  overlay.innerHTML = '';
+  const message = document.createElement('div');
+  message.className = 'nr-result-msg idle';
+  message.innerHTML = '///SELECT<br>MODE///';
+  overlay.appendChild(message);
+}
+
+function drawIdleCanvas() {
+  const canvas = getEl('nr-maze-canvas');
+  if (!canvas) return;
+  const wrap = canvas.parentElement;
+  const size = Math.max(260, Math.min((wrap?.clientWidth || 420) - 24, (wrap?.clientHeight || 420) - 24, 420));
+  const ctx = canvas.getContext('2d');
+  canvas.width = size;
+  canvas.height = size;
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = NR_COLORS.bg;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = NR_COLORS.border;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, size - 2, size - 2);
+}
+
+function renderIdleTerminal() {
+  const terminal = getEl('nr-terminal');
+  if (!terminal) return;
+  terminal.innerHTML = '';
+  [
+    'CMD.DeckTerminal///IDLE///>AWAIT',
+    'CMD.Breach///SELECT///>DIFFICULTY',
+    'AUDIO.Buffer///neonBreach.mp3///>STANDBY'
+  ].forEach((lineText, index) => {
+    const line = document.createElement('span');
+    line.className = `nr-term-line${index === 0 ? '' : ' dim'}`;
+    line.textContent = lineText;
+    terminal.appendChild(line);
+  });
+  const cursor = document.createElement('span');
+  cursor.className = 'nr-term-cursor';
+  terminal.appendChild(cursor);
+}
+
+function renderIdleState() {
+  clearInterval(nrTimerHandle);
+  clearInterval(nrTerminalHandle);
+  nrGrid = [];
+  nrTrail = [];
+  nrVisited = [];
+  nrComplete = false;
+  nrFailed = false;
+  nrCountdown = 0;
+  updateTimerDisplay();
+  drawIdleCanvas();
+  showIdleOverlay();
+  renderIdleTerminal();
 }
 
 function restartTerminalLoop() {
@@ -408,6 +547,7 @@ function failRun(reasonLine) {
   appendTerminalLine(reasonLine, 'fail');
   appendTerminalLine(NR_FAIL_LINE, 'fail');
   showResult(false);
+  jumpToBreachOutro();
 }
 
 function showResult(success) {
@@ -545,12 +685,14 @@ function movePlayer(direction) {
   nrPlayer = { x: nextX, y: nextY };
   nrVisited[nextY][nextX] = true;
   nrTrail.push({ x: nextX, y: nextY });
+  playMoveBeep();
 
   if (nextX === nrGoal.x && nextY === nrGoal.y) {
     nrComplete = true;
     clearInterval(nrTimerHandle);
     clearInterval(nrTerminalHandle);
     showResult(true);
+    jumpToBreachOutro();
   }
 
   drawGrid();
@@ -561,6 +703,7 @@ function initNetrunner() {
     const activeTag = document.activeElement?.tagName;
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
     if (event.key === 'r' || event.key === 'R') {
+      if (!nrStarted) return;
       event.preventDefault();
       generateMaze();
       return;
@@ -579,9 +722,11 @@ function initNetrunner() {
 
   window.addEventListener('resize', () => {
     if (nrGrid.length) drawGrid();
+    else renderIdleState();
   });
 
-  generateMaze();
+  updateTimerDisplay();
+  renderIdleState();
 }
 
 if (document.readyState === 'loading') {
