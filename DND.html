@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260414c">
+<link rel="stylesheet" href="DND.css?v=20260414d">
 </head>
 <body>
 <div class="wrapper">
@@ -241,8 +241,17 @@
             <button class="preset-btn" type="button" onclick="rollInitiationCheck()">Initaition Check</button>
             <button class="preset-btn" type="button" onclick="rollAmbush()">Ambush</button>
             <button class="preset-btn" type="button" onclick="rollAmbushCounter()">Ambush Counter</button>
-            <button class="preset-btn" type="button" onclick="openAimHitModal()">Aim Hit</button>
             <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
+          </div>
+          <div class="aim-stack-box">
+            <div class="roll-box-title">Aim Action</div>
+            <div class="aim-stack-row">
+              <div class="aim-stack-pips" id="aim-stack-pips"></div>
+            </div>
+            <div class="aim-followup-row" id="aim-followup-row">
+              <button class="preset-btn aim-followup-btn" id="aim-keep-btn" type="button" onclick="keepAimAction()">Aim</button>
+              <button class="preset-btn aim-followup-btn" type="button" onclick="attackAimAction()">Attack</button>
+            </div>
           </div>
           <div class="roll-box-note">Each preset replaces the current modifier stack with its own formula, then rolls 1d10.</div>
         </div>
@@ -338,21 +347,34 @@
 <!-- AIM HIT MODAL -->
 <div class="modal-overlay" id="aim-hit-modal">
   <div class="modal-box create-modal-box">
-    <h3>AIM HIT</h3>
+    <h3>AIM ATTACK</h3>
     <div class="create-form">
       <label>
         <div class="create-field-label">Weapon</div>
         <select class="create-field-input" id="aim-weapon-select"></select>
       </label>
-      <label>
-        <div class="create-field-label">Aim Bonus</div>
-        <input class="create-field-input" id="aim-bonus-input" type="number" min="0" step="1" value="0" />
-      </label>
-      <div class="create-form-note">Uses selected weapon Accuracy + your entered Aim bonus + 1d10.</div>
+      <div class="create-form-note" id="aim-weapon-note">Pick a weapon first.</div>
     </div>
     <div class="modal-btns" style="margin-top:18px;">
       <button class="action-btn" type="button" onclick="closeAimHitModal()">CANCEL</button>
-      <button class="action-btn red" type="button" onclick="submitAimHitModal()">ROLL</button>
+      <button class="action-btn red" type="button" onclick="confirmAimHitWeapon()">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="aim-bonus-modal">
+  <div class="modal-box create-modal-box">
+    <h3>AIM BONUS</h3>
+    <div class="create-form">
+      <div class="create-form-note" id="aim-bonus-note">Select an aim bonus to add before rolling 1D10.</div>
+      <div class="aim-bonus-grid">
+        <button class="action-btn new-btn aim-bonus-btn" type="button" onclick="submitAimHitBonus(1)">+1</button>
+        <button class="action-btn new-btn aim-bonus-btn" type="button" onclick="submitAimHitBonus(2)">+2</button>
+        <button class="action-btn new-btn aim-bonus-btn" type="button" onclick="submitAimHitBonus(3)">+3</button>
+      </div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeAimBonusModal()">CANCEL</button>
     </div>
   </div>
 </div>
@@ -412,7 +434,7 @@
 </div>
 
 </div><!-- wrapper -->
-<script src="DND.js?v=20260414c"></script>
-<script src="netrunner.js?v=20260414c"></script>
+<script src="DND.js?v=20260414e"></script>
+<script src="netrunner.js?v=20260414d"></script>
 </body>
 </html>
