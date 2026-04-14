@@ -8,10 +8,12 @@ let bodyLevelVal = 0, weightVal = 0, stunVal = 0;
 let inventory = {};
 let rollModifiers = [];
 let currentRoll = { sides: null, qty: 1, rolls: [], result: 0 };
+let aimStackPoints = 0;
 let _rollTimer = null;
 let bannerImageData = '';
 let inventoryEditState = null;
 let aimHitWeapons = [];
+let aimHitSelectedWeapon = null;
 let dossierHoverAudio = null;
 let dossierHoveredButton = null;
 let rollCinemaFrame = null;
@@ -38,10 +40,10 @@ document.getElementById('item-file-input').addEventListener('change',e=>{if(e.ta
 document.getElementById('banner-image-input').addEventListener('change',e=>{if(e.target.files[0])readBannerImage(e.target.files[0]);});
 document.getElementById('inventory-editor-modal').addEventListener('click',e=>{if(e.target===document.getElementById('inventory-editor-modal'))closeInventoryEditor();});
 document.getElementById('aim-hit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('aim-hit-modal'))closeAimHitModal();});
+document.getElementById('aim-bonus-modal').addEventListener('click',e=>{if(e.target===document.getElementById('aim-bonus-modal'))closeAimBonusModal();});
 document.getElementById('new-char-modal').addEventListener('click',e=>{if(e.target===document.getElementById('new-char-modal'))closeNewCharacterModal();});
 document.getElementById('roll-cinema-modal').addEventListener('click',e=>{if(e.target===document.getElementById('roll-cinema-modal'))closeRollCinemaModal();});
 document.getElementById('inventory-item-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveInventoryItem();});
-document.getElementById('aim-bonus-input').addEventListener('keydown',e=>{if(e.key==='Enter')submitAimHitModal();});
 
 function readFile(file){
   if(!file.name.endsWith('.txt')){showError('ERROR: Only .txt files are supported.');return;}
@@ -463,6 +465,7 @@ document.getElementById('status-bar').style.display='none';
   mergeInventory(data.inventory||{});
   renderInventory();
   rollModifiers=[];
+  aimStackPoints=0;
   currentRoll={sides:null,qty:getRollQuantity(),rolls:[],result:0};
   renderRollLab();
 
@@ -554,6 +557,9 @@ function getItemNumericField(item,...fieldNames){
   }
   return null;
 }
+function getAimHitAccuracy(item){
+  return getItemNumericField(item,'Accuracy','Weapon Accuracy','WA');
+}
 function setPresetRoll(label,modifiers,sides=10){
   const rollQty=document.getElementById('roll-qty');
   if(rollQty)rollQty.value=1;
@@ -564,6 +570,44 @@ function setPresetRoll(label,modifiers,sides=10){
 }
 
 /* ══════════════ SKILLS ══════════════ */
+function renderAimAction(){
+  const pips=document.getElementById('aim-stack-pips');
+  const followup=document.getElementById('aim-followup-row');
+  const keepBtn=document.getElementById('aim-keep-btn');
+  if(!pips||!followup||!keepBtn)return;
+  pips.innerHTML=Array.from({length:3},(_,idx)=>`<span class="aim-stack-pip${idx<aimStackPoints?' active':''}"></span>`).join('');
+  keepBtn.textContent=aimStackPoints>0?'Keep Aim':'Aim';
+  keepBtn.classList.toggle('disabled',aimStackPoints>=3);
+}
+
+function resetAimAction(){
+  aimStackPoints=0;
+  renderAimAction();
+}
+
+function startAimAction(){
+  if(aimStackPoints>=3)return;
+  aimStackPoints=1;
+  renderAimAction();
+  showActionLog('AIM ACTION STARTED: +1 AIM');
+}
+
+function keepAimAction(){
+  if(aimStackPoints<=0){
+    startAimAction();
+    return;
+  }
+  if(aimStackPoints>=3)return;
+  aimStackPoints+=1;
+  renderAimAction();
+  showActionLog(`AIM STACK INCREASED TO +${aimStackPoints}`);
+}
+
+function attackAimAction(){
+  if(aimStackPoints<=0)return;
+  openAimHitModal();
+}
+
 function renderSkills(){
   const el=document.getElementById('sp-display');
   el.textContent=upgradePoints;
@@ -746,6 +790,7 @@ function renderRollLab(){
   document.getElementById('roll-last-summary').textContent=equation;
   document.getElementById('roll-last-breakdown').textContent=breakdown;
   document.getElementById('roll-last-total').textContent=total;
+  renderAimAction();
   if(!rollModifiers.length){
     modList.innerHTML='<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
     return;
@@ -916,26 +961,54 @@ function rollSuppressiveFireSave(){
   ],10);
 }
 function openAimHitModal(){
-  const weapons=(inventory.weapon||[]).filter(item=>getItemNumericField(item,'Accuracy')!==null);
-  if(!weapons.length){showError('ADD OR LOAD A WEAPON WITH AN ACCURACY VALUE FIRST.');return;}
+  const weapons=(inventory.weapon||[]).slice();
   aimHitWeapons=weapons;
+  aimHitSelectedWeapon=null;
   const select=document.getElementById('aim-weapon-select');
-  select.innerHTML=weapons.map((weapon,idx)=>`<option value="${idx}">${escapeHtml(weapon.name||`Weapon ${idx+1}`)} (ACC ${getItemNumericField(weapon,'Accuracy')})</option>`).join('');
-  document.getElementById('aim-bonus-input').value=0;
+  const note=document.getElementById('aim-weapon-note');
+  if(!weapons.length){
+    select.innerHTML='';
+    if(note)note.textContent='No weapons in inventory yet.';
+  }else{
+    select.innerHTML=weapons.map((weapon,idx)=>`<option value="${idx}">${escapeHtml(weapon.name||`Weapon ${idx+1}`)}</option>`).join('');
+    if(note)note.textContent='Weapon list preview only for now.';
+  }
   document.getElementById('aim-hit-modal').classList.add('show');
-  document.getElementById('aim-bonus-input').focus();
+  if(weapons.length)select.focus();
 }
 function closeAimHitModal(){
   document.getElementById('aim-hit-modal').classList.remove('show');
 }
-function submitAimHitModal(){
+function closeAimBonusModal(){
+  document.getElementById('aim-bonus-modal').classList.remove('show');
+  aimHitSelectedWeapon=null;
+}
+function confirmAimHitWeapon(){
   const weapon=aimHitWeapons[parseInt(document.getElementById('aim-weapon-select').value,10)];
   if(!weapon){showError('SELECT A WEAPON FIRST.');return;}
-  const accuracy=getItemNumericField(weapon,'Accuracy');
-  const aim=Math.max(0,parseInt(document.getElementById('aim-bonus-input').value,10)||0);
+  const accuracy=getAimHitAccuracy(weapon);
+  if(accuracy===null){
+    showError('SELECTED WEAPON HAS NO ACCURACY, WEAPON ACCURACY, OR WA VALUE.');
+    return;
+  }
+  const aimUsed=aimStackPoints;
   closeAimHitModal();
+  rollModifiers.push({source:'PRESET',label:`${weapon.name||'Weapon'} Accuracy`,value:accuracy});
+  if(aimUsed>0){
+    rollModifiers.push({source:'PRESET',label:'Aim',value:aimUsed});
+  }
+  renderRollLab();
+  resetAimAction();
+  rollDie(10);
+  showActionLog(`AIM ATTACK ROLLED ${weapon.name?.toUpperCase()||'WEAPON'} ACC ${accuracy>=0?'+':''}${accuracy}${aimUsed>0?` AIM +${aimUsed}`:''}`);
+}
+function submitAimHitBonus(aim){
+  const weapon=aimHitSelectedWeapon;
+  if(!weapon){showError('SELECT A WEAPON FIRST.');return;}
+  const accuracy=getAimHitAccuracy(weapon);
+  closeAimBonusModal();
   setPresetRoll('AIM HIT',[
-    {source:'PRESET',label:`${weapon.name} Accuracy`,value:accuracy},
+    {source:'PRESET',label:`${weapon.name||'Weapon'} Accuracy`,value:accuracy},
     {source:'PRESET',label:'Aim',value:aim}
   ],10);
 }
@@ -1148,6 +1221,7 @@ function resetSheet(){
     document.getElementById('status-bar').style.display='none';
     closeInventoryEditor();
     closeAimHitModal();
+    closeAimBonusModal();
     clearInterval(_rollTimer);
     renderSheet(buildBlankSheetData());
     closeModal();
