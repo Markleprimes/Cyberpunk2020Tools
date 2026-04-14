@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260413d">
+<link rel="stylesheet" href="DND.css?v=20260414c">
 </head>
 <body>
 <div class="wrapper">
@@ -18,9 +18,9 @@
   <div class="corner-tag">
     REV 2.4.1<br>NIGHT CITY UPLINK<br>
     <span class="online">
-  <span class="online-dot"></span>
-  JACKED IN
-  </span>
+      <span class="online-dot"></span>
+      JACKED IN
+    </span>
   </div>
 </header>
 
@@ -46,7 +46,7 @@
     <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
     <input type="file" id="file-input2" accept=".txt" style="display:none">
     <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
-    <button class="action-btn" onclick="openNewCharacterModal()" style="border-color:rgba(255,177,74,.4);color:var(--accent-y);">NEW</button>
+    <button class="action-btn new-btn" onclick="openNewCharacterModal()">NEW</button>
   </div>
 
   <div class="sheet-section">
@@ -193,6 +193,21 @@
     <div class="panel-title">Roll Lab</div>
     <div class="roll-lab">
       <div>
+        <div class="roll-status-strip">
+          <div class="roll-status-copy">
+            <div class="roll-label">Last Result</div>
+            <div class="roll-equation" id="roll-last-summary">Pick a die and the roll modal will handle the animation.</div>
+            <div class="roll-breakdown" id="roll-last-breakdown">Modifiers stay locked here. Roll drama moves to the popup.</div>
+          </div>
+          <div class="roll-status-total" id="roll-last-total">0</div>
+        </div>
+        <div class="modifier-bar">
+          <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
+          <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
+          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD MODIFIER</button>
+          <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR MODIFIERS</button>
+        </div>
+        <div class="modifier-list" id="modifier-list"></div>
         <div class="roll-control-bar">
           <div class="roll-qty-wrap">
             <span class="roll-qty-label">Dice Count</span>
@@ -209,24 +224,6 @@
           <button class="dice-btn" type="button" onclick="rollDie(12)">D12</button>
           <button class="dice-btn" type="button" onclick="rollDie(20)">D20</button>
         </div>
-        <div class="roll-display">
-          <div class="die-orb" id="die-orb">
-            <div class="die-face" id="die-face">--</div>
-          </div>
-          <div class="roll-summary">
-            <div class="roll-label">Current Roll</div>
-            <div class="roll-equation" id="roll-equation">Pick a die and add modifiers from stats, skills, or numeric inventory values.</div>
-            <div class="roll-breakdown" id="roll-breakdown"></div>
-            <div class="roll-total" id="roll-total">0</div>
-          </div>
-        </div>
-        <div class="modifier-bar">
-          <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
-          <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
-          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD MODIFIER</button>
-          <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR MODIFIERS</button>
-        </div>
-        <div class="modifier-list" id="modifier-list"></div>
       </div>
       <div class="roll-side-panel">
         <div class="roll-box">
@@ -262,7 +259,7 @@
       <div class="nr-left">
         <div class="nr-section-label">DIFFICULTY</div>
         <div class="nr-diff-btns">
-          <button class="nr-diff-btn active" id="nr-diff-easy" type="button" onclick="setDifficulty('easy')">EASY</button>
+          <button class="nr-diff-btn" id="nr-diff-easy" type="button" onclick="setDifficulty('easy')">EASY</button>
           <button class="nr-diff-btn" id="nr-diff-medium" type="button" onclick="setDifficulty('medium')">MEDIUM</button>
           <button class="nr-diff-btn" id="nr-diff-hard" type="button" onclick="setDifficulty('hard')">HARD</button>
         </div>
@@ -305,6 +302,38 @@
 </div><!-- end sheet -->
 
 <div class="action-toast" id="action-toast"></div>
+
+<!-- ROLL CINEMA MODAL -->
+<div class="modal-overlay roll-cinema-modal" id="roll-cinema-modal">
+  <div class="modal-box roll-cinema-box">
+    <button class="roll-cinema-close" type="button" onclick="closeRollCinemaModal()">CLOSE</button>
+    <div class="roll-cinema-head">
+      <div class="roll-cinema-kicker" id="roll-cinema-kicker">1D10 EXECUTION</div>
+      <div class="roll-cinema-pool" id="roll-cinema-pool">Dice pool: []</div>
+    </div>
+    <div class="roll-cinema-stage" id="roll-cinema-stage">
+      <div class="roll-cinema-die" id="roll-cinema-die">
+        <span id="roll-cinema-die-value">0</span>
+      </div>
+      <div class="roll-cinema-impact" id="roll-cinema-impact"></div>
+    </div>
+    <div class="roll-cinema-results">
+      <div class="roll-cinema-card show" id="roll-cinema-raw-card">
+        <div class="roll-cinema-label">Dice Total</div>
+        <div class="roll-cinema-raw-value" id="roll-cinema-raw">0</div>
+      </div>
+      <div class="roll-cinema-card" id="roll-cinema-mod-card">
+        <div class="roll-cinema-label">Modifier Surge</div>
+        <div class="roll-cinema-mod-list" id="roll-cinema-mod-list"></div>
+        <div class="roll-cinema-mod-total" id="roll-cinema-mod-total">+0</div>
+      </div>
+      <div class="roll-cinema-card" id="roll-cinema-final-card">
+        <div class="roll-cinema-label">Final Total</div>
+        <div class="roll-cinema-final-value" id="roll-cinema-final">0</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- AIM HIT MODAL -->
 <div class="modal-overlay" id="aim-hit-modal">
@@ -383,7 +412,7 @@
 </div>
 
 </div><!-- wrapper -->
-<script src="DND.js?v=20260413d"></script>
-<script src="netrunner.js?v=20260413d"></script>
+<script src="DND.js?v=20260414c"></script>
+<script src="netrunner.js?v=20260414c"></script>
 </body>
 </html>
