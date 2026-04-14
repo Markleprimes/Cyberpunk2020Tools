@@ -12,6 +12,12 @@ let _rollTimer = null;
 let bannerImageData = '';
 let inventoryEditState = null;
 let aimHitWeapons = [];
+let dossierHoverAudio = null;
+let dossierHoveredButton = null;
+let rollCinemaFrame = null;
+let rollCinemaNumberTimer = null;
+let rollCinemaCountTimer = null;
+let rollCinemaRevealTimer = null;
 const LIMBS = ['Head','Torso','R.Arm','L.Arm','R.Leg','L.Leg'];
 let limbSP  = {Head:0,Torso:0,'R.Arm':0,'L.Arm':0,'R.Leg':0,'L.Leg':0};
 let limbDMG = {Head:0,Torso:0,'R.Arm':0,'L.Arm':0,'R.Leg':0,'L.Leg':0};
@@ -20,6 +26,8 @@ const STAT_COLORS={REF:'var(--stat-core)',INT:'var(--stat-core)',COOL:'var(--sta
 const CHARACTER_KEYS=new Set(['name','stats','career','careerskill','reputation','wallet','physicalbody','body','stunpoint','armor','damage']);
 const INVENTORY_ORDER=['weapon','cyberware','miscellaneous','buff'];
 const DEFAULT_STATS=['REF','INT','COOL','ATTR','TECH','LUCK','EMPT'];
+const BOOT_RAW_KEY='cp2020_boot_raw_character';
+const BOOT_DATA_KEY='cp2020_boot_character_data';
 
 /* ══════════════ FORMAT TOGGLE ══════════════ */
 
@@ -30,6 +38,8 @@ document.getElementById('item-file-input').addEventListener('change',e=>{if(e.ta
 document.getElementById('banner-image-input').addEventListener('change',e=>{if(e.target.files[0])readBannerImage(e.target.files[0]);});
 document.getElementById('inventory-editor-modal').addEventListener('click',e=>{if(e.target===document.getElementById('inventory-editor-modal'))closeInventoryEditor();});
 document.getElementById('aim-hit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('aim-hit-modal'))closeAimHitModal();});
+document.getElementById('new-char-modal').addEventListener('click',e=>{if(e.target===document.getElementById('new-char-modal'))closeNewCharacterModal();});
+document.getElementById('roll-cinema-modal').addEventListener('click',e=>{if(e.target===document.getElementById('roll-cinema-modal'))closeRollCinemaModal();});
 document.getElementById('inventory-item-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveInventoryItem();});
 document.getElementById('aim-bonus-input').addEventListener('keydown',e=>{if(e.key==='Enter')submitAimHitModal();});
 
@@ -61,6 +71,79 @@ function showActionLog(msg){
   clearTimeout(_toastTimer);
   _toastTimer=setTimeout(()=>toast.classList.remove('show'),2000);
 }
+function clearRollCinemaTimers(){
+  cancelAnimationFrame(rollCinemaFrame);
+  clearInterval(rollCinemaNumberTimer);
+  clearInterval(rollCinemaCountTimer);
+  clearTimeout(rollCinemaRevealTimer);
+  rollCinemaFrame=null;
+  rollCinemaNumberTimer=null;
+  rollCinemaCountTimer=null;
+  rollCinemaRevealTimer=null;
+}
+function closeRollCinemaModal(){
+  clearRollCinemaTimers();
+  document.getElementById('roll-cinema-modal').classList.remove('show');
+}
+function setRollCinemaCards(rawVisible=false,modVisible=false,finalVisible=false){
+  document.getElementById('roll-cinema-raw-card').classList.toggle('show',rawVisible);
+  document.getElementById('roll-cinema-mod-card').classList.toggle('show',modVisible);
+  document.getElementById('roll-cinema-final-card').classList.toggle('show',finalVisible);
+}
+function animateRollCinemaCount(start,end){
+  clearInterval(rollCinemaCountTimer);
+  const target=document.getElementById('roll-cinema-final');
+  const duration=650;
+  const startTime=performance.now();
+  target.textContent=start;
+  const tick=(now)=>{
+    const pct=Math.min(1,(now-startTime)/duration);
+    const value=Math.round(start+((end-start)*pct));
+    target.textContent=value;
+    if(pct<1){
+      rollCinemaFrame=requestAnimationFrame(tick);
+    }else{
+      rollCinemaFrame=null;
+    }
+  };
+  rollCinemaFrame=requestAnimationFrame(tick);
+}
+function renderRollCinemaModifiers(modTotal){
+  const list=document.getElementById('roll-cinema-mod-list');
+  if(!rollModifiers.length){
+    list.innerHTML='<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
+  }else{
+    list.innerHTML=rollModifiers.map(mod=>`
+      <div class="roll-cinema-mod-line">
+        <span>${escapeHtml(mod.label)}</span>
+        <span>${mod.value>=0?'+':''}${mod.value}</span>
+      </div>`).join('');
+  }
+  document.getElementById('roll-cinema-mod-total').textContent=`${modTotal>=0?'+':''}${modTotal}`;
+}
+function playDossierHoverSound(){
+  if(!dossierHoverAudio){
+    dossierHoverAudio=new Audio('audio/menu-hover.mp3');
+    dossierHoverAudio.preload='auto';
+  }
+  dossierHoverAudio.currentTime=0;
+  dossierHoverAudio.play().catch(()=>{});
+}
+document.addEventListener('mouseover',(event)=>{
+  const button=event.target.closest('button');
+  if(!button)return;
+  if(button===dossierHoveredButton)return;
+  if(button.contains(event.relatedTarget))return;
+  dossierHoveredButton=button;
+  playDossierHoverSound();
+});
+document.addEventListener('mouseout',(event)=>{
+  const button=event.target.closest('button');
+  if(!button)return;
+  if(button===dossierHoveredButton && !button.contains(event.relatedTarget)){
+    dossierHoveredButton=null;
+  }
+});
 function buildBlankSheetData(name='--',aliases=[],career='UNKNOWN'){
   const stats={};
   DEFAULT_STATS.forEach(stat=>{stats[stat]=0;});
@@ -78,6 +161,29 @@ function buildBlankSheetData(name='--',aliases=[],career='UNKNOWN'){
     damage:{Head:0,Torso:0,'R.Arm':0,'L.Arm':0,'R.Leg':0,'L.Leg':0},
     inventory:{}
   };
+}
+function openNewCharacterModal(){
+  document.getElementById('new-name').value='';
+  document.getElementById('new-street').value='';
+  document.getElementById('new-career').value='';
+  document.getElementById('new-char-modal').classList.add('show');
+  document.getElementById('new-name').focus();
+}
+function closeNewCharacterModal(){
+  document.getElementById('new-char-modal').classList.remove('show');
+}
+function submitNewCharacter(){
+  const name=document.getElementById('new-name').value.trim();
+  const street=document.getElementById('new-street').value.trim();
+  const career=document.getElementById('new-career').value.trim();
+  if(!name||!career){
+    showError('NEW DOSSIER REQUIRES A NAME AND CAREER.');
+    return;
+  }
+  document.getElementById('status-bar').style.display='none';
+  renderSheet(buildBlankSheetData(name,street?[street]:[],career));
+  closeNewCharacterModal();
+  showActionLog(`NEW DOSSIER OPENED: ${name.toUpperCase()}`);
 }
 function renderBannerImage(){
   const banner=document.querySelector('.name-banner');
@@ -631,16 +737,15 @@ function renderRollLab(){
   document.getElementById('modifier-total').textContent=modTotal;
   document.getElementById('last-die-label').textContent=hasRoll?`${qty}D${currentRoll.sides}`:'NONE';
   const total=(currentRoll.result||0)+modTotal;
-  document.getElementById('roll-total').textContent=total;
   const equation=hasRoll
-    ? `${qty}D${currentRoll.sides} rolled ${currentRoll.result} + modifiers ${modTotal>=0?'+':''}${modTotal}`
+    ? `${qty}D${currentRoll.sides} locked ${currentRoll.result}. Final total ${total}.`
     : `No die rolled yet. Current modifiers total ${modTotal>=0?'+':''}${modTotal}.`;
   const breakdown=hasRoll
     ? `Dice pool: [${currentRoll.rolls.join(', ')}]`
-    : `Set the dice count, then click any die button to roll multiple dice together.`;
-  document.getElementById('roll-equation').textContent=equation;
-  document.getElementById('roll-breakdown').textContent=breakdown;
-  document.getElementById('die-face').textContent=hasRoll?currentRoll.result:'--';
+    : `Set the dice count, then click any die button to open the roll cinema.`;
+  document.getElementById('roll-last-summary').textContent=equation;
+  document.getElementById('roll-last-breakdown').textContent=breakdown;
+  document.getElementById('roll-last-total').textContent=total;
   if(!rollModifiers.length){
     modList.innerHTML='<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
     return;
@@ -683,6 +788,104 @@ function addCustomRollModifier(){
   valueInput.value='';
   renderRollLab();
   showActionLog(`ADDED CUSTOM MODIFIER ${label.toUpperCase()}`);
+}
+function openRollCinemaAnimation(sides,qty,rolls){
+  clearRollCinemaTimers();
+  const rawTotal=rolls.reduce((sum,val)=>sum+val,0);
+  const modTotal=getModifierTotal();
+  const finalTotal=rawTotal+modTotal;
+  const modal=document.getElementById('roll-cinema-modal');
+  const stage=document.getElementById('roll-cinema-stage');
+  const die=document.getElementById('roll-cinema-die');
+  const dieValue=document.getElementById('roll-cinema-die-value');
+  const impact=document.getElementById('roll-cinema-impact');
+  document.getElementById('roll-cinema-kicker').textContent=`${qty}D${sides} EXECUTION`;
+  document.getElementById('roll-cinema-pool').textContent=`Dice pool: [${rolls.join(', ')}]`;
+  document.getElementById('roll-cinema-raw').textContent='0';
+  document.getElementById('roll-cinema-final').textContent='0';
+  renderRollCinemaModifiers(modTotal);
+  setRollCinemaCards(false,false,false);
+  document.getElementById('roll-cinema-raw-card').classList.remove('emphasis');
+  document.getElementById('roll-cinema-final-card').classList.remove('emphasis');
+  die.classList.remove('locked');
+  modal.classList.add('show');
+
+  const stageRect=stage.getBoundingClientRect();
+  const dieSize=76;
+  const bounds={w:Math.max(120,stageRect.width-dieSize),h:Math.max(120,stageRect.height-dieSize)};
+  let x=12;
+  let y=12;
+  let vx=Math.max(7,Math.min(11,bounds.w/34));
+  let vy=2.4;
+  let rotation=-18;
+  let vr=7.5;
+  let bouncedFloor=false;
+  const gravity=.46;
+  const startTime=performance.now();
+
+  rollCinemaNumberTimer=setInterval(()=>{
+    dieValue.textContent=Math.max(1,Math.ceil(Math.random()*Math.max(rawTotal,sides)));
+  },58);
+
+  const impactAt=(ix,iy)=>{
+    impact.classList.remove('show');
+    impact.style.left=`${ix-16}px`;
+    impact.style.top=`${iy-16}px`;
+    void impact.offsetWidth;
+    impact.classList.add('show');
+  };
+
+  const step=(now)=>{
+    vy+=gravity;
+    x+=vx;
+    y+=vy;
+    rotation+=vr;
+
+    if(x<=0||x>=bounds.w){
+      x=Math.max(0,Math.min(bounds.w,x));
+      vx*=-0.92;
+      vr*=-0.88;
+      impactAt(x+dieSize/2,y+dieSize/2);
+    }
+    if(y<=0){
+      y=0;
+      vy*=-0.82;
+      impactAt(x+dieSize/2,y+dieSize/2);
+    }
+    if(y>=bounds.h){
+      y=bounds.h;
+      if(Math.abs(vy)>1.2)impactAt(x+dieSize/2,y+dieSize/2);
+      vy*=-0.76;
+      vx*=0.96;
+      vr*=0.9;
+      bouncedFloor=true;
+    }
+
+    die.style.transform=`translate(${x}px,${y}px) rotate(${rotation}deg)`;
+
+    const elapsed=now-startTime;
+    const speed=Math.abs(vx)+Math.abs(vy)+Math.abs(vr*.14);
+    if(elapsed>1150&&bouncedFloor&&speed<2.4){
+      clearInterval(rollCinemaNumberTimer);
+      rollCinemaNumberTimer=null;
+      die.classList.add('locked');
+      die.style.transform=`translate(${x}px,${bounds.h}px) rotate(0deg)`;
+      dieValue.textContent=rawTotal;
+      document.getElementById('roll-cinema-raw').textContent=rawTotal;
+      setRollCinemaCards(true,false,false);
+      document.getElementById('roll-cinema-raw-card').classList.add('emphasis');
+      rollCinemaRevealTimer=setTimeout(()=>{
+        document.getElementById('roll-cinema-raw-card').classList.remove('emphasis');
+        setRollCinemaCards(true,true,true);
+        document.getElementById('roll-cinema-final-card').classList.add('emphasis');
+        animateRollCinemaCount(rawTotal,finalTotal);
+      },420);
+      return;
+    }
+
+    rollCinemaFrame=requestAnimationFrame(step);
+  };
+  rollCinemaFrame=requestAnimationFrame(step);
 }
 function rollFacedown(){
   setPresetRoll('FACEDOWN',[
@@ -737,26 +940,13 @@ function submitAimHitModal(){
   ],10);
 }
 function rollDie(sides){
-  clearInterval(_rollTimer);
   normalizeRollQty();
   const qty=getRollQuantity();
-  const orb=document.getElementById('die-orb');
-  const face=document.getElementById('die-face');
-  orb.classList.add('rolling');
-  let ticks=0;
-  _rollTimer=setInterval(()=>{
-    const previewTotal=Array.from({length:qty},()=>Math.floor(Math.random()*sides)+1).reduce((sum,val)=>sum+val,0);
-    face.textContent=previewTotal;
-    ticks++;
-    if(ticks>=9){
-      clearInterval(_rollTimer);
-      const rolls=Array.from({length:qty},()=>Math.floor(Math.random()*sides)+1);
-      currentRoll={sides,qty,rolls,result:rolls.reduce((sum,val)=>sum+val,0)};
-      orb.classList.remove('rolling');
-      renderRollLab();
-      showActionLog(`ROLLED ${qty}D${sides} FOR ${currentRoll.result}`);
-    }
-  },90);
+  const rolls=Array.from({length:qty},()=>Math.floor(Math.random()*sides)+1);
+  currentRoll={sides,qty,rolls,result:rolls.reduce((sum,val)=>sum+val,0)};
+  renderRollLab();
+  openRollCinemaAnimation(sides,qty,rolls);
+  showActionLog(`ROLLED ${qty}D${sides} FOR ${currentRoll.result}`);
 }
 
 /* ══════════════ CYBERWARE ══════════════ */
@@ -965,33 +1155,28 @@ function resetSheet(){
   });
 }
 
-renderSheet(buildBlankSheetData());
-
-function openNewCharacterModal(){
-  document.getElementById('new-char-modal').classList.add('show');
-}
-
-function closeNewCharacterModal(){
-  document.getElementById('new-char-modal').classList.remove('show');
-}
-
-function submitNewCharacter(){
-  const name = document.getElementById('new-name').value.trim();
-  const street = document.getElementById('new-street').value.trim();
-  const career = document.getElementById('new-career').value.trim();
-
-  if(!name || !career){
-    showError("NAME AND CAREER REQUIRED");
+function bootDossierFromLauncher(){
+  const pendingRaw=sessionStorage.getItem(BOOT_RAW_KEY);
+  if(pendingRaw){
+    sessionStorage.removeItem(BOOT_RAW_KEY);
+    parseCharacter(pendingRaw);
     return;
   }
 
-  document.getElementById('char-name').textContent = name;
-  document.getElementById('char-career').textContent = career;
+  const pendingData=sessionStorage.getItem(BOOT_DATA_KEY);
+  if(pendingData){
+    sessionStorage.removeItem(BOOT_DATA_KEY);
+    try{
+      const data=JSON.parse(pendingData);
+      renderSheet(data);
+      showActionLog(`NEW DOSSIER OPENED: ${fileSafeNameFromData(data)}`);
+      return;
+    }catch(err){
+      showError('LAUNCHER DATA ERROR: '+err.message);
+    }
+  }
 
-  document.getElementById('char-aliases').innerHTML =
-    street ? `<span class="alias-tag">${street}</span>` : "";
-
-  closeNewCharacterModal();
-  showActionLog("NEW CHARACTER CREATED");
+  renderSheet(buildBlankSheetData());
 }
 
+bootDossierFromLauncher();
