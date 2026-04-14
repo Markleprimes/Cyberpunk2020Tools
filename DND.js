@@ -584,6 +584,11 @@ function resetAimAction(){
   aimStackPoints=0;
   renderAimAction();
 }
+function clearAimAction(){
+  if(aimStackPoints<=0)return;
+  resetAimAction();
+  showActionLog('AIM STACK CLEARED');
+}
 
 function startAimAction(){
   if(aimStackPoints>=3)return;
