@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberpunk 2020 // GM Monitor</title>
+</head>
+<body>
+  <h1>GM Monitor</h1>
+  <p>Simple live Firebase test page.</p>
+
+  <div>
+    <label for="gm-room-id">Room ID</label>
+    <input id="gm-room-id" type="text" value="test-room">
+    <button type="button" id="gm-connect-btn">Connect</button>
+  </div>
+
+  <hr>
+
+  <div>
+    <strong>Status:</strong>
+    <span id="gm-status">Idle</span>
+  </div>
+
+  <div>
+    <strong>Last Update:</strong>
+    <span id="gm-updated">--</span>
+  </div>
+
+  <h2>Player Payload</h2>
+  <pre id="gm-payload">No data yet.</pre>
+
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
+  <script src="functions/firebase-sync.js?v=20260415a"></script>
+  <script src="functions/gm.js?v=20260415a"></script>
+</body>
+</html>
