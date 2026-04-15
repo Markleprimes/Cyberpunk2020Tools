@@ -64,6 +64,15 @@
               ${renderGMKeyValueLines(entry.skills)}
             </div>
           </div>
+          <div class="gm-sheet-columns gm-sheet-columns-wide">
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Dossier</div>
+              ${renderGMKeyValueLines({
+                Reputation: entry.reputation ?? 0,
+                Wallet: entry.wallet ?? 0
+              })}
+            </div>
+          </div>
           <div class="gm-sheet-roll">
             <span class="gm-sheet-title">Last Roll</span>
             <span class="gm-sheet-roll-value">${renderGMRollSummary(entry.lastRoll)}</span>

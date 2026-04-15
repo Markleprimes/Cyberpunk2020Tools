@@ -131,6 +131,8 @@ function getCurrentCharacterProfile() {
     role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
     stats,
     skills,
+    reputation: repValue,
+    wallet: walletValue,
     lastRoll
   };
 }
