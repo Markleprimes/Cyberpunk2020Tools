@@ -1,8 +1,26 @@
 (function initGMPage() {
   let activeRef = null;
   let activeHandler = null;
+  let gmLocalNpcSeed = 0;
+  let gmLocalRollFrame = null;
+  let gmLocalNpcs = [];
+  let gmRemotePlayers = [];
+  let gmRollModifiers = [];
+  let gmCurrentRoll = null;
+  let gmPendingRollRequest = null;
+  let gmRollShakePower = 0;
+  let gmRollShakeActive = false;
+  let gmRollShakePointerId = null;
+  let gmRollShakeLastPoint = null;
+  let gmRollCinemaFrame = null;
+  let gmRollCinemaNumberTimer = null;
+  let gmRollCinemaRevealTimer = null;
+  let gmRollCountAudio = null;
+  let gmRollBounceAudios = [];
+
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
+  const GM_LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 
   function setGMStatusVisual(status) {
     const chip = document.getElementById('gm-status-chip');
@@ -27,30 +45,375 @@
     node.textContent = Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
   }
 
-  function renderGMPlayers(data) {
-    const playerNode = document.getElementById('gm-player-list');
-    const npcNode = document.getElementById('gm-npc-list');
-    if (!playerNode || !npcNode) return;
-    const entries = Object.entries(data || {}).map(([id, entry]) => ({ id, ...(entry || {}) }));
-    const players = entries.filter((entry) => (entry.role || 'player') !== 'npc');
-    const npcs = entries.filter((entry) => (entry.role || 'player') === 'npc');
-
-    if (!players.length) {
-      playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
-    } else {
-      playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player)).join('');
-    }
-
-    if (!npcs.length) {
-      npcNode.innerHTML = '<div class="gm-empty">No NPC links yet.</div>';
-    } else {
-      npcNode.innerHTML = npcs.map((npc) => renderGMEntry(npc.id, npc)).join('');
-    }
-
-    animateGMRollPanels(entries);
+  function escapeGMValue(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  function renderGMEntry(clientId, entry) {
+  function humanizeLabel(value) {
+    return String(value || '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[._]/g, ' ')
+      .trim();
+  }
+
+  function cleanValue(val) {
+    return String(val || '').trim().replace(/^"(.*)"$/, '$1');
+  }
+
+  function parseGMNumericValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const str = String(value ?? '').trim();
+    if (/^[-+]?\d+$/.test(str)) return parseInt(str, 10);
+    return null;
+  }
+
+  function extractTopLevelBlocks(text) {
+    const blocks = [];
+    let i = 0;
+    while (i < text.length) {
+      while (i < text.length && /[,\s]/.test(text[i])) i += 1;
+      if (i >= text.length) break;
+      const keyStart = i;
+      while (i < text.length && text[i] !== ':') i += 1;
+      if (i >= text.length) break;
+      const key = text.slice(keyStart, i).trim().replace(/^"|"$/g, '');
+      i += 1;
+      while (i < text.length && /\s/.test(text[i])) i += 1;
+      if (text[i] !== '{') {
+        while (i < text.length && text[i] !== ',' && text[i] !== '\n') i += 1;
+        continue;
+      }
+      let depth = 0;
+      let inQuote = false;
+      const bodyStart = i + 1;
+      let end = i;
+      for (; end < text.length; end += 1) {
+        const ch = text[end];
+        if (ch === '"' && text[end - 1] !== '\\') inQuote = !inQuote;
+        if (inQuote) continue;
+        if (ch === '{') depth += 1;
+        else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      blocks.push({ key, body: text.slice(bodyStart, end).trim() });
+      i = end + 1;
+    }
+    return blocks;
+  }
+
+  function splitTopLevelTokens(text) {
+    const tokens = [];
+    let cur = '';
+    let depth = 0;
+    let inQuote = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (ch === '"' && text[i - 1] !== '\\') {
+        inQuote = !inQuote;
+        cur += ch;
+        continue;
+      }
+      if (!inQuote) {
+        if (ch === '{') depth += 1;
+        else if (ch === '}') depth -= 1;
+        if ((ch === ',' || ch === '\n' || ch === '\r') && depth === 0) {
+          if (cur.trim()) tokens.push(cur.trim());
+          cur = '';
+          continue;
+        }
+      }
+      cur += ch;
+    }
+    if (cur.trim()) tokens.push(cur.trim());
+    return tokens;
+  }
+
+  function stripCommentLines(raw) {
+    return String(raw || '')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+  }
+
+  function parseNameBlock(body) {
+    const quoted = [...String(body || '').matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    return quoted.length
+      ? quoted
+      : String(body || '').split(/[,\n]/).map((part) => part.trim()).filter(Boolean);
+  }
+
+  function parseKVBlock(body) {
+    const result = {};
+    String(body || '').split(/[,\n]+/).forEach((entry) => {
+      const value = entry.trim();
+      if (!value) return;
+      const match = value.match(/^"?([^"=]+)"?\s*=\s*(.+)$/);
+      if (match) result[match[1].trim()] = match[2].trim().replace(/"/g, '');
+    });
+    return result;
+  }
+
+  function parseInventoryCategory(body, category) {
+    const blocks = extractTopLevelBlocks(body);
+    if (blocks.length) return blocks.map((block, idx) => parseInventoryItemBlock(block, category, idx));
+    const names = parseNameBlock(body);
+    return names.map((name, idx) => ({ id: `${category}${idx + 1}`, name, fields: {}, info: [] }));
+  }
+
+  function parseInventoryItemBlock(block, category, idx) {
+    const fields = {};
+    let name = block.key;
+    let info = [];
+    splitTopLevelTokens(block.body).forEach((token) => {
+      const infoMatch = token.match(/^info\s*:\s*\{([\s\S]*)\}$/i);
+      if (infoMatch) {
+        info = parseNameBlock(infoMatch[1]);
+        return;
+      }
+      const match = token.match(/^"?([^"=]+)"?\s*=\s*(.+)$/);
+      if (!match) return;
+      const fieldKey = match[1].trim();
+      const value = cleanValue(match[2]);
+      if (fieldKey.toLowerCase() === 'name') name = value || name;
+      else fields[fieldKey] = value;
+    });
+    return {
+      id: block.key || `${category}${idx + 1}`,
+      name: name || `${category} ${idx + 1}`,
+      fields,
+      info
+    };
+  }
+
+  function looksLikeCharacterText(text) {
+    const lower = String(text || '').toLowerCase();
+    return lower.includes('name:') && lower.includes('stats:') && lower.includes('career:');
+  }
+
+  function parseGMCharacterText(raw) {
+    const data = {
+      name: [],
+      stats: {},
+      career: [],
+      careerSkill: {},
+      reputation: {},
+      wallet: {},
+      physicalBody: {},
+      body: {},
+      stunpoint: {},
+      armor: {},
+      damage: {},
+      inventory: {}
+    };
+
+    const text = stripCommentLines(raw);
+    extractTopLevelBlocks(text).forEach(({ key, body }) => {
+      const lower = key.trim().toLowerCase();
+      if (lower === 'name') data.name = parseNameBlock(body);
+      else if (lower === 'stats') data.stats = parseKVBlock(body);
+      else if (lower === 'career') data.career = parseNameBlock(body);
+      else if (lower === 'careerskill') data.careerSkill = parseKVBlock(body);
+      else if (lower === 'reputation') data.reputation = parseKVBlock(body);
+      else if (lower === 'wallet') data.wallet = parseKVBlock(body);
+      else if (lower === 'physicalbody') data.physicalBody = parseKVBlock(body);
+      else if (lower === 'body') data.body = parseKVBlock(body);
+      else if (lower === 'stunpoint') data.stunpoint = parseKVBlock(body);
+      else if (lower === 'armor') data.armor = parseKVBlock(body);
+      else if (lower === 'damage') data.damage = parseKVBlock(body);
+      else data.inventory[lower] = parseInventoryCategory(body, lower);
+    });
+
+    return data;
+  }
+
+  async function readGMTextFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(String(event.target?.result || ''));
+      reader.onerror = () => reject(new Error('FAILED TO READ NPC FILE.'));
+      reader.readAsText(file);
+    });
+  }
+
+  function ensureGMZipSupport() {
+    if (typeof JSZip !== 'undefined') return true;
+    setGMStatus('ZIP support failed to load on GM page.');
+    setGMStatusVisual('disconnected');
+    return false;
+  }
+
+  async function extractGMZipBundle(file) {
+    if (!ensureGMZipSupport()) throw new Error('ZIP SUPPORT FAILED TO LOAD.');
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const entries = Object.values(zip.files).filter((entry) => !entry.dir);
+    const textEntries = [];
+    for (const entry of entries) {
+      const name = entry.name.split('/').pop();
+      if (name.toLowerCase().endsWith('.txt')) {
+        textEntries.push({ name, text: await entry.async('string') });
+      }
+    }
+    const characterEntry = textEntries.find((entry) => /^(character|dossier|sheet)\.txt$/i.test(entry.name))
+      || textEntries.find((entry) => looksLikeCharacterText(entry.text))
+      || null;
+    return {
+      characterText: characterEntry?.text || '',
+      itemTexts: textEntries.filter((entry) => entry !== characterEntry).map((entry) => entry.text)
+    };
+  }
+
+  function mergeGMInventory(targetInventory, sourceInventory) {
+    Object.entries(sourceInventory || {}).forEach(([category, items]) => {
+      if (!Array.isArray(items) || !items.length) return;
+      if (!targetInventory[category]) targetInventory[category] = [];
+      targetInventory[category].push(...items);
+    });
+  }
+
+  function flattenGMInventory(inventoryMap) {
+    const list = [];
+    Object.entries(inventoryMap || {}).forEach(([category, items]) => {
+      (items || []).forEach((item) => {
+        list.push({
+          type: humanizeLabel(category),
+          name: item.name || humanizeLabel(item.id || category),
+          description: Array.isArray(item.info) && item.info.length ? item.info.join(' | ') : '--'
+        });
+      });
+    });
+    return list;
+  }
+
+  function buildGMNpcEntry(parsedData, sourceLabel = '') {
+    const physicalBody = parsedData.physicalBody || {};
+    const bodyBlock = parsedData.body || {};
+    const stunBlock = parsedData.stunpoint || {};
+    return {
+      id: `npc-local-${Date.now().toString(36)}-${gmLocalNpcSeed += 1}`,
+      name: parsedData.name?.[0] || sourceLabel || 'Unknown NPC',
+      career: parsedData.career?.[0] || 'NPC',
+      role: 'npc-local',
+      stats: Object.entries(parsedData.stats || {}).map(([label, value]) => ({ label, value: parseGMNumericValue(value) ?? value })),
+      skills: Object.entries(parsedData.careerSkill || {})
+        .filter(([label]) => label.toLowerCase() !== 'point')
+        .map(([label, value]) => ({ label, value: parseGMNumericValue(value) ?? value })),
+      reputation: parseGMNumericValue(parsedData.reputation?.rep) ?? 0,
+      wallet: parseGMNumericValue(parsedData.wallet?.eddies) ?? 0,
+      physical: {
+        bodyLevel: parseGMNumericValue(physicalBody.bodylevel) ?? 0,
+        weight: parseGMNumericValue(physicalBody.weight ?? bodyBlock.weight) ?? 0,
+        stun: parseGMNumericValue(physicalBody.stunpoint ?? stunBlock.stun) ?? 0
+      },
+      inventory: flattenGMInventory(parsedData.inventory || {}),
+      armor: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.armor?.[limb]) ?? 0 })),
+      damage: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.damage?.[limb]) ?? 0 })),
+      lastRollVisible: null,
+      lastRollPending: false
+    };
+  }
+
+  function renderGMKeyValueLines(block, options = {}) {
+    const entries = Array.isArray(block)
+      ? block.map((entry) => [entry?.label, entry?.value])
+      : Object.entries(block || {});
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map(([key, value]) => {
+      const numericValue = parseGMNumericValue(value);
+      const pickable = options.pickable && numericValue !== null;
+      const pickAttrs = pickable
+        ? ` data-gm-roll-source="${escapeGMValue(options.source || 'GM')}" data-gm-roll-label="${escapeGMValue(key)}" data-gm-roll-value="${escapeGMValue(numericValue)}" title="Add ${escapeGMValue(key)} to GM roll"`
+        : '';
+      return `
+        <div class="gm-sheet-line${pickable ? ' pickable' : ''}"${pickAttrs}>
+          <span class="gm-sheet-key">${escapeGMValue(key)}:</span>
+          <span class="gm-sheet-val">${escapeGMValue(value)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderGMArmorDamageTable(armor, damage) {
+    const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
+    const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
+    return `
+      <table class="gm-ad-table">
+        <thead>
+          <tr>
+            <th>Limb</th>
+            <th>Armor</th>
+            <th>Damage</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${GM_LIMBS.map((limb) => `
+            <tr>
+              <td>${escapeGMValue(limb)}</td>
+              <td>${escapeGMValue(armorMap.get(limb) ?? 0)}</td>
+              <td>${escapeGMValue(damageMap.get(limb) ?? 0)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderGMItemList(items) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!list.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return list.map((item) => {
+      const name = typeof item === 'string' ? item : item?.name;
+      const type = typeof item === 'string' ? 'Item' : (item?.type || 'Item');
+      const description = typeof item === 'string' ? '--' : (item?.description || '--');
+      return `
+        <div class="gm-sheet-line gm-sheet-line-stack">
+          <span class="gm-sheet-key">${escapeGMValue(type)}:</span>
+          <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue(name || '--')} // ${escapeGMValue(description)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderGMRollPanel(clientId, lastRoll, isPending = false) {
+    if (!lastRoll || !lastRoll.dice) {
+      return `
+        <div class="gm-roll-panel">
+          <div class="gm-sheet-title">Last Roll</div>
+          <div class="gm-roll-empty">${isPending ? 'Roll incoming...' : 'No roll yet.'}</div>
+        </div>
+      `;
+    }
+    const pool = Array.isArray(lastRoll.pool) ? `[${lastRoll.pool.join(', ')}]` : '[]';
+    const modifiers = Number(lastRoll.modifiers || 0);
+    const modifierText = `${modifiers >= 0 ? '+' : ''}${modifiers}`;
+    return `
+      <div class="gm-roll-panel">
+        <div class="gm-roll-head">
+          <span class="gm-sheet-title">Last Roll</span>
+          <span class="gm-roll-dice">${escapeGMValue(lastRoll.dice)}</span>
+        </div>
+        <div class="gm-roll-total" id="gm-roll-total-${escapeGMValue(clientId)}">${escapeGMValue(lastRoll.raw ?? lastRoll.total ?? '--')}</div>
+        <div class="gm-roll-meta">
+          <span>POOL ${escapeGMValue(pool)}</span>
+          <span>MOD ${escapeGMValue(modifierText)}</span>
+          <span>RAW ${escapeGMValue(lastRoll.raw ?? '--')}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMEntry(clientId, entry, options = {}) {
+    const pickSource = entry.name || 'NPC';
     return `
       <div class="gm-player-card gm-player-detail">
         <div class="gm-player-summary">
@@ -58,14 +421,18 @@
           <div class="gm-player-meta">${escapeGMValue(entry.career || 'UNKNOWN')} // ${escapeGMValue((entry.role || 'player').toUpperCase())}</div>
         </div>
         <div class="gm-player-sheet">
+          ${options.removable ? `
+            <div class="gm-card-actions">
+              <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-npc="${escapeGMValue(clientId)}">REMOVE NPC</button>
+            </div>` : ''}
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Stats</div>
-              ${renderGMKeyValueLines(entry.stats)}
+              ${renderGMKeyValueLines(entry.stats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Skill</div>
-              ${renderGMKeyValueLines(entry.skills)}
+              ${renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` })}
             </div>
           </div>
           <div class="gm-sheet-columns gm-sheet-columns-wide">
@@ -103,91 +470,6 @@
     `;
   }
 
-  function escapeGMValue(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function renderGMKeyValueLines(block) {
-    const entries = Array.isArray(block)
-      ? block.map((entry) => [entry?.label, entry?.value])
-      : Object.entries(block || {});
-    if (!entries.length) {
-      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
-    }
-    return entries.map(([key, value]) => `
-      <div class="gm-sheet-line">
-        <span class="gm-sheet-key">${escapeGMValue(key)}:</span>
-        <span class="gm-sheet-val">${escapeGMValue(value)}</span>
-      </div>
-    `).join('');
-  }
-
-  function renderGMRollSummary(lastRoll) {
-    if (!lastRoll || !lastRoll.dice) return '--';
-    const pool = Array.isArray(lastRoll.pool) ? `[${lastRoll.pool.join(', ')}]` : '[]';
-    const mod = Number(lastRoll.modifiers || 0);
-    return escapeGMValue(`${lastRoll.dice} ${pool} +${mod} => ${lastRoll.total ?? lastRoll.raw ?? '--'}`);
-  }
-
-  function renderGMArmorDamageTable(armor, damage) {
-    const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
-    const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
-    const limbs = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
-    return `
-      <table class="gm-ad-table">
-        <thead>
-          <tr>
-            <th>Limb</th>
-            <th>Armor</th>
-            <th>Damage</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${limbs.map((limb) => `
-            <tr>
-              <td>${escapeGMValue(limb)}</td>
-              <td>${escapeGMValue(armorMap.get(limb) ?? 0)}</td>
-              <td>${escapeGMValue(damageMap.get(limb) ?? 0)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  }
-
-  function renderGMRollPanel(clientId, lastRoll, isPending = false) {
-    if (!lastRoll || !lastRoll.dice) {
-      return `
-        <div class="gm-roll-panel">
-          <div class="gm-sheet-title">Last Roll</div>
-          <div class="gm-roll-empty">${isPending ? 'Roll incoming...' : 'No roll yet.'}</div>
-        </div>
-      `;
-    }
-    const pool = Array.isArray(lastRoll.pool) ? `[${lastRoll.pool.join(', ')}]` : '[]';
-    const modifiers = Number(lastRoll.modifiers || 0);
-    const modifierText = `${modifiers >= 0 ? '+' : ''}${modifiers}`;
-    return `
-      <div class="gm-roll-panel">
-        <div class="gm-roll-head">
-          <span class="gm-sheet-title">Last Roll</span>
-          <span class="gm-roll-dice">${escapeGMValue(lastRoll.dice)}</span>
-        </div>
-        <div class="gm-roll-total" id="gm-roll-total-${escapeGMValue(clientId)}" data-roll-client="${escapeGMValue(clientId)}" data-roll-raw="${escapeGMValue(lastRoll.raw ?? 0)}" data-roll-total="${escapeGMValue(lastRoll.total ?? 0)}">${escapeGMValue(lastRoll.raw ?? lastRoll.total ?? '--')}</div>
-        <div class="gm-roll-meta">
-          <span>POOL ${escapeGMValue(pool)}</span>
-          <span>MOD ${escapeGMValue(modifierText)}</span>
-          <span>RAW ${escapeGMValue(lastRoll.raw ?? '--')}</span>
-        </div>
-      </div>
-    `;
-  }
-
   function animateGMRollPanels(entries) {
     entries.forEach((entry) => {
       const lastRoll = entry.lastRollVisible || null;
@@ -196,9 +478,7 @@
       if (!node) return;
       const snapshot = `${lastRoll.dice}|${lastRoll.raw}|${lastRoll.modifiers}|${lastRoll.total}`;
       const prevState = gmRollStateByClient[entry.id];
-      if (prevState?.animationFrame) {
-        cancelAnimationFrame(prevState.animationFrame);
-      }
+      if (prevState?.animationFrame) cancelAnimationFrame(prevState.animationFrame);
       if (prevState?.displayedSnapshot === snapshot) {
         node.textContent = String(lastRoll.total ?? '--');
         node.classList.remove('animating');
@@ -245,28 +525,47 @@
     });
   }
 
-  function renderGMItemList(items) {
-    const list = Array.isArray(items) ? items.filter(Boolean) : [];
-    if (!list.length) {
-      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+  function renderGMRemotePlayers(data) {
+    const playerNode = document.getElementById('gm-player-list');
+    if (!playerNode) return;
+    const entries = Object.entries(data || {}).map(([id, entry]) => ({ id, ...(entry || {}) }));
+    const players = entries.filter((entry) => (entry.role || 'player') !== 'npc');
+    gmRemotePlayers = players.map((entry) => JSON.parse(JSON.stringify(entry)));
+
+    if (!players.length) {
+      playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
+    } else {
+      playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player)).join('');
     }
-    return list.map((item) => {
-      const name = typeof item === 'string' ? item : item?.name;
-      const type = typeof item === 'string' ? 'Item' : (item?.type || 'Item');
-      const description = typeof item === 'string' ? '--' : (item?.description || '--');
-      return `
-      <div class="gm-sheet-line gm-sheet-line-stack">
-        <span class="gm-sheet-key">${escapeGMValue(type)}:</span>
-        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue(name || '--')} // ${escapeGMValue(description)}</span>
-      </div>
-    `;
-    }).join('');
+
+    animateGMRollPanels(players);
+    publishGMMonitorState();
+  }
+
+  function renderGMNpcList() {
+    const npcNode = document.getElementById('gm-npc-list');
+    if (!npcNode) return;
+    if (!gmLocalNpcs.length) {
+      npcNode.innerHTML = '<div class="gm-empty">No local NPC dossier loaded yet.</div>';
+      publishGMMonitorState();
+      return;
+    }
+    npcNode.innerHTML = gmLocalNpcs.map((npc) => renderGMEntry(npc.id, npc, { removable: true, pickable: true })).join('');
+    publishGMMonitorState();
+  }
+
+  function publishGMMonitorState() {
+    window.gmMonitorState = {
+      remotePlayers: gmRemotePlayers.map((entry) => JSON.parse(JSON.stringify(entry))),
+      localNpcs: gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)))
+    };
+    window.dispatchEvent(new CustomEvent('gm-monitor-updated', {
+      detail: window.gmMonitorState
+    }));
   }
 
   function disconnectGMRoom() {
-    if (activeRef && activeHandler) {
-      activeRef.off('value', activeHandler);
-    }
+    if (activeRef && activeHandler) activeRef.off('value', activeHandler);
     Object.values(gmDelayedRollsByClient).forEach((timer) => clearTimeout(timer));
     Object.keys(gmDelayedRollsByClient).forEach((key) => delete gmDelayedRollsByClient[key]);
     activeRef = null;
@@ -315,7 +614,7 @@
     if (!rawEntries.length) {
       setGMStatus(`Connected to "${roomId}" but no players are linked yet.`);
       setGMStatusVisual('connected');
-      renderGMPlayers(null);
+      renderGMRemotePlayers(null);
       setGMLastUpdated(null);
       return;
     }
@@ -336,7 +635,7 @@
       ? `Live data received from "${roomId}". Roll reveal pending 5 seconds.`
       : `Live data received from "${roomId}".`);
     setGMStatusVisual(pendingRoll ? 'pending' : 'connected');
-    renderGMPlayers(renderEntries);
+    renderGMRemotePlayers(Object.fromEntries(renderEntries.map((entry) => [entry.id, entry])));
     setGMLastUpdated(lastUpdated || null);
   }
 
@@ -352,7 +651,7 @@
     disconnectGMRoom();
     setGMStatus(`Listening to room "${roomId}"...`);
     setGMStatusVisual('pending');
-    renderGMPlayers(null);
+    renderGMRemotePlayers(null);
     setGMLastUpdated(null);
 
     activeRef = roomRef.child('players');
@@ -367,20 +666,558 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    initFirebaseRealtime();
-    const connectButton = document.getElementById('gm-connect-btn');
-    if (connectButton) {
-      connectButton.addEventListener('click', connectGMRoom);
-    }
+  function getGMRollModifierTotal() {
+    return gmRollModifiers.reduce((sum, modifier) => sum + (modifier.value || 0), 0);
+  }
 
-    const roomInput = document.getElementById('gm-room-id');
-    if (roomInput) {
-      roomInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') connectGMRoom();
+  function renderGMRollModifierList() {
+    const node = document.getElementById('gm-roll-mod-list');
+    if (!node) return;
+    if (!gmRollModifiers.length) {
+      node.innerHTML = '<div class="gm-empty">No modifiers locked in.</div>';
+      return;
+    }
+    node.innerHTML = gmRollModifiers.map((modifier, index) => `
+      <div class="gm-mod-pill">
+        <span>${escapeGMValue(modifier.source)} // ${escapeGMValue(modifier.label)} ${modifier.value >= 0 ? '+' : ''}${escapeGMValue(modifier.value)}</span>
+        <button type="button" data-gm-remove-mod="${index}">X</button>
+      </div>
+    `).join('');
+  }
+
+  function clearGMRollCinemaTimers() {
+    cancelAnimationFrame(gmRollCinemaFrame);
+    clearInterval(gmRollCinemaNumberTimer);
+    clearTimeout(gmRollCinemaRevealTimer);
+    gmRollCinemaFrame = null;
+    gmRollCinemaNumberTimer = null;
+    gmRollCinemaRevealTimer = null;
+  }
+
+  function updateGMRollExecuteMeter() {
+    const fill = document.getElementById('gm-roll-execute-meter-fill');
+    const copy = document.getElementById('gm-roll-execute-meter-copy');
+    const pct = Math.max(0, Math.min(100, gmRollShakePower));
+    if (fill) fill.style.width = `${pct}%`;
+    if (copy) {
+      copy.textContent = pct < 15
+        ? 'Hold and shake to arm the roll.'
+        : pct < 45
+          ? 'Shake registered. Release to throw.'
+          : 'Good shake. Release to launch.';
+    }
+  }
+
+  function playGMRollCountTick() {
+    if (!gmRollCountAudio) {
+      gmRollCountAudio = new Audio('audio/count.mp3');
+      gmRollCountAudio.preload = 'auto';
+    }
+    gmRollCountAudio.currentTime = 0;
+    gmRollCountAudio.play().catch(() => {});
+  }
+
+  function playGMRollBounceTick() {
+    if (!gmRollBounceAudios.length) {
+      gmRollBounceAudios = [new Audio('audio/bounce1.wav'), new Audio('audio/bounce2.wav')];
+      gmRollBounceAudios.forEach((audio) => {
+        audio.preload = 'auto';
       });
     }
+    const audio = gmRollBounceAudios[Math.floor(Math.random() * gmRollBounceAudios.length)];
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
 
+  function cancelGMRollExecution() {
+    gmRollShakeActive = false;
+    gmRollShakePointerId = null;
+    gmRollShakeLastPoint = null;
+    gmRollShakePower = 0;
+    gmPendingRollRequest = null;
+    document.getElementById('gm-roll-shake-box')?.classList.remove('shaking');
+    const core = document.getElementById('gm-roll-shake-core');
+    if (core) core.style.transform = 'translate(0,0) rotate(0deg)';
+    updateGMRollExecuteMeter();
+    document.getElementById('gm-roll-execute-modal')?.classList.remove('show');
+  }
+
+  function closeGMRollCinemaModal() {
+    clearGMRollCinemaTimers();
+    document.getElementById('gm-roll-cinema-modal')?.classList.remove('show');
+  }
+
+  function beginGMRollExecution(sides, qty) {
+    gmPendingRollRequest = { sides, qty };
+    gmRollShakePower = 0;
+    gmRollShakeActive = false;
+    gmRollShakePointerId = null;
+    gmRollShakeLastPoint = null;
+    const label = document.getElementById('gm-roll-shake-label');
+    if (label) label.textContent = `${qty}D${sides}`;
+    document.getElementById('gm-roll-shake-box')?.classList.remove('shaking');
+    const core = document.getElementById('gm-roll-shake-core');
+    if (core) core.style.transform = 'translate(0,0) rotate(0deg)';
+    updateGMRollExecuteMeter();
+    document.getElementById('gm-roll-execute-modal')?.classList.add('show');
+  }
+
+  function setGMRollCinemaCards(rawVisible = false, modVisible = false, finalVisible = false) {
+    document.getElementById('gm-roll-cinema-raw-card')?.classList.toggle('show', rawVisible);
+    document.getElementById('gm-roll-cinema-mod-card')?.classList.toggle('show', modVisible);
+    document.getElementById('gm-roll-cinema-final-card')?.classList.toggle('show', finalVisible);
+  }
+
+  function renderGMRollCinemaModifiers(modTotal) {
+    const list = document.getElementById('gm-roll-cinema-mod-list');
+    if (!list) return;
+    if (!gmRollModifiers.length) {
+      list.innerHTML = '<div class="gm-empty">NO MODIFIERS LOCKED IN</div>';
+    } else {
+      list.innerHTML = gmRollModifiers.map((mod) => `
+        <div class="gm-roll-cinema-mod-line">
+          <span>${escapeGMValue(mod.label)}</span>
+          <span>${mod.value >= 0 ? '+' : ''}${escapeGMValue(mod.value)}</span>
+        </div>`).join('');
+    }
+    const totalNode = document.getElementById('gm-roll-cinema-mod-total');
+    if (totalNode) totalNode.textContent = `${modTotal >= 0 ? '+' : ''}${modTotal}`;
+  }
+
+  function animateGMRollCinemaCount(start, end) {
+    const target = document.getElementById('gm-roll-cinema-final');
+    if (!target) return;
+    const duration = 650;
+    const startTime = performance.now();
+    let lastValue = start;
+    target.textContent = start;
+    const tick = (now) => {
+      const pct = Math.min(1, (now - startTime) / duration);
+      const value = Math.round(start + ((end - start) * pct));
+      if (value !== lastValue) {
+        playGMRollCountTick();
+        lastValue = value;
+      }
+      target.textContent = value;
+      if (pct < 1) gmRollCinemaFrame = requestAnimationFrame(tick);
+      else gmRollCinemaFrame = null;
+    };
+    gmRollCinemaFrame = requestAnimationFrame(tick);
+  }
+
+  function getGMRollDieShapeClass(sides) {
+    if (sides === 4) return 'shape-d4';
+    if (sides === 8) return 'shape-d8';
+    if (sides === 10) return 'shape-d10';
+    if (sides === 12) return 'shape-d12';
+    if (sides === 20) return 'shape-d20';
+    return '';
+  }
+
+  function openGMRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
+    clearGMRollCinemaTimers();
+    const rawTotal = rolls.reduce((sum, value) => sum + value, 0);
+    const modTotal = getGMRollModifierTotal();
+    const finalTotal = rawTotal + modTotal;
+    const modal = document.getElementById('gm-roll-cinema-modal');
+    const stage = document.getElementById('gm-roll-cinema-stage');
+    const diceLayer = document.getElementById('gm-roll-cinema-dice');
+    if (!modal || !stage || !diceLayer) return;
+
+    document.getElementById('gm-roll-cinema-kicker').textContent = `${qty}D${sides} EXECUTION`;
+    document.getElementById('gm-roll-cinema-pool').textContent = `Dice pool: [${rolls.join(', ')}]`;
+    document.getElementById('gm-roll-cinema-raw').textContent = '0';
+    document.getElementById('gm-roll-cinema-final').textContent = '0';
+    renderGMRollCinemaModifiers(modTotal);
+    setGMRollCinemaCards(false, false, false);
+    document.getElementById('gm-roll-cinema-raw-card')?.classList.remove('emphasis');
+    document.getElementById('gm-roll-cinema-final-card')?.classList.remove('emphasis');
+    modal.classList.add('show');
+    diceLayer.innerHTML = '';
+
+    const stageRect = stage.getBoundingClientRect();
+    const dieSize = qty <= 2 ? 76 : qty <= 4 ? 64 : 52;
+    const bounds = { w: Math.max(180, stageRect.width - dieSize), h: Math.max(160, stageRect.height - dieSize) };
+    const throwBoost = shakePower / 100;
+    const diceBodies = rolls.map((value, idx) => {
+      const die = document.createElement('div');
+      die.className = `gm-roll-cinema-die ${getGMRollDieShapeClass(sides)}`.trim();
+      die.style.width = `${dieSize}px`;
+      die.style.height = `${dieSize}px`;
+      die.style.fontSize = `${Math.max(1.6, dieSize / 27)}rem`;
+      die.textContent = Math.max(1, Math.ceil(Math.random() * sides));
+      diceLayer.appendChild(die);
+      return {
+        el: die,
+        value,
+        x: 12 + Math.random() * 28,
+        y: 12 + idx * 8,
+        vx: (Math.random() * 5 + 5) + (throwBoost * 6) + (idx * 0.8),
+        vy: -(Math.random() * 6 + 2 + throwBoost * 7),
+        rotation: (Math.random() * 34) - 17,
+        vr: (Math.random() * 12) - 6,
+        settled: false,
+        lastBounceAt: 0
+      };
+    });
+
+    gmRollCinemaNumberTimer = setInterval(() => {
+      diceBodies.forEach((body) => {
+        if (body.settled) return;
+        body.el.textContent = Math.max(1, Math.ceil(Math.random() * sides));
+      });
+    }, 70);
+
+    const gravity = 0.48;
+    const friction = 0.992;
+    const bounce = 0.74;
+
+    const step = () => {
+      let settledCount = 0;
+      diceBodies.forEach((body, idx) => {
+        if (!body.settled) {
+          body.vy += gravity;
+          body.x += body.vx;
+          body.y += body.vy;
+          body.rotation += body.vr;
+          body.vx *= friction;
+          body.vr *= 0.985;
+
+          let bounced = false;
+          if (body.x <= 0) {
+            body.x = 0;
+            body.vx = Math.abs(body.vx) * bounce;
+            bounced = true;
+          } else if (body.x >= bounds.w) {
+            body.x = bounds.w;
+            body.vx = -Math.abs(body.vx) * bounce;
+            bounced = true;
+          }
+
+          if (body.y <= 0) {
+            body.y = 0;
+            body.vy = Math.abs(body.vy) * bounce;
+            bounced = true;
+          } else if (body.y >= bounds.h) {
+            body.y = bounds.h;
+            body.vy = -Math.abs(body.vy) * bounce;
+            body.vx *= 0.96;
+            bounced = true;
+          }
+
+          const now = performance.now();
+          if (bounced && now - body.lastBounceAt > 95) {
+            body.lastBounceAt = now;
+            playGMRollBounceTick();
+          }
+
+          const closeToRest = Math.abs(body.vx) < 0.2 && Math.abs(body.vy) < 0.3 && Math.abs(body.vr) < 0.3;
+          if (closeToRest && body.y >= bounds.h - 2) {
+            body.settled = true;
+            body.vx = 0;
+            body.vy = 0;
+            body.vr = 0;
+            body.el.textContent = body.value;
+            body.el.classList.add('settled');
+            playGMRollCountTick();
+          }
+        }
+
+        if (body.settled) {
+          settledCount += 1;
+          const baseX = (bounds.w / Math.max(1, diceBodies.length)) * idx + ((bounds.w / Math.max(1, diceBodies.length)) / 2);
+          body.x += (baseX - body.x) * 0.06;
+        }
+
+        body.el.style.transform = `translate(${body.x}px,${body.y}px) rotate(${body.rotation}deg)`;
+      });
+
+      if (settledCount >= diceBodies.length) {
+        clearInterval(gmRollCinemaNumberTimer);
+        gmRollCinemaNumberTimer = null;
+        document.getElementById('gm-roll-cinema-raw').textContent = rawTotal;
+        setGMRollCinemaCards(true, false, false);
+        document.getElementById('gm-roll-cinema-raw-card')?.classList.add('emphasis');
+        gmRollCinemaRevealTimer = setTimeout(() => {
+          document.getElementById('gm-roll-cinema-raw-card')?.classList.remove('emphasis');
+          setGMRollCinemaCards(true, true, true);
+          document.getElementById('gm-roll-cinema-final-card')?.classList.add('emphasis');
+          animateGMRollCinemaCount(rawTotal, finalTotal);
+        }, 620);
+        gmRollCinemaFrame = null;
+        return;
+      }
+
+      gmRollCinemaFrame = requestAnimationFrame(step);
+    };
+
+    gmRollCinemaFrame = requestAnimationFrame(step);
+  }
+
+  function executeGMPendingRoll() {
+    if (!gmPendingRollRequest) return;
+    const { sides, qty } = gmPendingRollRequest;
+    const shakePowerSnapshot = gmRollShakePower;
+    document.getElementById('gm-roll-execute-modal')?.classList.remove('show');
+    gmPendingRollRequest = null;
+    gmRollShakePower = 0;
+    updateGMRollExecuteMeter();
+    const rolls = Array.from({ length: qty }, () => Math.floor(Math.random() * sides) + 1);
+    const raw = rolls.reduce((sum, roll) => sum + roll, 0);
+    const modifiers = getGMRollModifierTotal();
+    gmCurrentRoll = {
+      dice: `${qty}D${sides}`,
+      pool: rolls,
+      raw,
+      modifiers,
+      total: raw + modifiers,
+      source: gmRollModifiers.length
+        ? gmRollModifiers.map((modifier) => `${modifier.source}: ${modifier.label}`).join(' // ')
+        : 'Manual GM roll'
+    };
+    renderGMRollDisplay();
+    openGMRollCinemaAnimation(sides, qty, rolls, shakePowerSnapshot);
+  }
+
+  function handleGMRollShakeStart(event) {
+    if (!gmPendingRollRequest) return;
+    gmRollShakeActive = true;
+    gmRollShakePointerId = event.pointerId;
+    gmRollShakeLastPoint = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.classList.add('shaking');
+  }
+
+  function handleGMRollShakeMove(event) {
+    if (!gmRollShakeActive || event.pointerId !== gmRollShakePointerId) return;
+    const core = document.getElementById('gm-roll-shake-core');
+    const dx = event.clientX - gmRollShakeLastPoint.x;
+    const dy = event.clientY - gmRollShakeLastPoint.y;
+    const dist = Math.hypot(dx, dy);
+    gmRollShakePower = Math.min(100, gmRollShakePower + dist * 0.45);
+    updateGMRollExecuteMeter();
+    const tx = Math.max(-24, Math.min(24, dx * 1.4));
+    const ty = Math.max(-24, Math.min(24, dy * 1.4));
+    const rot = Math.max(-18, Math.min(18, dx + dy));
+    if (core) core.style.transform = `translate(${tx}px,${ty}px) rotate(${rot}deg)`;
+    gmRollShakeLastPoint = { x: event.clientX, y: event.clientY };
+  }
+
+  function handleGMRollShakeEnd(event) {
+    if (!gmRollShakeActive || event.pointerId !== gmRollShakePointerId) return;
+    const box = document.getElementById('gm-roll-shake-box');
+    const core = document.getElementById('gm-roll-shake-core');
+    gmRollShakeActive = false;
+    gmRollShakePointerId = null;
+    gmRollShakeLastPoint = null;
+    box?.classList.remove('shaking');
+    if (core) core.style.transform = 'translate(0,0) rotate(0deg)';
+    executeGMPendingRoll();
+  }
+
+  function animateGMLocalRollTotal(start, end) {
+    const node = document.getElementById('gm-local-roll-total');
+    if (!node) return;
+    if (gmLocalRollFrame) cancelAnimationFrame(gmLocalRollFrame);
+    const duration = 650;
+    const startedAt = performance.now();
+    node.classList.add('animating');
+
+    const tick = (now) => {
+      const pct = Math.min(1, (now - startedAt) / duration);
+      const value = Math.round(start + ((end - start) * pct));
+      node.textContent = String(value);
+      if (pct < 1) {
+        gmLocalRollFrame = requestAnimationFrame(tick);
+      } else {
+        node.textContent = String(end);
+        node.classList.remove('animating');
+        gmLocalRollFrame = null;
+      }
+    };
+
+    gmLocalRollFrame = requestAnimationFrame(tick);
+  }
+
+  function renderGMRollDisplay() {
+    const node = document.getElementById('gm-roll-display');
+    if (!node) return;
+    if (!gmCurrentRoll?.dice) {
+      node.innerHTML = `
+        <div class="gm-sheet-title">GM Result</div>
+        <div class="gm-roll-empty">No GM roll yet.</div>
+      `;
+      return;
+    }
+
+    const modifiers = gmCurrentRoll.modifiers || 0;
+    const modifierText = `${modifiers >= 0 ? '+' : ''}${modifiers}`;
+    const pool = `[${(gmCurrentRoll.pool || []).join(', ')}]`;
+    node.innerHTML = `
+      <div class="gm-roll-head">
+        <span class="gm-sheet-title">GM Result</span>
+        <span class="gm-roll-dice">${escapeGMValue(gmCurrentRoll.dice)}</span>
+      </div>
+      <div class="gm-roll-total" id="gm-local-roll-total">${escapeGMValue(gmCurrentRoll.raw)}</div>
+      <div class="gm-roll-meta">
+        <span>POOL ${escapeGMValue(pool)}</span>
+        <span>MOD ${escapeGMValue(modifierText)}</span>
+        <span>RAW ${escapeGMValue(gmCurrentRoll.raw)}</span>
+      </div>
+      <div class="gm-roll-source">${escapeGMValue(gmCurrentRoll.source || 'Manual GM roll')}</div>
+    `;
+    animateGMLocalRollTotal(Number(gmCurrentRoll.raw || 0), Number(gmCurrentRoll.total || 0));
+  }
+
+  function addGMRollModifier(source, label, value) {
+    const numericValue = parseGMNumericValue(value);
+    if (numericValue === null) return;
+    gmRollModifiers.push({
+      source: source || 'GM',
+      label: label || 'Modifier',
+      value: numericValue
+    });
+    renderGMRollModifierList();
+  }
+
+  function removeGMRollModifier(index) {
+    gmRollModifiers.splice(index, 1);
+    renderGMRollModifierList();
+  }
+
+  function clearGMRollModifiers() {
+    gmRollModifiers = [];
+    renderGMRollModifierList();
+  }
+
+  function addCustomGMRollModifier() {
+    const labelInput = document.getElementById('gm-roll-custom-label');
+    const valueInput = document.getElementById('gm-roll-custom-value');
+    const label = (labelInput?.value || '').trim() || 'Custom';
+    const value = parseGMNumericValue(valueInput?.value);
+    if (value === null) return;
+    addGMRollModifier('GM', label, value);
+    if (labelInput) labelInput.value = '';
+    if (valueInput) valueInput.value = '0';
+  }
+
+  function rollGMDice(sides) {
+    const qty = Math.max(1, Math.min(20, parseGMNumericValue(document.getElementById('gm-roll-qty')?.value) ?? 1));
+    beginGMRollExecution(sides, qty);
+  }
+
+  function removeLocalNpc(npcId) {
+    gmLocalNpcs = gmLocalNpcs.filter((npc) => npc.id !== npcId);
+    renderGMNpcList();
+  }
+
+  async function loadGmNpcFile(file) {
+    try {
+      const lowerName = String(file?.name || '').toLowerCase();
+      let parsed = null;
+      if (lowerName.endsWith('.zip')) {
+        const bundle = await extractGMZipBundle(file);
+        if (!bundle.characterText) throw new Error('CHARACTER.TXT NOT FOUND IN NPC ZIP.');
+        parsed = parseGMCharacterText(bundle.characterText);
+        bundle.itemTexts.forEach((text) => {
+          const itemData = parseGMCharacterText(text);
+          mergeGMInventory(parsed.inventory, itemData.inventory);
+        });
+      } else if (lowerName.endsWith('.txt')) {
+        parsed = parseGMCharacterText(await readGMTextFile(file));
+      } else {
+        throw new Error('Only .txt or .zip files are supported.');
+      }
+
+      gmLocalNpcs.push(buildGMNpcEntry(parsed, file?.name || 'NPC'));
+      renderGMNpcList();
+      setGMStatus(`Local NPC loaded: ${gmLocalNpcs[gmLocalNpcs.length - 1].name}`);
+      setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
+    } catch (error) {
+      setGMStatus(`NPC load error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initFirebaseRealtime();
+    window.getGMRemotePlayers = () => gmRemotePlayers.map((entry) => JSON.parse(JSON.stringify(entry)));
+    window.getGMLocalNpcs = () => gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
+
+    document.getElementById('gm-connect-btn')?.addEventListener('click', connectGMRoom);
+    document.getElementById('gm-room-id')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') connectGMRoom();
+    });
+
+    document.getElementById('gm-add-npc-btn')?.addEventListener('click', () => {
+      const input = document.getElementById('gm-npc-file-input');
+      if (!input) return;
+      input.value = '';
+      input.click();
+    });
+
+    document.getElementById('gm-npc-file-input')?.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (file) await loadGmNpcFile(file);
+      event.target.value = '';
+    });
+
+    document.getElementById('gm-roll-add-mod-btn')?.addEventListener('click', addCustomGMRollModifier);
+    document.getElementById('gm-roll-clear-mods-btn')?.addEventListener('click', clearGMRollModifiers);
+    document.getElementById('gm-roll-custom-value')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') addCustomGMRollModifier();
+    });
+
+    document.querySelectorAll('.gm-die-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const sides = parseGMNumericValue(button.getAttribute('data-gm-die'));
+        if (sides) rollGMDice(sides);
+      });
+    });
+
+    document.getElementById('gm-roll-execute-cancel')?.addEventListener('click', cancelGMRollExecution);
+    document.getElementById('gm-roll-cinema-close')?.addEventListener('click', closeGMRollCinemaModal);
+    document.getElementById('gm-roll-execute-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) cancelGMRollExecution();
+    });
+    document.getElementById('gm-roll-cinema-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMRollCinemaModal();
+    });
+
+    const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
+    if (gmRollShakeBox) {
+      gmRollShakeBox.addEventListener('pointerdown', handleGMRollShakeStart);
+      gmRollShakeBox.addEventListener('pointermove', handleGMRollShakeMove);
+      gmRollShakeBox.addEventListener('pointerup', handleGMRollShakeEnd);
+      gmRollShakeBox.addEventListener('pointercancel', handleGMRollShakeEnd);
+    }
+
+    document.addEventListener('click', (event) => {
+      const pickable = event.target.closest('.gm-sheet-line.pickable');
+      if (pickable) {
+        const source = pickable.getAttribute('data-gm-roll-source') || 'NPC';
+        const label = pickable.getAttribute('data-gm-roll-label') || 'Value';
+        const value = parseGMNumericValue(pickable.getAttribute('data-gm-roll-value'));
+        if (value !== null) addGMRollModifier(source, label, value);
+        return;
+      }
+
+      const removeNpcButton = event.target.closest('[data-gm-remove-npc]');
+      if (removeNpcButton) {
+        removeLocalNpc(removeNpcButton.getAttribute('data-gm-remove-npc'));
+        return;
+      }
+
+      const removeModButton = event.target.closest('[data-gm-remove-mod]');
+      if (removeModButton) {
+        removeGMRollModifier(parseInt(removeModButton.getAttribute('data-gm-remove-mod'), 10));
+      }
+    });
+
+    renderGMRemotePlayers(null);
+    renderGMNpcList();
+    renderGMRollModifierList();
+    renderGMRollDisplay();
     setGMStatusVisual('disconnected');
   });
 })();

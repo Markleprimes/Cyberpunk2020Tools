@@ -4,7 +4,7 @@
 // firebase-database-compat.js
 
 (function initCyberpunkFirebaseScope() {
-  const CLIENT_ID_STORAGE_KEY = 'cp2020_sync_client_id';
+  const TAB_ID_STORAGE_KEY = 'cp2020_sync_tab_id';
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyAIS55Q4jXZkb_2DGhPTReK68mV7OeBpb4",
     authDomain: "cyberpunk2020online.firebaseapp.com",
@@ -42,15 +42,44 @@
     return db.ref(`rooms/${cleanRoomId}`);
   }
 
+  let runtimeClientId = '';
+
+  function createClientId() {
+    return `client-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
   function getSyncClientId() {
+    if (runtimeClientId) return runtimeClientId;
+
     try {
-      const existing = window.localStorage?.getItem(CLIENT_ID_STORAGE_KEY);
-      if (existing) return existing;
-      const created = `client-${Math.random().toString(36).slice(2, 10)}`;
-      window.localStorage?.setItem(CLIENT_ID_STORAGE_KEY, created);
-      return created;
+      const existing = window.sessionStorage?.getItem(TAB_ID_STORAGE_KEY);
+      if (existing) {
+        runtimeClientId = existing;
+        return runtimeClientId;
+      }
+
+      const created = createClientId();
+      window.sessionStorage?.setItem(TAB_ID_STORAGE_KEY, created);
+      runtimeClientId = created;
+      return runtimeClientId;
     } catch (error) {
-      return `client-${Math.random().toString(36).slice(2, 10)}`;
+      // Fallback for browsers that block sessionStorage in local-file contexts.
+    }
+
+    try {
+      const existingWindowName = String(window.name || '').trim();
+      if (existingWindowName.startsWith('cp2020-tab-')) {
+        runtimeClientId = existingWindowName.replace('cp2020-tab-', '');
+        return runtimeClientId;
+      }
+
+      const created = createClientId();
+      window.name = `cp2020-tab-${created}`;
+      runtimeClientId = created;
+      return runtimeClientId;
+    } catch (error) {
+      runtimeClientId = createClientId();
+      return runtimeClientId;
     }
   }
 

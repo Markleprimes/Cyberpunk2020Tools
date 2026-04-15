@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260415c">
+<link rel="stylesheet" href="gm.css?v=20260415e">
 </head>
 <body>
   <div class="gm-shell">
@@ -18,6 +18,12 @@
       <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
     </header>
 
+    <div class="gm-tabs">
+      <button type="button" class="gm-tab-btn active" data-gm-tab="monitor">Monitor</button>
+      <button type="button" class="gm-tab-btn" data-gm-tab="action">Action Play</button>
+    </div>
+
+    <div class="gm-tab-panel active" id="gm-tab-monitor">
     <section class="gm-panel">
       <div class="gm-panel-title">Room Settings</div>
       <div class="gm-room-row">
@@ -42,15 +48,176 @@
 
     <section class="gm-panel">
       <div class="gm-panel-title">NPC</div>
+      <div class="gm-room-row">
+        <button type="button" class="gm-btn" id="gm-add-npc-btn">ADD NPC FILE</button>
+        <input id="gm-npc-file-input" type="file" accept=".txt,.zip" hidden>
+      </div>
+      <div class="gm-meta-row">
+        <div><span class="gm-meta-label">Mode</span><span>Local GM dossier import</span></div>
+        <div><span class="gm-meta-label">Use</span><span>Click NPC stats or skills to lock them into GM Roll Lab</span></div>
+      </div>
       <div class="gm-npc-list" id="gm-npc-list">
-        <div class="gm-empty">NPC controls can live here later.</div>
+        <div class="gm-empty">No local NPC dossier loaded yet.</div>
       </div>
     </section>
+
+    <section class="gm-panel">
+      <div class="gm-panel-title">Roll Lab</div>
+      <div class="gm-roll-lab-grid">
+        <div class="gm-roll-config">
+          <div class="gm-room-row">
+            <label class="gm-field gm-field-small">
+              <span>Dice Count</span>
+              <input id="gm-roll-qty" type="number" min="1" max="20" value="1">
+            </label>
+            <label class="gm-field">
+              <span>Custom Label</span>
+              <input id="gm-roll-custom-label" type="text" placeholder="Aim, Cover, Range...">
+            </label>
+            <label class="gm-field gm-field-small">
+              <span>Value</span>
+              <input id="gm-roll-custom-value" type="number" value="0">
+            </label>
+            <button type="button" class="gm-btn" id="gm-roll-add-mod-btn">ADD MODIFIER</button>
+            <button type="button" class="gm-btn gm-btn-muted" id="gm-roll-clear-mods-btn">CLEAR MODS</button>
+          </div>
+          <div class="gm-mod-list" id="gm-roll-mod-list">
+            <div class="gm-empty">No modifiers locked in.</div>
+          </div>
+          <div class="gm-dice-bank">
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="4">D4</button>
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="6">D6</button>
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="8">D8</button>
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="10">D10</button>
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="12">D12</button>
+            <button type="button" class="gm-btn gm-die-btn" data-gm-die="20">D20</button>
+          </div>
+        </div>
+      <div class="gm-roll-display" id="gm-roll-display">
+          <div class="gm-sheet-title">GM Result</div>
+          <div class="gm-roll-empty">No GM roll yet.</div>
+        </div>
+      </div>
+    </section>
+    </div>
+
+    <div class="gm-tab-panel" id="gm-tab-action">
+      <section class="gm-panel">
+        <div class="gm-panel-title">Character Pool</div>
+        <div class="gm-action-pool" id="gm-action-pool">
+          <div class="gm-empty">No characters available yet.</div>
+        </div>
+      </section>
+
+      <div class="gm-action-layout">
+        <section class="gm-panel">
+          <div class="gm-panel-title">Action Section</div>
+          <div class="gm-action-controls" style="margin-bottom:12px;">
+            <button type="button" class="gm-btn gm-btn-muted" id="gm-clear-action-btn">CLEAR CHARACTERS</button>
+          </div>
+          <div class="gm-action-zones">
+            <div class="gm-drop-zone" id="gm-drop-ally" data-gm-side="ally">
+              <div class="gm-drop-title">Protagonist</div>
+              <div class="gm-drop-list" id="gm-ally-list">
+                <div class="gm-empty">Drag characters here.</div>
+              </div>
+            </div>
+            <div class="gm-drop-zone" id="gm-drop-enemy" data-gm-side="enemy">
+              <div class="gm-drop-title">Antagonist</div>
+              <div class="gm-drop-list" id="gm-enemy-list">
+                <div class="gm-empty">Drag characters here.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="gm-panel">
+          <div class="gm-panel-title">Turn Action</div>
+          <div class="gm-action-controls">
+            <button type="button" class="gm-btn" id="gm-init-check-btn">INITIATION CHECK</button>
+            <button type="button" class="gm-btn" id="gm-prev-turn-btn">PREVIOUS TURN</button>
+            <button type="button" class="gm-btn" id="gm-next-turn-btn">NEXT TURN</button>
+            <button type="button" class="gm-btn gm-btn-muted" id="gm-end-combat-btn">END COMBAT</button>
+          </div>
+          <div class="gm-turn-note" id="gm-turn-note">Set up both sides, then run initiative.</div>
+          <div class="gm-turn-order" id="gm-turn-order">
+            <div class="gm-empty">No active combat order yet.</div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-initiative-modal">
+    <div class="gm-modal-box gm-initiative-box">
+      <h3>INITIATION CHECK</h3>
+      <div class="gm-roll-execute-copy">Players must roll again from their dossier. NPCs auto-roll REF + 1D10 here.</div>
+      <div class="gm-initiative-list" id="gm-initiative-list">
+        <div class="gm-empty">No combatants assigned yet.</div>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-initiative-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-initiative-confirm" disabled>CONFIRM ORDER</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gm-modal-overlay gm-roll-execute-modal" id="gm-roll-execute-modal">
+    <div class="gm-modal-box gm-roll-execute-box">
+      <h3>ROLL EXECUTION</h3>
+      <div class="gm-roll-execute-copy">Hold click on the box, shake it, then release to throw the dice.</div>
+      <div class="gm-roll-execute-stage">
+        <div class="gm-roll-shake-box" id="gm-roll-shake-box">
+          <div class="gm-roll-shake-core" id="gm-roll-shake-core">
+            <span class="gm-roll-shake-label" id="gm-roll-shake-label">1D10</span>
+          </div>
+        </div>
+      </div>
+      <div class="gm-roll-execute-meter">
+        <div class="gm-roll-execute-meter-track">
+          <span class="gm-roll-execute-meter-fill" id="gm-roll-execute-meter-fill"></span>
+        </div>
+        <div class="gm-roll-execute-meter-copy" id="gm-roll-execute-meter-copy">Hold and shake to arm the roll.</div>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-execute-cancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gm-modal-overlay gm-roll-cinema-modal" id="gm-roll-cinema-modal">
+    <div class="gm-modal-box gm-roll-cinema-box">
+      <button class="gm-roll-cinema-close" type="button" id="gm-roll-cinema-close">CLOSE</button>
+      <div class="gm-roll-cinema-head">
+        <div class="gm-roll-cinema-kicker" id="gm-roll-cinema-kicker">1D10 EXECUTION</div>
+        <div class="gm-roll-cinema-pool" id="gm-roll-cinema-pool">Dice pool: []</div>
+      </div>
+      <div class="gm-roll-cinema-stage" id="gm-roll-cinema-stage">
+        <div class="gm-roll-cinema-dice" id="gm-roll-cinema-dice"></div>
+      </div>
+      <div class="gm-roll-cinema-results">
+        <div class="gm-roll-cinema-card show" id="gm-roll-cinema-raw-card">
+          <div class="gm-roll-cinema-label">Dice Total</div>
+          <div class="gm-roll-cinema-raw-value" id="gm-roll-cinema-raw">0</div>
+        </div>
+        <div class="gm-roll-cinema-card" id="gm-roll-cinema-mod-card">
+          <div class="gm-roll-cinema-label">Modifier Surge</div>
+          <div class="gm-roll-cinema-mod-list" id="gm-roll-cinema-mod-list"></div>
+          <div class="gm-roll-cinema-mod-total" id="gm-roll-cinema-mod-total">+0</div>
+        </div>
+        <div class="gm-roll-cinema-card" id="gm-roll-cinema-final-card">
+          <div class="gm-roll-cinema-label">Final Total</div>
+          <div class="gm-roll-cinema-final-value" id="gm-roll-cinema-final">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260415b"></script>
-  <script src="functions/gm.js?v=20260415d"></script>
+<script src="functions/firebase-sync.js?v=20260415c"></script>
+  <script src="functions/gm.js?v=20260415g"></script>
+  <script src="functions/gm-action-play.js?v=20260415d"></script>
 </body>
 </html>
