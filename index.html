@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBERPUNK 2020 // Access Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="index.css?v=20260415a">
+</head>
+<body>
+<div class="launcher-shell">
+  <header class="launcher-header">
+    <div>
+      <div class="launcher-kicker">NIGHT CITY ACCESS // ROLEPLAY DOSSIER UPLINK</div>
+      <h1>CYBERPUNK 2020</h1>
+      <p class="launcher-copy">Jack in through an existing dossier file or spin up a new character shell before entering the sheet.</p>
+    </div>
+    <div class="launcher-status">
+      <span class="status-dot"></span>
+      ACCESS READY
+    </div>
+  </header>
+
+  <main class="launcher-grid">
+    <section class="launcher-card">
+      <div class="card-eyebrow">Existing Dossier</div>
+      <h2>Load File</h2>
+      <p>Import a `.txt` or bundled `.zip` dossier and push it straight into the dossier.</p>
+      <button class="launcher-btn" id="launcher-load-btn" type="button">LOAD FILE</button>
+      <input type="file" id="launcher-file-input" accept=".txt,.zip" hidden>
+      <details class="format-guide">
+        <summary>UPLOAD FORMAT GUIDE</summary>
+        <div class="format-guide-body">
+          <div class="format-block">
+            <div class="format-title">Character .txt</div>
+            <pre>name: {
+  "Character Name", "Street Name"
+}
+
+stats: {
+  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, EMPT=0
+}
+
+career: {
+  "Solo"
+}
+
+careerSkill: {
+  point=0
+  Awareness/Notice=0
+}
+
+reputation: {
+  rep=0
+}
+
+wallet: {
+  eddies=0
+}
+
+physicalBody: {
+  bodylevel=0
+  weight=0
+  stunpoint=0
+}
+
+armor: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}
+
+damage: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}</pre>
+          </div>
+          <div class="format-block">
+            <div class="format-title">Item .txt</div>
+            <pre>weapon: {
+  weapon1:{
+    name="",
+    Type="",
+    Accuracy=,
+    Concealability="",
+    Availability="",
+    Damage/Ammo="",
+    ShotsCapacity=,
+    "Rates of Fire"=,
+    Reliability="",
+    Range=,
+    Cost=,
+    info:{ "" }
+  }
+}
+
+cyberware: {
+  cyberware1:{
+    name="",
+    Type="",
+    HumanityCost="",
+    Cost=,
+    info:{ "" }
+  }
+}
+
+miscellaneous: {
+  misc1:{
+    name="",
+    Type="",
+    Cost=,
+    info:{ "" }
+  }
+}
+
+buff: {
+  buff1:{
+    name="",
+    Type="",
+    Duration="",
+    Effect="",
+    info:{ "" }
+  }
+}</pre>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="launcher-card launcher-card-alt">
+      <div class="card-eyebrow">Blank Shell</div>
+      <h2>Create New Character</h2>
+      <p>Enter name, street name, and career first, then let the dossier open with a blank statline.</p>
+      <button class="launcher-btn alt" id="launcher-create-btn" type="button">CREATE NEW CHARACTER</button>
+    </section>
+  </main>
+
+  <div class="launcher-hint">After you upload or confirm a new character, the system runs a short "CHIPPIN IN" glitch load before opening the dossier.</div>
+  <div class="launcher-status-bar" id="launcher-status" aria-live="polite"></div>
+</div>
+
+<div class="launcher-modal" id="launcher-modal" aria-hidden="true">
+  <div class="launcher-modal-box">
+    <h3>New Character</h3>
+    <form id="launcher-form" class="launcher-form">
+      <label>
+        <span class="launcher-label">Name</span>
+        <input id="launcher-name" class="launcher-input" type="text" maxlength="60" placeholder="V, Kaito, Johnny..." required>
+      </label>
+      <label>
+        <span class="launcher-label">Street Name</span>
+        <input id="launcher-street" class="launcher-input" type="text" maxlength="60" placeholder="Optional handle">
+      </label>
+      <label>
+        <span class="launcher-label">Career</span>
+        <input id="launcher-career" class="launcher-input" type="text" maxlength="40" placeholder="Solo, Netrunner, Techie..." required>
+      </label>
+      <div class="launcher-modal-actions">
+        <button class="launcher-btn ghost" id="launcher-cancel-btn" type="button">CANCEL</button>
+        <button class="launcher-btn alt" type="submit">ENTER</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="transition-overlay" id="transition-overlay" aria-hidden="true">
+  <div class="transition-grid" id="transition-grid"></div>
+  <div class="transition-scan"></div>
+  <div class="transition-copy">
+    <div class="transition-kicker">CHIPPIN IN</div>
+    <div class="transition-title" id="transition-title">JACKING INTO DOSSIER</div>
+    <div class="transition-text" id="transition-text">Running access handshake...</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="functions/upload-download.js?v=20260415f"></script>
+<script src="functions/createNewCharacter.js?v=20260415e"></script>
+<script src="functions/index-transition.js?v=20260415e"></script>
+<script src="functions/index.js?v=20260415e"></script>
+</body>
+</html>

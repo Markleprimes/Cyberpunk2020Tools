@@ -1,0 +1,466 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBERPUNK 2020 // Character Dossier</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="DND.css?v=20260415e">
+</head>
+<body>
+<div class="wrapper">
+
+<header>
+  <div class="logo-block">
+    <h1>CYBERPUNK<br>2020</h1>
+    <div class="edition">// CHARACTER DOSSIER // NIGHT CITY //</div>
+  </div>
+  <div class="corner-tag">
+    REV 2.7.4<br>NIGHT CITY UPLINK<br>
+    <span class="online">
+      <span class="online-dot"></span>
+      JACKED IN
+    </span>
+  </div>
+</header>
+
+<div id="status-bar"></div>
+<div class="system-strip" id="system-strip">
+  <div class="system-chip">
+    <span class="system-chip-dot"></span>
+    DOSSIER LIVE
+  </div>
+  <div class="system-marquee">
+    <span class="system-label">SYSTEM</span>
+    <span class="system-text" id="system-strip-text">Night City uplink stabilizing...</span>
+  </div>
+  <div class="system-metrics">
+    <span class="system-metric" id="system-metric-inv">INV 0</span>
+    <span class="system-metric" id="system-metric-wound">WOUND CLEAR</span>
+    <span class="system-metric" id="system-metric-roll">MOD +0</span>
+  </div>
+</div>
+
+<!-- SHEET -->
+<div id="sheet">
+
+  <div class="name-banner">
+    <div>
+      <div class="name-heading">
+        <div class="name-main" id="char-name">--</div>
+        <button class="name-image-btn" type="button" onclick="document.getElementById('banner-image-input').click()">IMG</button>
+        <input type="file" id="banner-image-input" accept="image/*" style="display:none">
+      </div>
+      <div class="name-aliases" id="char-aliases"></div>
+    </div>
+    <div class="career-badge" id="char-career">UNKNOWN</div>
+  </div>
+
+  <div class="sheet-actions">
+    <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
+    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
+    <input type="file" id="file-input2" accept=".txt,.zip" style="display:none">
+    <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
+    <button class="action-btn new-btn" onclick="openNewCharacterModal()">NEW</button>
+  </div>
+
+  <div class="sheet-section">
+  
+<div class="modal-overlay" id="new-char-modal">
+  <div class="modal-box create-modal-box">
+    <h3>NEW CHARACTER</h3>
+
+    <div class="create-form">
+      
+      <label>
+        <div class="create-field-label">Name</div>
+        <input class="create-field-input" id="new-name" type="text">
+      </label>
+
+      <label>
+        <div class="create-field-label">Street Name (Optional)</div>
+        <input class="create-field-input" id="new-street" type="text">
+      </label>
+
+      <label>
+        <div class="create-field-label">Career</div>
+        <input class="create-field-input" id="new-career" type="text">
+      </label>
+
+    </div>
+
+    <div class="modal-btns">
+      <button class="action-btn" onclick="closeNewCharacterModal()">CANCEL</button>
+      <button class="action-btn red" onclick="submitNewCharacter()">CREATE</button>
+    </div>
+  </div>
+</div>
+
+  <!-- STATS -->
+  <div class="panel" style="margin-bottom:18px;">
+    <div class="panel-title">Core Statistics</div>
+    <div class="stats-grid" id="stats-grid"></div>
+  </div>
+
+  <!-- BODY + STUN (full width) -->
+  <div class="sheet-grid" style="grid-template-columns:1.35fr 1.35fr 1.35fr 1fr 1fr;margin-bottom:18px;" id="body-stun-panel">
+    <div class="panel" style="grid-column:1/4;">
+      <div class="panel-title">Physical</div>
+      <div class="body-stun-row">
+        <div class="bs-item">
+          <div class="bs-label">BODY LEVEL</div>
+          <div class="bs-value red-glass" id="body-level-val">--</div>
+          <div class="bs-controls">
+            <button class="ctrl-btn" onclick="changeBS('bodylevel',1)">+</button>
+            <button class="ctrl-btn minus" onclick="changeBS('bodylevel',-1)">-</button>
+          </div>
+        </div>
+        <div class="bs-item">
+          <div class="bs-label">BODY WEIGHT</div>
+          <div class="bs-value" id="body-val">--</div>
+          <div class="bs-controls">
+            <button class="ctrl-btn" onclick="changeBS('weight',1)">+</button>
+            <button class="ctrl-btn minus" onclick="changeBS('weight',-1)">-</button>
+          </div>
+        </div>
+        <div class="bs-item">
+          <div class="bs-label">STUN POINTS</div>
+          <div class="bs-value red-glass" id="stun-val">--</div>
+          <div class="bs-controls">
+            <button class="ctrl-btn" onclick="changeBS('stun',1)">+</button>
+            <button class="ctrl-btn minus" onclick="changeBS('stun',-1)">-</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="grid-column:4/5;">
+      <div class="panel-title">Reputation</div>
+      <div class="rep-row">
+        <div class="rep-main" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)">
+          <div class="rep-number" id="rep-number">0</div>
+          <div class="rep-side">
+          <div class="rep-label">STREET CRED</div>
+          <div class="rep-btn-row">
+            <button class="ctrl-btn" onclick="event.stopPropagation();changeRep(1)">+</button>
+            <button class="ctrl-btn minus" onclick="event.stopPropagation();changeRep(-1)">-</button>
+          </div>
+          </div>
+        </div>
+      </div>
+      <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)"></div>
+    </div>
+    <div class="panel" style="grid-column:5/6;">
+      <div class="panel-title">Wallet</div>
+      <div class="wallet-row">
+        <input class="wallet-number" id="wallet-val" type="number" min="0" step="1" value="0" onchange="setWallet(this.value)" />
+        <div class="wallet-side">
+          <div class="wallet-label">EDDIES</div>
+          <div class="rep-btn-row">
+            <button class="ctrl-btn" onclick="changeWallet(1)">+</button>
+            <button class="ctrl-btn minus" onclick="changeWallet(-1)">-</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKILLS + CYBER -->
+  <div class="sheet-grid" style="margin-bottom:18px;">
+    <div class="panel">
+      <div class="panel-title">Career Skills</div>
+      <div class="sp-tracker">
+        <span class="sp-label">UPGRADE POINTS</span>
+        <span class="sp-value" id="sp-display">0</span>
+        <div class="rep-btn-row">
+          <button class="ctrl-btn" onclick="changeUpgradePoints(1)">+</button>
+          <button class="ctrl-btn minus" onclick="changeUpgradePoints(-1)">-</button>
+        </div>
+      </div>
+      <div class="skill-list" id="skill-list"></div>
+      <div class="add-skill-bar">
+        <input class="add-skill-input" id="new-skill-name" type="text" placeholder="Custom skill name..." maxlength="50">
+        <button class="add-skill-btn" onclick="addCustomSkill()">ADD</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Inventory</div>
+      <div id="inventory-list" class="inventory-list"></div>
+      <div class="inventory-actions">
+        <button class="add-skill-btn" type="button" onclick="openInventoryEditor()">ADD ITEM</button>
+        <button class="add-skill-btn" onclick="document.getElementById('item-file-input').click()" style="border-color:rgba(59,184,255,.35);color:var(--accent-b);background:rgba(59,184,255,.08);">LOAD ITEM FILE</button>
+        <button class="add-skill-btn" type="button" onclick="downloadInventoryTxt()" style="border-color:rgba(255,177,74,.3);color:var(--accent-y);background:rgba(255,177,74,.08);">DOWNLOAD ITEM .ZIP</button>
+        <input type="file" id="item-file-input" accept=".txt,.zip" style="display:none">
+      </div>
+    </div>
+  </div>
+
+  <!-- DAMAGE & ARMOR -->
+  <div class="panel" style="margin-bottom:18px;">
+    <div class="panel-title">Damage &amp; Armor</div>
+    <div class="limb-grid" id="limb-grid"></div>
+    <div class="wound-status-panel" id="wound-panel">
+      <div class="wound-title">WOUND STATUS</div>
+      <div class="wound-rows" id="wound-rows"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;">
+    <div class="panel-title">Roll Lab</div>
+    <div class="roll-lab">
+      <div>
+        <div class="roll-status-strip">
+          <div class="roll-status-copy">
+            <div class="roll-label">Last Result</div>
+            <div class="roll-equation" id="roll-last-summary">Pick a die and the roll modal will handle the animation.</div>
+            <div class="roll-breakdown" id="roll-last-breakdown">Modifiers stay locked here. Roll drama moves to the popup.</div>
+          </div>
+          <div class="roll-status-total" id="roll-last-total">0</div>
+        </div>
+        <div class="modifier-bar">
+          <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
+          <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
+          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD MODIFIER</button>
+          <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR MODIFIERS</button>
+        </div>
+        <div class="modifier-list" id="modifier-list"></div>
+        <div class="roll-control-bar">
+          <div class="roll-qty-wrap">
+            <span class="roll-qty-label">Dice Count</span>
+            <button class="ctrl-btn minus" type="button" onclick="changeRollQty(-1)">-</button>
+            <input class="roll-qty-input" id="roll-qty" type="number" min="1" max="20" step="1" value="1" onchange="normalizeRollQty()" />
+            <button class="ctrl-btn" type="button" onclick="changeRollQty(1)">+</button>
+          </div>
+        </div>
+        <div class="dice-bank">
+          <button class="dice-btn" type="button" onclick="rollDie(4)">D4</button>
+          <button class="dice-btn" type="button" onclick="rollDie(6)">D6</button>
+          <button class="dice-btn" type="button" onclick="rollDie(8)">D8</button>
+          <button class="dice-btn" type="button" onclick="rollDie(10)">D10</button>
+          <button class="dice-btn" type="button" onclick="rollDie(12)">D12</button>
+          <button class="dice-btn" type="button" onclick="rollDie(20)">D20</button>
+        </div>
+      </div>
+      <div class="roll-side-panel">
+        <div class="roll-box">
+          <div class="roll-box-title">Modifier Total</div>
+          <div class="roll-box-value" id="modifier-total">0</div>
+        </div>
+        <div class="roll-box">
+          <div class="roll-box-title">Last Die</div>
+          <div class="roll-box-value" id="last-die-label">NONE</div>
+        </div>
+        <div class="roll-box">
+          <div class="roll-box-title">Presets</div>
+          <div class="preset-list">
+            <button class="preset-btn" type="button" onclick="rollFacedown()">Facedown</button>
+            <button class="preset-btn" type="button" onclick="rollInitiationCheck()">Initaition Check</button>
+            <button class="preset-btn" type="button" onclick="rollAmbush()">Ambush</button>
+            <button class="preset-btn" type="button" onclick="rollAmbushCounter()">Ambush Counter</button>
+            <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
+          </div>
+          <div class="aim-stack-box">
+            <div class="roll-box-title">Aim Action</div>
+            <div class="aim-stack-row">
+              <div class="aim-stack-pips" id="aim-stack-pips"></div>
+            </div>
+            <div class="aim-followup-row" id="aim-followup-row">
+              <button class="preset-btn aim-followup-btn" id="aim-keep-btn" type="button" onclick="keepAimAction()">Aim</button>
+              <button class="preset-btn aim-followup-btn" type="button" onclick="attackAimAction()">Attack</button>
+              <button class="preset-btn aim-followup-btn" type="button" onclick="clearAimAction()">Clear Aim</button>
+            </div>
+          </div>
+          <div class="roll-box-note">Each preset replaces the current modifier stack with its own formula, then rolls 1d10.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NETRUNNER DECK -->
+  <div class="panel section-panel netrunner-shell">
+    <div class="panel-title">Netrunner Deck</div>
+    <div class="netrunner-layout">
+
+      <!-- LEFT: Difficulty + Move Buttons -->
+      <div class="nr-left">
+        <div class="nr-section-label">DIFFICULTY</div>
+        <div class="nr-diff-btns">
+          <button class="nr-diff-btn" id="nr-diff-easy" type="button" onclick="setDifficulty('easy')">EASY</button>
+          <button class="nr-diff-btn" id="nr-diff-medium" type="button" onclick="setDifficulty('medium')">MEDIUM</button>
+          <button class="nr-diff-btn" id="nr-diff-hard" type="button" onclick="setDifficulty('hard')">HARD</button>
+        </div>
+        <div class="nr-section-label" style="margin-top:22px;">KEYBINDS</div>
+        <div class="nr-info-list">
+          <div class="nr-info-row"><span class="nr-key">R</span><span class="nr-info-copy">Generate new breach</span></div>
+          <div class="nr-info-row"><span class="nr-key">ARROWS</span><span class="nr-info-copy">Move runner</span></div>
+        </div>
+        <div class="nr-section-label" style="margin-top:22px;">RULES</div>
+        <div class="nr-info-list nr-rules-list">
+          <div class="nr-rule-copy">10 seconds per breach.</div>
+          <div class="nr-rule-copy">Hit a wall and you die.</div>
+          <div class="nr-rule-copy">Touch your own path and you die.</div>
+          <div class="nr-rule-copy">Reach the red node to win.</div>
+        </div>
+      </div>
+
+      <!-- CENTER: Console + Maze -->
+      <div class="nr-center">
+        <div class="nr-header-bar">
+          <span class="nr-console-label">///Console.///</span>
+          <span class="nr-dots">.... .... .... ....</span>
+          <span class="nr-breach-timer">Breach Timer <span class="nr-timer-box" id="nr-timer">0:00</span></span>
+        </div>
+        <div class="nr-maze-wrap">
+          <canvas id="nr-maze-canvas"></canvas>
+          <div class="nr-maze-overlay" id="nr-maze-overlay"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: CMD Terminal -->
+      <div class="nr-right">
+        <div class="nr-terminal-label">CMD.///Buffer.!</div>
+        <div class="nr-terminal-screen" id="nr-terminal"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- end sheet -->
+
+<div class="action-toast" id="action-toast"></div>
+
+<!-- ROLL EXECUTE MODAL -->
+<div class="modal-overlay roll-execute-modal" id="roll-execute-modal">
+  <div class="modal-box roll-execute-box">
+    <h3>ROLL EXECUTION</h3>
+    <div class="roll-execute-copy">Hold click on the box, shake it, then release to throw the dice.</div>
+    <div class="roll-execute-stage">
+      <div class="roll-shake-box" id="roll-shake-box">
+        <div class="roll-shake-core" id="roll-shake-core">
+          <span class="roll-shake-label" id="roll-shake-label">1D10</span>
+        </div>
+      </div>
+    </div>
+    <div class="roll-execute-meter">
+      <div class="roll-execute-meter-track">
+        <span class="roll-execute-meter-fill" id="roll-execute-meter-fill"></span>
+      </div>
+      <div class="roll-execute-meter-copy" id="roll-execute-meter-copy">Hold and shake to arm the roll.</div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="cancelRollExecution()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROLL CINEMA MODAL -->
+<div class="modal-overlay roll-cinema-modal" id="roll-cinema-modal">
+  <div class="modal-box roll-cinema-box">
+    <button class="roll-cinema-close" type="button" onclick="closeRollCinemaModal()">CLOSE</button>
+    <div class="roll-cinema-head">
+      <div class="roll-cinema-kicker" id="roll-cinema-kicker">1D10 EXECUTION</div>
+      <div class="roll-cinema-pool" id="roll-cinema-pool">Dice pool: []</div>
+    </div>
+    <div class="roll-cinema-stage" id="roll-cinema-stage">
+      <div class="roll-cinema-dice" id="roll-cinema-dice"></div>
+    </div>
+    <div class="roll-cinema-results">
+      <div class="roll-cinema-card show" id="roll-cinema-raw-card">
+        <div class="roll-cinema-label">Dice Total</div>
+        <div class="roll-cinema-raw-value" id="roll-cinema-raw">0</div>
+      </div>
+      <div class="roll-cinema-card" id="roll-cinema-mod-card">
+        <div class="roll-cinema-label">Modifier Surge</div>
+        <div class="roll-cinema-mod-list" id="roll-cinema-mod-list"></div>
+        <div class="roll-cinema-mod-total" id="roll-cinema-mod-total">+0</div>
+      </div>
+      <div class="roll-cinema-card" id="roll-cinema-final-card">
+        <div class="roll-cinema-label">Final Total</div>
+        <div class="roll-cinema-final-value" id="roll-cinema-final">0</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AIM HIT MODAL -->
+<div class="modal-overlay" id="aim-hit-modal">
+  <div class="modal-box create-modal-box">
+    <h3>AIM ATTACK</h3>
+    <div class="create-form">
+      <label>
+        <div class="create-field-label">Weapon</div>
+        <select class="create-field-input" id="aim-weapon-select"></select>
+      </label>
+      <div class="create-form-note" id="aim-weapon-note">Pick a weapon first.</div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeAimHitModal()">CANCEL</button>
+      <button class="action-btn red" type="button" onclick="confirmAimHitWeapon()">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY EDITOR MODAL -->
+<div class="modal-overlay" id="inventory-editor-modal">
+  <div class="modal-box inventory-editor-box">
+    <h3 id="inventory-editor-title">ITEM EDITOR</h3>
+    <div class="inventory-editor-form">
+      <div class="inventory-editor-grid">
+        <label>
+          <div class="create-field-label">Item Name</div>
+          <input class="create-field-input" id="inventory-item-name" type="text" maxlength="80" placeholder="Very Heavy Pistol" />
+        </label>
+        <label>
+          <div class="create-field-label">Type</div>
+          <select class="create-field-input" id="inventory-item-type" onchange="toggleInventoryCustomType()">
+            <option value="weapon">Weapon</option>
+            <option value="cyberware">Cyberware</option>
+            <option value="miscellaneous">Miscellaneous</option>
+            <option value="buff">Buff</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+      </div>
+      <label id="inventory-custom-type-wrap" style="display:none;">
+        <div class="create-field-label">Custom Type</div>
+        <input class="create-field-input" id="inventory-custom-type" type="text" maxlength="40" placeholder="ammo, armor, gear..." />
+      </label>
+      <label>
+        <div class="create-field-label">Stats</div>
+        <textarea class="inventory-textarea" id="inventory-item-stats" placeholder="Accuracy=1&#10;Damage/Ammo=4D6&#10;Cost=450"></textarea>
+      </label>
+      <label>
+        <div class="create-field-label">Description</div>
+        <textarea class="inventory-textarea" id="inventory-item-info" placeholder="One line per note&#10;Reliable sidearm"></textarea>
+      </label>
+      <div class="create-form-note">Use one stat per line in <code>label=value</code> format. Numeric values stay clickable for rolls.</div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeInventoryEditor()">CANCEL</button>
+      <button class="action-btn red" type="button" onclick="saveInventoryItem()">SAVE ITEM</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <h3 id="modal-title">CONFIRM</h3>
+    <p id="modal-msg">Are you sure?</p>
+    <div class="modal-btns">
+      <button class="action-btn" onclick="closeModal()">CANCEL</button>
+      <button class="action-btn red" id="modal-confirm">DELETE</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- wrapper -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="functions/DND.js?v=20260415f"></script>
+<script src="functions/createNewCharacter.js?v=20260415e"></script>
+<script src="functions/dossierSheet.js?v=20260415e"></script>
+<script src="functions/inventory.js?v=20260415e"></script>
+<script src="functions/rollLab.js?v=20260415f"></script>
+<script src="functions/upload-download.js?v=20260415f"></script>
+<script src="functions/netrunner.js?v=20260414d"></script>
+</body>
+</html>
