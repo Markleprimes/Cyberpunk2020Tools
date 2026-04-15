@@ -115,14 +115,6 @@ function getCurrentCharacterProfile() {
     label: skill.name,
     value: skill.value || 0
   }));
-  const armor = LIMBS.map((limb) => ({
-    label: limb,
-    value: limbSP[limb] || 0
-  }));
-  const damage = LIMBS.map((limb) => ({
-    label: limb,
-    value: limbDMG[limb] || 0
-  }));
   const inventorySummary = Object.keys(inventory || {}).map((category) => ({
     label: humanizeLabel(category),
     value: (inventory[category] || []).map((item) => item.name || humanizeLabel(item.id || category)).join(', ') || '--'
@@ -146,8 +138,6 @@ function getCurrentCharacterProfile() {
     upgradePoints,
     reputation: repValue,
     wallet: walletValue,
-    armor,
-    damage,
     inventory: inventorySummary,
     lastRoll
   };

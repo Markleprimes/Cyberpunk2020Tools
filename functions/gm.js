@@ -78,16 +78,6 @@
               ${renderGMInventoryLines(entry.inventory)}
             </div>
           </div>
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Armor</div>
-              ${renderGMKeyValueLines(entry.armor)}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Damage</div>
-              ${renderGMKeyValueLines(entry.damage)}
-            </div>
-          </div>
           <div class="gm-sheet-roll">
             <span class="gm-sheet-title">Last Roll</span>
             <span class="gm-sheet-roll-value">${renderGMRollSummary(entry.lastRoll)}</span>
