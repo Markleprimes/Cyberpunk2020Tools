@@ -72,6 +72,14 @@
                 Wallet: entry.wallet ?? 0
               })}
             </div>
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Physical</div>
+              ${renderGMKeyValueLines({
+                BodyLevel: entry.physical?.bodyLevel ?? 0,
+                Weight: entry.physical?.weight ?? 0,
+                Stun: entry.physical?.stun ?? 0
+              })}
+            </div>
           </div>
           <div class="gm-sheet-roll">
             <span class="gm-sheet-title">Last Roll</span>

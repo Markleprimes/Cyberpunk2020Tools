@@ -133,6 +133,11 @@ function getCurrentCharacterProfile() {
     skills,
     reputation: repValue,
     wallet: walletValue,
+    physical: {
+      bodyLevel: bodyLevelVal,
+      weight: weightVal,
+      stun: stunVal
+    },
     lastRoll
   };
 }
