@@ -465,5 +465,12 @@
 <script src="functions/rollLab.js?v=20260415f"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
 <script src="functions/netrunner.js?v=20260414d"></script>
+<script>
+  initFirebaseRealtime();
+getSyncRoomRef('test-room').child('player').update({
+  message: 'hello from player',
+  updatedAt: Date.now()
+});
+</script>
 </body>
 </html>
