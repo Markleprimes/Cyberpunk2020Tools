@@ -17,6 +17,8 @@
   let gmRollCinemaRevealTimer = null;
   let gmRollCountAudio = null;
   let gmRollBounceAudios = [];
+  let gmAimStackPoints = 0;
+  let gmAimHitWeapons = [];
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
@@ -311,6 +313,7 @@
         weight: parseGMNumericValue(physicalBody.weight ?? bodyBlock.weight) ?? 0,
         stun: parseGMNumericValue(physicalBody.stunpoint ?? stunBlock.stun) ?? 0
       },
+      inventoryMap: JSON.parse(JSON.stringify(parsedData.inventory || {})),
       inventory: flattenGMInventory(parsedData.inventory || {}),
       armor: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.armor?.[limb]) ?? 0 })),
       damage: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.damage?.[limb]) ?? 0 })),
@@ -1090,6 +1093,165 @@
     renderGMRollModifierList();
   }
 
+  function getGMActiveCombatantData() {
+    return typeof window.getGMActiveCombatant === 'function' ? window.getGMActiveCombatant() : null;
+  }
+
+  function requireGMActiveCombatant() {
+    const combatant = getGMActiveCombatantData();
+    if (!combatant) {
+      setGMStatus('No current combat actor selected for GM preset roll.');
+      return null;
+    }
+    return combatant;
+  }
+
+  function getGMCombatantStatValue(combatant, label) {
+    const entry = (Array.isArray(combatant?.stats) ? combatant.stats : []).find((item) => String(item?.label || '').trim().toUpperCase() === String(label || '').trim().toUpperCase());
+    return parseGMNumericValue(entry?.value) ?? 0;
+  }
+
+  function getGMCombatantSkillValue(combatant, ...names) {
+    const wanted = names
+      .map((name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, ''))
+      .filter(Boolean);
+    const entry = (Array.isArray(combatant?.skills) ? combatant.skills : []).find((item) => {
+      const normalized = String(item?.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return wanted.some((name) => normalized.includes(name));
+    });
+    return parseGMNumericValue(entry?.value) ?? 0;
+  }
+
+  function setGMPresetRoll(label, modifiers, sides = 10) {
+    const qtyInput = document.getElementById('gm-roll-qty');
+    if (qtyInput) qtyInput.value = '1';
+    gmRollModifiers = modifiers
+      .map((modifier) => ({
+        source: modifier.source || 'PRESET',
+        label: modifier.label || 'Modifier',
+        value: parseGMNumericValue(modifier.value)
+      }))
+      .filter((modifier) => modifier.value !== null);
+    renderGMRollModifierList();
+    rollGMDice(sides);
+    setGMStatus(`${label} preset executed.`);
+  }
+
+  function renderGMAimAction() {
+    const pips = document.getElementById('gm-aim-pips');
+    const aimBtn = document.getElementById('gm-aim-btn');
+    if (pips) {
+      pips.innerHTML = Array.from({ length: 3 }, (_, idx) => `<span class="gm-aim-pip${idx < gmAimStackPoints ? ' active' : ''}"></span>`).join('');
+    }
+    if (aimBtn) {
+      aimBtn.textContent = gmAimStackPoints > 0 ? 'KEEP AIM' : 'AIM';
+      aimBtn.disabled = gmAimStackPoints >= 3;
+    }
+  }
+
+  function resetGMAimAction() {
+    gmAimStackPoints = 0;
+    renderGMAimAction();
+  }
+
+  function startOrKeepGMAim() {
+    if (!requireGMActiveCombatant()) return;
+    if (gmAimStackPoints >= 3) return;
+    gmAimStackPoints += 1;
+    renderGMAimAction();
+    setGMStatus(`Aim stack set to +${gmAimStackPoints}.`);
+  }
+
+  function clearGMAim() {
+    if (gmAimStackPoints <= 0) return;
+    resetGMAimAction();
+    setGMStatus('Aim stack cleared.');
+  }
+
+  function getGMCombatWeapons(combatant) {
+    return Array.isArray(combatant?.inventoryMap?.weapon) ? combatant.inventoryMap.weapon : [];
+  }
+
+  function getGMAimHitAccuracy(weapon) {
+    if (!weapon) return null;
+    const fields = weapon.fields || {};
+    for (const key of ['Accuracy', 'Weapon Accuracy', 'WA']) {
+      const matchKey = Object.keys(fields).find((fieldKey) => String(fieldKey).trim().toLowerCase() === key.toLowerCase());
+      const value = parseGMNumericValue(matchKey ? fields[matchKey] : null);
+      if (value !== null) return value;
+    }
+    return null;
+  }
+
+  function openGMAimHitModal() {
+    const combatant = requireGMActiveCombatant();
+    if (!combatant) return;
+    gmAimHitWeapons = getGMCombatWeapons(combatant);
+    const select = document.getElementById('gm-aim-weapon-select');
+    const note = document.getElementById('gm-aim-weapon-note');
+    if (!select || !note) return;
+    if (!gmAimHitWeapons.length) {
+      select.innerHTML = '';
+      note.textContent = 'No weapon with stored inventory data is available for the current actor.';
+    } else {
+      select.innerHTML = gmAimHitWeapons.map((weapon, idx) => `<option value="${idx}">${escapeGMValue(weapon.name || `Weapon ${idx + 1}`)}</option>`).join('');
+      note.textContent = 'Select a weapon and confirm to attack.';
+    }
+    document.getElementById('gm-aim-hit-modal')?.classList.add('show');
+  }
+
+  function closeGMAimHitModal() {
+    document.getElementById('gm-aim-hit-modal')?.classList.remove('show');
+  }
+
+  function confirmGMAimHit() {
+    const combatant = getGMActiveCombatantData();
+    const select = document.getElementById('gm-aim-weapon-select');
+    const weapon = gmAimHitWeapons[parseInt(select?.value, 10)];
+    if (!combatant || !weapon) {
+      setGMStatus('Aim attack failed: no weapon selected.');
+      return;
+    }
+    const accuracy = getGMAimHitAccuracy(weapon);
+    if (accuracy === null) {
+      setGMStatus('Aim attack failed: selected weapon has no Accuracy / Weapon Accuracy / WA value.');
+      return;
+    }
+    const aimUsed = gmAimStackPoints;
+    closeGMAimHitModal();
+    gmRollModifiers = [];
+    addGMRollModifier(combatant.name || 'Actor', `${weapon.name || 'Weapon'} Accuracy`, accuracy);
+    if (aimUsed > 0) addGMRollModifier(combatant.name || 'Actor', 'Aim', aimUsed);
+    resetGMAimAction();
+    rollGMDice(10);
+  }
+
+  function rollGMAmbushPreset() {
+    const combatant = requireGMActiveCombatant();
+    if (!combatant) return;
+    setGMPresetRoll('AMBUSH', [
+      { source: combatant.name || 'Actor', label: 'Stealth', value: getGMCombatantSkillValue(combatant, 'Stealth') },
+      { source: combatant.name || 'Actor', label: 'INT', value: getGMCombatantStatValue(combatant, 'INT') }
+    ], 10);
+  }
+
+  function rollGMAmbushCounterPreset() {
+    const combatant = requireGMActiveCombatant();
+    if (!combatant) return;
+    setGMPresetRoll('AMBUSH COUNTER', [
+      { source: combatant.name || 'Actor', label: 'Awareness', value: getGMCombatantSkillValue(combatant, 'Awareness', 'AwarenessNotice') }
+    ], 10);
+  }
+
+  function rollGMSuppressivePreset() {
+    const combatant = requireGMActiveCombatant();
+    if (!combatant) return;
+    setGMPresetRoll('SUPPRESSIVE FIRE SAVE', [
+      { source: combatant.name || 'Actor', label: 'Athletics', value: getGMCombatantSkillValue(combatant, 'Athletics', 'Athletic') },
+      { source: combatant.name || 'Actor', label: 'REF', value: getGMCombatantStatValue(combatant, 'REF') }
+    ], 10);
+  }
+
   function addCustomGMRollModifier() {
     const labelInput = document.getElementById('gm-roll-custom-label');
     const valueInput = document.getElementById('gm-roll-custom-value');
@@ -1143,6 +1305,8 @@
     initFirebaseRealtime();
     window.getGMRemotePlayers = () => gmRemotePlayers.map((entry) => JSON.parse(JSON.stringify(entry)));
     window.getGMLocalNpcs = () => gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
+    window.addGMRollModifier = addGMRollModifier;
+    window.getGMCurrentRoll = () => gmCurrentRoll ? JSON.parse(JSON.stringify(gmCurrentRoll)) : null;
 
     document.getElementById('gm-connect-btn')?.addEventListener('click', connectGMRoom);
     document.getElementById('gm-room-id')?.addEventListener('keydown', (event) => {
@@ -1164,6 +1328,14 @@
 
     document.getElementById('gm-roll-add-mod-btn')?.addEventListener('click', addCustomGMRollModifier);
     document.getElementById('gm-roll-clear-mods-btn')?.addEventListener('click', clearGMRollModifiers);
+    document.getElementById('gm-roll-ambush-btn')?.addEventListener('click', rollGMAmbushPreset);
+    document.getElementById('gm-roll-ambush-counter-btn')?.addEventListener('click', rollGMAmbushCounterPreset);
+    document.getElementById('gm-roll-suppressive-btn')?.addEventListener('click', rollGMSuppressivePreset);
+    document.getElementById('gm-aim-btn')?.addEventListener('click', startOrKeepGMAim);
+    document.getElementById('gm-clear-aim-btn')?.addEventListener('click', clearGMAim);
+    document.getElementById('gm-attack-btn')?.addEventListener('click', openGMAimHitModal);
+    document.getElementById('gm-aim-hit-cancel')?.addEventListener('click', closeGMAimHitModal);
+    document.getElementById('gm-aim-hit-confirm')?.addEventListener('click', confirmGMAimHit);
     document.getElementById('gm-roll-custom-value')?.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') addCustomGMRollModifier();
     });
@@ -1182,6 +1354,9 @@
     });
     document.getElementById('gm-roll-cinema-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeGMRollCinemaModal();
+    });
+    document.getElementById('gm-aim-hit-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMAimHitModal();
     });
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
@@ -1218,6 +1393,7 @@
     renderGMNpcList();
     renderGMRollModifierList();
     renderGMRollDisplay();
+    renderGMAimAction();
     setGMStatusVisual('disconnected');
   });
 })();

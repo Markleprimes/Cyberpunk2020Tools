@@ -2,13 +2,21 @@
   const actionState = {
     ally: [],
     enemy: [],
+    boardOpposition: [],
     turnOrder: [],
     currentTurnIndex: 0,
     initiativeModal: null,
-    draggedKey: ''
+    draggedKey: '',
+    manualRolls: {},
+    turnStartSnapshots: {}
   };
 
   const initiativeAnimFrames = {};
+  const initiativeRevealTimers = {};
+  const INITIATIVE_PLAYER_REVEAL_DELAY_MS = 2400;
+  let confirmModalAction = null;
+  const turnRollAnimFrames = {};
+  const turnRollSnapshots = {};
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -52,6 +60,11 @@
     return getCombatantMap().get(key) || null;
   }
 
+  function getActiveCombatant() {
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    return active ? getCombatantByKey(active.key) : null;
+  }
+
   function getAssignedSide(key) {
     if (actionState.ally.includes(key)) return 'ally';
     if (actionState.enemy.includes(key)) return 'enemy';
@@ -62,7 +75,14 @@
     const availableKeys = new Set(getMonitorCombatants().map((entry) => entry.combatKey));
     actionState.ally = actionState.ally.filter((key) => availableKeys.has(key));
     actionState.enemy = actionState.enemy.filter((key) => availableKeys.has(key));
+    actionState.boardOpposition = actionState.boardOpposition.filter((key) => availableKeys.has(key));
     actionState.turnOrder = actionState.turnOrder.filter((entry) => availableKeys.has(entry.key));
+    Object.keys(actionState.manualRolls).forEach((key) => {
+      if (!availableKeys.has(key)) delete actionState.manualRolls[key];
+    });
+    Object.keys(actionState.turnStartSnapshots).forEach((key) => {
+      if (!availableKeys.has(key)) delete actionState.turnStartSnapshots[key];
+    });
     if (actionState.currentTurnIndex >= actionState.turnOrder.length) {
       actionState.currentTurnIndex = Math.max(0, actionState.turnOrder.length - 1);
     }
@@ -73,7 +93,30 @@
     actionState.ally = actionState.ally.filter((entry) => entry !== key);
     actionState.enemy = actionState.enemy.filter((entry) => entry !== key);
     actionState[side].push(key);
+    actionState.turnOrder = actionState.turnOrder.map((entry) => (
+      entry.key === key
+        ? { ...entry, side }
+        : entry
+    ));
     renderActionPlay();
+  }
+
+  function addCombatantToBoardOpposition(key) {
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    if (!key || !active || key === active.key) return;
+    actionState.boardOpposition = actionState.boardOpposition.filter((entry) => entry !== key);
+    actionState.boardOpposition.push(key);
+    renderActionPlay();
+  }
+
+  function getCombatDropSide(node) {
+    const defaultSide = node?.getAttribute('data-gm-side') || 'ally';
+    if (!actionState.turnOrder.length) return defaultSide;
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    if (!active) return defaultSide;
+    if (node?.id === 'gm-drop-ally') return active.side;
+    if (node?.id === 'gm-drop-enemy') return active.side === 'ally' ? 'enemy' : 'ally';
+    return defaultSide;
   }
 
   function getAssignedCombatants() {
@@ -98,6 +141,37 @@
   function getRollSnapshot(lastRoll) {
     if (!lastRoll || !lastRoll.dice) return '';
     return `${lastRoll.dice}|${lastRoll.raw}|${lastRoll.modifiers}|${lastRoll.total}`;
+  }
+
+  function getCombatantVisibleRoll(combatant) {
+    if (!combatant) return null;
+    return actionState.manualRolls[combatant.combatKey]
+      || combatant.lastRollVisible
+      || combatant.lastRoll
+      || null;
+  }
+
+  function markCurrentTurnBaseline() {
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    if (!active) return;
+    const combatant = getCombatantByKey(active.key);
+    actionState.boardOpposition = actionState.boardOpposition.filter((key) => key !== active.key);
+    actionState.turnStartSnapshots[active.key] = getRollSnapshot(getCombatantVisibleRoll(combatant));
+  }
+
+  function applyCurrentNpcRoll() {
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    if (!active || !active.key.startsWith('npc:') || typeof window.getGMCurrentRoll !== 'function') return;
+    const roll = window.getGMCurrentRoll();
+    if (!roll || !roll.dice) return;
+    actionState.manualRolls[active.key] = {
+      dice: roll.dice,
+      pool: Array.isArray(roll.pool) ? [...roll.pool] : [],
+      raw: Number(roll.raw || 0),
+      modifiers: Number(roll.modifiers || 0),
+      total: Number(roll.total || 0)
+    };
+    renderActionPlay();
   }
 
   function animateInitiativeValue(rowKey, start, end) {
@@ -163,8 +237,113 @@
           <div class="gm-player-name">${escapeHtml(entry.name || 'Unknown')}</div>
           <div class="gm-action-char-meta">${escapeHtml(entry.career || 'UNKNOWN')} // ${escapeHtml(entry.sourceType.toUpperCase())}</div>
           <div class="gm-assigned-side">${side === 'ally' ? 'Protagonist' : 'Antagonist'}</div>
+          ${renderCombatPickGroup(entry)}
         </div>
       `).join('');
+  }
+
+  function getCombatStatPairs(block) {
+    if (Array.isArray(block)) {
+      return block
+        .map((entry) => ({
+          label: String(entry?.label || '').trim(),
+          value: parseInt(entry?.value, 10)
+        }))
+        .filter((entry) => entry.label && Number.isFinite(entry.value));
+    }
+    return Object.entries(block || {})
+      .map(([label, value]) => ({
+        label: String(label || '').trim(),
+        value: parseInt(value, 10)
+      }))
+      .filter((entry) => entry.label && Number.isFinite(entry.value));
+  }
+
+  function renderCombatPickLines(source, sectionLabel, block) {
+    const entries = getCombatStatPairs(block).slice(0, 4);
+    if (!entries.length) return '';
+    return `
+      <div class="gm-combat-pick-group">
+        <div class="gm-combat-pick-title">${escapeHtml(sectionLabel)}</div>
+        <div class="gm-combat-picks">
+          ${entries.map((entry) => `
+            <button
+              type="button"
+              class="gm-combat-pick"
+              data-gm-combat-roll-source="${escapeHtml(source)}"
+              data-gm-combat-roll-label="${escapeHtml(entry.label)}"
+              data-gm-combat-roll-value="${escapeHtml(entry.value)}"
+            >
+              <span>${escapeHtml(entry.label)}</span>
+              <strong>${escapeHtml(entry.value)}</strong>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCombatPickGroup(combatant) {
+    const source = combatant?.name || 'Combatant';
+    return `
+      <div class="gm-combat-pick-wrap">
+        ${renderCombatPickLines(source, 'Stats', combatant?.stats)}
+        ${renderCombatPickLines(source, 'Skills', combatant?.skills)}
+      </div>
+    `;
+  }
+
+  function renderCombatSetupBoard() {
+    const allyNode = document.getElementById('gm-ally-list');
+    const enemyNode = document.getElementById('gm-enemy-list');
+    const allyTitle = document.getElementById('gm-drop-ally-title');
+    const enemyTitle = document.getElementById('gm-drop-enemy-title');
+    if (!allyNode || !enemyNode || !allyTitle || !enemyTitle) return false;
+    if (!actionState.turnOrder.length) {
+      allyTitle.textContent = 'Protagonist';
+      enemyTitle.textContent = 'Antagonist';
+      return false;
+    }
+
+    const active = actionState.turnOrder[actionState.currentTurnIndex];
+    const activeCombatant = getCombatantByKey(active.key);
+    if (!activeCombatant) return false;
+
+    const opposition = actionState.boardOpposition
+      .filter((key) => key !== active.key)
+      .map((key) => getCombatantByKey(key))
+      .filter(Boolean);
+
+    allyTitle.textContent = `Current Actor // ${active.side === 'ally' ? 'Protagonist' : 'Antagonist'}`;
+    enemyTitle.textContent = `Opposition // ${active.side === 'ally' ? 'Antagonist' : 'Protagonist'}`;
+
+    allyNode.innerHTML = `
+      <div class="gm-assigned-card">
+        <div class="gm-player-name">${escapeHtml(activeCombatant.name || 'Unknown')}</div>
+        <div class="gm-action-char-meta">${escapeHtml(activeCombatant.career || 'UNKNOWN')} // ${escapeHtml(active.side === 'ally' ? 'PROTAGONIST' : 'ANTAGONIST')}</div>
+        <div class="gm-turn-roll">
+          ${renderTurnRollPanel(activeCombatant, `board-active-${active.key}`, '', { hideUntilTurnRoll: true })}
+        </div>
+        ${renderCombatPickGroup(activeCombatant)}
+      </div>
+    `;
+
+    enemyNode.innerHTML = opposition.length ? opposition.map((combatant) => `
+      <div class="gm-assigned-card" draggable="true" data-gm-combat-key="${escapeHtml(combatant.combatKey)}">
+        <div class="gm-player-name">${escapeHtml(combatant.name || 'Unknown')}</div>
+        <div class="gm-action-char-meta">${escapeHtml(combatant.career || 'UNKNOWN')} // ${escapeHtml(active.side === 'ally' ? 'ANTAGONIST' : 'PROTAGONIST')}</div>
+        <div class="gm-turn-roll">
+          ${renderTurnRollPanel(combatant, `board-opposition-${combatant.combatKey}`)}
+        </div>
+        ${renderCombatPickGroup(combatant)}
+      </div>
+    `).join('') : '<div class="gm-empty">Drag characters here for the current opposition.</div>';
+
+    animateTurnRoll(`board-active-${active.key}`, activeCombatant);
+    opposition.forEach((combatant) => {
+      animateTurnRoll(`board-opposition-${combatant.combatKey}`, combatant);
+    });
+    return true;
   }
 
   function renderTurnOrder() {
@@ -183,30 +362,128 @@
       ? `Current turn: ${active.name} // ${active.side === 'ally' ? 'Protagonist' : 'Antagonist'}`
       : 'Combat order locked in.';
 
-    node.innerHTML = actionState.turnOrder.map((entry, index) => `
-      <div class="gm-turn-row${index === actionState.currentTurnIndex ? ' active' : ''}">
-        <div class="gm-turn-top">
-          <div class="gm-turn-name">${escapeHtml(entry.name)}</div>
-          <div class="gm-turn-total">${escapeHtml(entry.total)}</div>
+    node.innerHTML = actionState.turnOrder.map((entry, index) => {
+      return `
+        <div class="gm-turn-row${index === actionState.currentTurnIndex ? ' active' : ''}">
+          <div class="gm-turn-top">
+            <div class="gm-turn-name">${escapeHtml(entry.name)}</div>
+            <div class="gm-turn-total">${escapeHtml(entry.total)}</div>
+          </div>
+          <div class="gm-turn-meta">${escapeHtml(entry.side === 'ally' ? 'Protagonist' : 'Antagonist')} // ${escapeHtml(entry.breakdown)}</div>
+          <div class="gm-turn-actions">
+            <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-combatant="${escapeHtml(entry.key)}">REMOVE CHARACTER</button>
+          </div>
         </div>
-        <div class="gm-turn-meta">${escapeHtml(entry.side === 'ally' ? 'Protagonist' : 'Antagonist')} // ${escapeHtml(entry.breakdown)}</div>
-        <div class="gm-turn-actions">
-          <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-combatant="${escapeHtml(entry.key)}">REMOVE CHARACTER</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   function renderActionPlay() {
     normalizeActionState();
     renderActionPool();
-    renderAssignedList('ally', 'gm-ally-list', 'Drag characters here.');
-    renderAssignedList('enemy', 'gm-enemy-list', 'Drag characters here.');
+    if (!renderCombatSetupBoard()) {
+      renderAssignedList('ally', 'gm-ally-list', 'Drag characters here.');
+      renderAssignedList('enemy', 'gm-enemy-list', 'Drag characters here.');
+    }
     renderTurnOrder();
     if (actionState.initiativeModal?.open) {
       updateInitiativeModalFromMonitor();
       renderInitiativeModal();
     }
+  }
+
+  function renderTurnRollPanel(combatant, slotKey, className = '', options = {}) {
+    const roll = getCombatantVisibleRoll(combatant);
+    const pending = !!combatant?.lastRollPending && !(roll && roll.dice);
+    if (options.hideUntilTurnRoll) {
+      const baseline = actionState.turnStartSnapshots[combatant?.combatKey || ''] || '';
+      const snapshot = getRollSnapshot(roll);
+      if (!snapshot || snapshot === baseline) {
+        return `
+          <div class="gm-roll-panel ${className}">
+            <div class="gm-sheet-title">Last Roll</div>
+            <div class="gm-roll-empty">${pending ? 'Roll incoming...' : 'Awaiting turn roll.'}</div>
+          </div>
+        `;
+      }
+    }
+    if (!roll || !roll.dice) {
+      return `
+        <div class="gm-roll-panel ${className}">
+          <div class="gm-sheet-title">Last Roll</div>
+          <div class="gm-roll-empty">${pending ? 'Roll incoming...' : 'No roll yet.'}</div>
+        </div>
+      `;
+    }
+    const pool = Array.isArray(roll.pool) ? `[${roll.pool.join(', ')}]` : '[]';
+    const modifiers = Number(roll.modifiers || 0);
+    const modifierText = `${modifiers >= 0 ? '+' : ''}${modifiers}`;
+    return `
+      <div class="gm-roll-panel ${className}">
+        <div class="gm-roll-head">
+          <span class="gm-sheet-title">Last Roll</span>
+          <span class="gm-roll-dice">${escapeHtml(roll.dice)}</span>
+        </div>
+        <div class="gm-roll-total" id="gm-turn-roll-total-${toId(slotKey)}">${escapeHtml(roll.raw ?? roll.total ?? '--')}</div>
+        <div class="gm-roll-meta">
+          <span>POOL ${escapeHtml(pool)}</span>
+          <span>MOD ${escapeHtml(modifierText)}</span>
+          <span>RAW ${escapeHtml(roll.raw ?? '--')}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function animateTurnRoll(slotKey, combatant) {
+    const roll = getCombatantVisibleRoll(combatant);
+    if (!roll || !roll.dice) return;
+    const node = document.getElementById(`gm-turn-roll-total-${toId(slotKey)}`);
+    if (!node) return;
+    const snapshot = `${roll.dice}|${roll.raw}|${roll.modifiers}|${roll.total}`;
+    if (turnRollSnapshots[slotKey] === snapshot) {
+      node.textContent = String(roll.total ?? '--');
+      node.classList.remove('animating');
+      return;
+    }
+    if (turnRollAnimFrames[slotKey]) cancelAnimationFrame(turnRollAnimFrames[slotKey]);
+    const start = Number(roll.raw ?? 0);
+    const end = Number(roll.total ?? 0);
+    const startedAt = performance.now();
+    const duration = 650;
+    node.classList.add('animating');
+    const tick = (now) => {
+      const pct = Math.min(1, (now - startedAt) / duration);
+      const value = Math.round(start + ((end - start) * pct));
+      node.textContent = String(value);
+      if (pct < 1) {
+        turnRollAnimFrames[slotKey] = requestAnimationFrame(tick);
+      } else {
+        node.textContent = String(end);
+        node.classList.remove('animating');
+        turnRollAnimFrames[slotKey] = null;
+        turnRollSnapshots[slotKey] = snapshot;
+      }
+    };
+    turnRollAnimFrames[slotKey] = requestAnimationFrame(tick);
+  }
+
+  function openActionConfirmModal(title, message, onConfirm) {
+    confirmModalAction = onConfirm;
+    const titleNode = document.getElementById('gm-action-confirm-title');
+    const messageNode = document.getElementById('gm-action-confirm-message');
+    if (titleNode) titleNode.textContent = title;
+    if (messageNode) messageNode.textContent = message;
+    document.getElementById('gm-action-confirm-modal')?.classList.add('show');
+  }
+
+  function closeActionConfirmModal() {
+    confirmModalAction = null;
+    document.getElementById('gm-action-confirm-modal')?.classList.remove('show');
+  }
+
+  function acceptActionConfirmModal() {
+    if (typeof confirmModalAction === 'function') confirmModalAction();
+    closeActionConfirmModal();
   }
 
   function buildNpcInitiativeResult(combatant) {
@@ -226,7 +503,7 @@
     const combatants = getAssignedCombatants();
     if (!combatants.length) {
       const note = document.getElementById('gm-turn-note');
-      if (note) note.textContent = 'Add combatants to the Action Section first.';
+      if (note) note.textContent = 'Add combatants to Combat Setup first.';
       return;
     }
 
@@ -265,6 +542,8 @@
   }
 
   function closeInitiativeModal() {
+    Object.values(initiativeRevealTimers).forEach((timer) => clearTimeout(timer));
+    Object.keys(initiativeRevealTimers).forEach((key) => delete initiativeRevealTimers[key]);
     actionState.initiativeModal = null;
     document.getElementById('gm-initiative-modal')?.classList.remove('show');
   }
@@ -280,20 +559,35 @@
     modal.combatants.forEach((combatant) => {
       if (combatant.sourceType !== 'player') return;
       const result = modal.results[combatant.combatKey];
-      if (!result || result.ready) return;
+      if (!result || result.ready || result.pendingReveal) return;
       const roll = combatant.lastRollVisible || combatant.lastRoll || null;
       const snapshot = getRollSnapshot(roll);
       if (!snapshot || snapshot === modal.baselineSnapshots[combatant.combatKey]) return;
       modal.results[combatant.combatKey] = {
-        ready: true,
-        raw: Number(roll.raw || 0),
-        modifiers: Number(roll.modifiers || 0),
-        total: Number(roll.total || 0),
-        status: 'READY',
-        breakdown: `${roll.dice} RAW ${roll.raw ?? 0} ${Number(roll.modifiers || 0) >= 0 ? '+' : ''}${roll.modifiers || 0}`
+        ...result,
+        pendingReveal: true,
+        status: 'SYNCING WITH PLAYER CINEMA',
+        breakdown: 'Waiting for player dice animation to finish...'
       };
       renderInitiativeModal();
-      animateInitiativeValue(combatant.combatKey, Number(roll.raw || 0), Number(roll.total || 0));
+      clearTimeout(initiativeRevealTimers[combatant.combatKey]);
+      initiativeRevealTimers[combatant.combatKey] = setTimeout(() => {
+        if (!actionState.initiativeModal?.open) return;
+        const liveCombatant = getCombatantByKey(combatant.combatKey) || combatant;
+        const liveRoll = liveCombatant.lastRollVisible || liveCombatant.lastRoll || roll;
+        modal.results[combatant.combatKey] = {
+          ready: true,
+          pendingReveal: false,
+          raw: Number(liveRoll.raw || 0),
+          modifiers: Number(liveRoll.modifiers || 0),
+          total: Number(liveRoll.total || 0),
+          status: 'READY',
+          breakdown: `${liveRoll.dice} RAW ${liveRoll.raw ?? 0} ${Number(liveRoll.modifiers || 0) >= 0 ? '+' : ''}${liveRoll.modifiers || 0}`
+        };
+        delete initiativeRevealTimers[combatant.combatKey];
+        renderInitiativeModal();
+        animateInitiativeValue(combatant.combatKey, Number(liveRoll.raw || 0), Number(liveRoll.total || 0));
+      }, INITIATIVE_PLAYER_REVEAL_DELAY_MS);
     });
   }
 
@@ -343,6 +637,10 @@
     actionState.turnOrder = sorted;
     actionState.currentTurnIndex = 0;
     closeInitiativeModal();
+    actionState.manualRolls = {};
+    actionState.boardOpposition = [];
+    actionState.turnStartSnapshots = {};
+    markCurrentTurnBaseline();
     renderActionPlay();
   }
 
@@ -350,41 +648,68 @@
     if (!actionState.turnOrder.length) return;
     const length = actionState.turnOrder.length;
     actionState.currentTurnIndex = (actionState.currentTurnIndex + delta + length) % length;
-    renderTurnOrder();
+    markCurrentTurnBaseline();
+    renderActionPlay();
   }
 
   function removeCombatantFromCombat(key) {
     const entry = actionState.turnOrder.find((item) => item.key === key) || getCombatantByKey(key);
     if (!entry) return;
-    if (!window.confirm(`Remove ${entry.name || 'this character'} from combat?`)) return;
-    actionState.ally = actionState.ally.filter((item) => item !== key);
-    actionState.enemy = actionState.enemy.filter((item) => item !== key);
-    actionState.turnOrder = actionState.turnOrder.filter((item) => item.key !== key);
-    if (actionState.currentTurnIndex >= actionState.turnOrder.length) {
-      actionState.currentTurnIndex = Math.max(0, actionState.turnOrder.length - 1);
-    }
-    renderActionPlay();
+    openActionConfirmModal(
+      'REMOVE CHARACTER',
+      `Remove ${entry.name || 'this character'} from combat?`,
+      () => {
+        actionState.ally = actionState.ally.filter((item) => item !== key);
+        actionState.enemy = actionState.enemy.filter((item) => item !== key);
+        actionState.boardOpposition = actionState.boardOpposition.filter((item) => item !== key);
+        actionState.turnOrder = actionState.turnOrder.filter((item) => item.key !== key);
+        delete actionState.manualRolls[key];
+        delete actionState.turnStartSnapshots[key];
+        if (actionState.currentTurnIndex >= actionState.turnOrder.length) {
+          actionState.currentTurnIndex = Math.max(0, actionState.turnOrder.length - 1);
+        }
+        markCurrentTurnBaseline();
+        renderActionPlay();
+      }
+    );
   }
 
   function endCombat() {
-    if (!window.confirm('End combat and clear the action section and turn list?')) return;
-    actionState.ally = [];
-    actionState.enemy = [];
-    actionState.turnOrder = [];
-    actionState.currentTurnIndex = 0;
-    closeInitiativeModal();
-    renderActionPlay();
+    openActionConfirmModal(
+      'END COMBAT',
+      'End combat and clear Combat Setup and the turn list?',
+      () => {
+        actionState.ally = [];
+        actionState.enemy = [];
+        actionState.boardOpposition = [];
+        actionState.turnOrder = [];
+        actionState.currentTurnIndex = 0;
+        actionState.manualRolls = {};
+        actionState.turnStartSnapshots = {};
+        closeInitiativeModal();
+        renderActionPlay();
+      }
+    );
   }
 
   function clearAssignedCharacters() {
-    if (!actionState.ally.length && !actionState.enemy.length) return;
-    if (!window.confirm('Clear all characters from the action section?')) return;
-    actionState.ally = [];
-    actionState.enemy = [];
-    actionState.turnOrder = [];
-    actionState.currentTurnIndex = 0;
-    closeInitiativeModal();
-    renderActionPlay();
+    if (!actionState.turnOrder.length && !actionState.ally.length && !actionState.enemy.length) return;
+    if (actionState.turnOrder.length && !actionState.boardOpposition.length) return;
+    openActionConfirmModal(
+      'CLEAR CHARACTERS',
+      actionState.turnOrder.length
+        ? 'Clear only the current Combat Setup board?'
+        : 'Clear all characters from Combat Setup?',
+      () => {
+        if (actionState.turnOrder.length) {
+          actionState.boardOpposition = [];
+        } else {
+          actionState.ally = [];
+          actionState.enemy = [];
+        }
+        renderActionPlay();
+      }
+    );
   }
 
   function switchGMTab(tabName) {
@@ -409,13 +734,22 @@
       event.preventDefault();
       node.classList.remove('drag-over');
       const key = event.dataTransfer?.getData('text/plain') || actionState.draggedKey;
-      const side = node.getAttribute('data-gm-side');
-      assignCombatantToSide(key, side);
+      if (actionState.turnOrder.length) {
+        if (node.id === 'gm-drop-enemy') addCombatantToBoardOpposition(key);
+      } else {
+        const side = getCombatDropSide(node);
+        assignCombatantToSide(key, side);
+      }
       actionState.draggedKey = '';
     });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    window.getGMActiveCombatant = () => {
+      const active = getActiveCombatant();
+      return active ? clone(active) : null;
+    };
+
     document.querySelectorAll('.gm-tab-btn').forEach((button) => {
       button.addEventListener('click', () => switchGMTab(button.getAttribute('data-gm-tab')));
     });
@@ -440,13 +774,30 @@
     document.getElementById('gm-prev-turn-btn')?.addEventListener('click', () => moveTurn(-1));
     document.getElementById('gm-next-turn-btn')?.addEventListener('click', () => moveTurn(1));
     document.getElementById('gm-end-combat-btn')?.addEventListener('click', endCombat);
+    document.getElementById('gm-roll-send-active-btn')?.addEventListener('click', applyCurrentNpcRoll);
     document.getElementById('gm-initiative-cancel')?.addEventListener('click', closeInitiativeModal);
     document.getElementById('gm-initiative-confirm')?.addEventListener('click', confirmInitiativeOrder);
     document.getElementById('gm-initiative-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeInitiativeModal();
     });
+    document.getElementById('gm-action-confirm-cancel')?.addEventListener('click', closeActionConfirmModal);
+    document.getElementById('gm-action-confirm-accept')?.addEventListener('click', acceptActionConfirmModal);
+    document.getElementById('gm-action-confirm-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeActionConfirmModal();
+    });
 
     document.addEventListener('click', (event) => {
+      const combatRollButton = event.target.closest('[data-gm-combat-roll-value]');
+      if (combatRollButton && typeof window.addGMRollModifier === 'function') {
+        const source = combatRollButton.getAttribute('data-gm-combat-roll-source') || 'Combat';
+        const label = combatRollButton.getAttribute('data-gm-combat-roll-label') || 'Value';
+        const value = parseInt(combatRollButton.getAttribute('data-gm-combat-roll-value'), 10);
+        if (Number.isFinite(value)) {
+          window.addGMRollModifier(source, label, value);
+        }
+        return;
+      }
+
       const removeButton = event.target.closest('[data-gm-remove-combatant]');
       if (removeButton) {
         removeCombatantFromCombat(removeButton.getAttribute('data-gm-remove-combatant'));

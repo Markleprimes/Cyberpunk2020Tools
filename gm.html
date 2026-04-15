@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260415e">
+<link rel="stylesheet" href="gm.css?v=20260415j">
 </head>
 <body>
   <div class="gm-shell">
@@ -80,9 +80,27 @@
             </label>
             <button type="button" class="gm-btn" id="gm-roll-add-mod-btn">ADD MODIFIER</button>
             <button type="button" class="gm-btn gm-btn-muted" id="gm-roll-clear-mods-btn">CLEAR MODS</button>
+            <button type="button" class="gm-btn gm-btn-muted" id="gm-roll-send-active-btn">SEND TO ACTIVE NPC</button>
           </div>
           <div class="gm-mod-list" id="gm-roll-mod-list">
             <div class="gm-empty">No modifiers locked in.</div>
+          </div>
+          <div class="gm-roll-presets">
+            <button type="button" class="gm-btn" id="gm-roll-ambush-btn">AMBUSH</button>
+            <button type="button" class="gm-btn" id="gm-roll-ambush-counter-btn">AMBUSH COUNTER</button>
+            <button type="button" class="gm-btn" id="gm-roll-suppressive-btn">SUPPRESSIVE FIRE SAVE</button>
+          </div>
+          <div class="gm-aim-box">
+            <div class="gm-sheet-title">Aim Action</div>
+            <div class="gm-aim-row">
+              <div class="gm-aim-pips" id="gm-aim-pips"></div>
+              <div class="gm-aim-actions">
+                <button type="button" class="gm-btn" id="gm-aim-btn">AIM</button>
+                <button type="button" class="gm-btn" id="gm-attack-btn">ATTACK</button>
+                <button type="button" class="gm-btn gm-btn-muted" id="gm-clear-aim-btn">CLEAR AIM</button>
+              </div>
+            </div>
+            <div class="gm-roll-source">Presets and Aim use the current combat actor when available.</div>
           </div>
           <div class="gm-dice-bank">
             <button type="button" class="gm-btn gm-die-btn" data-gm-die="4">D4</button>
@@ -111,19 +129,19 @@
 
       <div class="gm-action-layout">
         <section class="gm-panel">
-          <div class="gm-panel-title">Action Section</div>
+          <div class="gm-panel-title">Combat Setup</div>
           <div class="gm-action-controls" style="margin-bottom:12px;">
             <button type="button" class="gm-btn gm-btn-muted" id="gm-clear-action-btn">CLEAR CHARACTERS</button>
           </div>
           <div class="gm-action-zones">
             <div class="gm-drop-zone" id="gm-drop-ally" data-gm-side="ally">
-              <div class="gm-drop-title">Protagonist</div>
+              <div class="gm-drop-title" id="gm-drop-ally-title">Protagonist</div>
               <div class="gm-drop-list" id="gm-ally-list">
                 <div class="gm-empty">Drag characters here.</div>
               </div>
             </div>
             <div class="gm-drop-zone" id="gm-drop-enemy" data-gm-side="enemy">
-              <div class="gm-drop-title">Antagonist</div>
+              <div class="gm-drop-title" id="gm-drop-enemy-title">Antagonist</div>
               <div class="gm-drop-list" id="gm-enemy-list">
                 <div class="gm-empty">Drag characters here.</div>
               </div>
@@ -158,6 +176,17 @@
       <div class="gm-modal-btns">
         <button class="gm-btn gm-btn-muted" type="button" id="gm-initiative-cancel">CANCEL</button>
         <button class="gm-btn" type="button" id="gm-initiative-confirm" disabled>CONFIRM ORDER</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gm-modal-overlay" id="gm-action-confirm-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3 id="gm-action-confirm-title">CONFIRM</h3>
+      <div class="gm-roll-execute-copy" id="gm-action-confirm-message">Are you sure?</div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-action-confirm-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-action-confirm-accept">CONFIRM</button>
       </div>
     </div>
   </div>
@@ -213,11 +242,28 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-aim-hit-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>AIM ATTACK</h3>
+      <div class="gm-roll-execute-copy">
+        <label class="gm-field">
+          <span>Weapon</span>
+          <select id="gm-aim-weapon-select"></select>
+        </label>
+      </div>
+      <div class="gm-roll-source" id="gm-aim-weapon-note">Pick a weapon first.</div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-aim-hit-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-aim-hit-confirm">CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260415c"></script>
-  <script src="functions/gm.js?v=20260415g"></script>
-  <script src="functions/gm-action-play.js?v=20260415d"></script>
+  <script src="functions/gm.js?v=20260415j"></script>
+  <script src="functions/gm-action-play.js?v=20260415l"></script>
 </body>
 </html>
