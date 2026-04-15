@@ -115,10 +115,6 @@ function getCurrentCharacterProfile() {
     label: skill.name,
     value: skill.value || 0
   }));
-  const inventorySummary = Object.keys(inventory || {}).map((category) => ({
-    label: humanizeLabel(category),
-    value: (inventory[category] || []).map((item) => item.name || humanizeLabel(item.id || category)).join(', ') || '--'
-  }));
   const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRoll = currentRoll?.sides
     ? {
@@ -135,10 +131,6 @@ function getCurrentCharacterProfile() {
     role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
     stats,
     skills,
-    upgradePoints,
-    reputation: repValue,
-    wallet: walletValue,
-    inventory: inventorySummary,
     lastRoll
   };
 }

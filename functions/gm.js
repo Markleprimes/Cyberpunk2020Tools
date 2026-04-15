@@ -64,20 +64,6 @@
               ${renderGMKeyValueLines(entry.skills)}
             </div>
           </div>
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Dossier</div>
-              ${renderGMKeyValueLines({
-                Upgrade: entry.upgradePoints ?? 0,
-                Reputation: entry.reputation ?? 0,
-                Wallet: entry.wallet ?? 0
-              })}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Inventory</div>
-              ${renderGMInventoryLines(entry.inventory)}
-            </div>
-          </div>
           <div class="gm-sheet-roll">
             <span class="gm-sheet-title">Last Roll</span>
             <span class="gm-sheet-roll-value">${renderGMRollSummary(entry.lastRoll)}</span>
@@ -107,21 +93,6 @@
       <div class="gm-sheet-line">
         <span class="gm-sheet-key">${escapeGMValue(key)}:</span>
         <span class="gm-sheet-val">${escapeGMValue(value)}</span>
-      </div>
-    `).join('');
-  }
-
-  function renderGMInventoryLines(block) {
-    const entries = Array.isArray(block)
-      ? block.map((entry) => [entry?.label, entry?.value])
-      : Object.entries(block || {});
-    if (!entries.length) {
-      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
-    }
-    return entries.map(([category, items]) => `
-      <div class="gm-sheet-line gm-sheet-line-stack">
-        <span class="gm-sheet-key">${escapeGMValue(category)}:</span>
-        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue(items || '--')}</span>
       </div>
     `).join('');
   }
