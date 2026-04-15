@@ -107,24 +107,26 @@ function showError(msg) {
 }
 
 function getCurrentCharacterProfile() {
-  const stats = {};
-  Object.keys(sheetStats).forEach((key) => {
-    stats[key] = getEffectiveStatValue(key);
-  });
-  const skills = {};
-  sheetSkills.forEach((skill) => {
-    skills[skill.name] = skill.value || 0;
-  });
-  const armor = {};
-  const damage = {};
-  LIMBS.forEach((limb) => {
-    armor[limb] = limbSP[limb] || 0;
-    damage[limb] = limbDMG[limb] || 0;
-  });
-  const inventorySummary = {};
-  Object.keys(inventory || {}).forEach((category) => {
-    inventorySummary[category] = (inventory[category] || []).map((item) => item.name || humanizeLabel(item.id || category));
-  });
+  const stats = Object.keys(sheetStats).map((key) => ({
+    label: key,
+    value: getEffectiveStatValue(key)
+  }));
+  const skills = sheetSkills.map((skill) => ({
+    label: skill.name,
+    value: skill.value || 0
+  }));
+  const armor = LIMBS.map((limb) => ({
+    label: limb,
+    value: limbSP[limb] || 0
+  }));
+  const damage = LIMBS.map((limb) => ({
+    label: limb,
+    value: limbDMG[limb] || 0
+  }));
+  const inventorySummary = Object.keys(inventory || {}).map((category) => ({
+    label: humanizeLabel(category),
+    value: (inventory[category] || []).map((item) => item.name || humanizeLabel(item.id || category)).join(', ') || '--'
+  }));
   const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRoll = currentRoll?.sides
     ? {

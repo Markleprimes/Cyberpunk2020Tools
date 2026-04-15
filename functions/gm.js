@@ -107,7 +107,9 @@
   }
 
   function renderGMKeyValueLines(block) {
-    const entries = Object.entries(block || {});
+    const entries = Array.isArray(block)
+      ? block.map((entry) => [entry?.label, entry?.value])
+      : Object.entries(block || {});
     if (!entries.length) {
       return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
     }
@@ -120,14 +122,16 @@
   }
 
   function renderGMInventoryLines(block) {
-    const entries = Object.entries(block || {});
+    const entries = Array.isArray(block)
+      ? block.map((entry) => [entry?.label, entry?.value])
+      : Object.entries(block || {});
     if (!entries.length) {
       return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
     }
     return entries.map(([category, items]) => `
       <div class="gm-sheet-line gm-sheet-line-stack">
         <span class="gm-sheet-key">${escapeGMValue(category)}:</span>
-        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue((items || []).join(', ') || '--')}</span>
+        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue(items || '--')}</span>
       </div>
     `).join('');
   }
