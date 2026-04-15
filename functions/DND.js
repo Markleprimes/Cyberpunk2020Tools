@@ -115,6 +115,26 @@ function getCurrentCharacterProfile() {
     label: skill.name,
     value: skill.value || 0
   }));
+  const armor = LIMBS.map((limb) => ({
+    label: limb,
+    value: limbSP[limb] || 0
+  }));
+  const damage = LIMBS.map((limb) => ({
+    label: limb,
+    value: limbDMG[limb] || 0
+  }));
+  const inventoryItems = [];
+  Object.keys(inventory || {}).forEach((category) => {
+    (inventory[category] || []).forEach((item) => {
+      inventoryItems.push({
+        type: humanizeLabel(category),
+        name: item.name || humanizeLabel(item.id || category),
+        description: Array.isArray(item.info) && item.info.length
+          ? item.info.join(' | ')
+          : '--'
+      });
+    });
+  });
   const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRoll = currentRoll?.sides
     ? {
@@ -131,6 +151,8 @@ function getCurrentCharacterProfile() {
     role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
     stats,
     skills,
+    armor,
+    damage,
     reputation: repValue,
     wallet: walletValue,
     physical: {
@@ -138,6 +160,7 @@ function getCurrentCharacterProfile() {
       weight: weightVal,
       stun: stunVal
     },
+    inventory: inventoryItems,
     lastRoll
   };
 }
