@@ -100,7 +100,7 @@ body::before{
 }
 .launcher-grid{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
   gap:18px;
 }
 .launcher-card{
@@ -125,6 +125,10 @@ body::before{
 .launcher-card-alt{
   border-color:rgba(255,177,74,.22);
   background:rgba(29,11,7,.78);
+}
+.launcher-card-gm{
+  border-color:rgba(0,217,139,.22);
+  background:rgba(9,23,16,.72);
 }
 .card-eyebrow{
   font-family:'Share Tech Mono',monospace;
@@ -234,6 +238,16 @@ body::before{
 .launcher-btn.ghost{
   border-color:var(--border);
   color:var(--text-dim);
+}
+.launcher-btn.gm{
+  border-color:rgba(0,217,139,.34);
+  color:var(--accent-g);
+  text-decoration:none;
+}
+.launcher-btn.gm:hover{
+  background:var(--accent-g);
+  color:var(--bg);
+  box-shadow:var(--glow-g);
 }
 .launcher-btn.ghost:hover{
   background:rgba(255,255,255,.08);

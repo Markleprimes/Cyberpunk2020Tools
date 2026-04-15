@@ -2,6 +2,13 @@
   let activeRef = null;
   let activeHandler = null;
 
+  function setGMStatusVisual(status) {
+    const chip = document.getElementById('gm-status-chip');
+    if (!chip) return;
+    chip.textContent = status.toUpperCase();
+    chip.className = `gm-status-chip ${status}`;
+  }
+
   function setGMStatus(message) {
     const node = document.getElementById('gm-status');
     if (node) node.textContent = message;
@@ -18,10 +25,93 @@
     node.textContent = Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
   }
 
-  function setGMPayload(data) {
-    const node = document.getElementById('gm-payload');
-    if (!node) return;
-    node.textContent = data ? JSON.stringify(data, null, 2) : 'No data yet.';
+  function renderGMPlayers(data) {
+    const playerNode = document.getElementById('gm-player-list');
+    const npcNode = document.getElementById('gm-npc-list');
+    if (!playerNode || !npcNode) return;
+    const entries = Object.values(data || {});
+    const players = entries.filter((entry) => (entry.role || 'player') !== 'npc');
+    const npcs = entries.filter((entry) => (entry.role || 'player') === 'npc');
+
+    if (!players.length) {
+      playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
+    } else {
+      playerNode.innerHTML = players.map((player) => `
+      <details class="gm-player-card gm-player-detail">
+        <summary class="gm-player-summary">
+          <div class="gm-player-name">${player.name || 'Unknown'}</div>
+          <div class="gm-player-meta">${player.career || 'UNKNOWN'}</div>
+        </summary>
+        <div class="gm-player-sheet">
+          <div class="gm-sheet-columns">
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Stats</div>
+              ${renderGMKeyValueLines(player.stats)}
+            </div>
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Skill</div>
+              ${renderGMKeyValueLines(player.skills)}
+            </div>
+          </div>
+          <div class="gm-sheet-roll">
+            <span class="gm-sheet-title">Last Roll</span>
+            <span class="gm-sheet-roll-value">${escapeGMValue(player.lastRoll || '--')}</span>
+          </div>
+        </div>
+      </details>
+    `).join('');
+    }
+
+    if (!npcs.length) {
+      npcNode.innerHTML = '<div class="gm-empty">No NPC links yet.</div>';
+    } else {
+      npcNode.innerHTML = npcs.map((npc) => `
+      <details class="gm-player-card gm-player-detail">
+        <summary class="gm-player-summary">
+          <div class="gm-player-name">${npc.name || 'Unknown'}</div>
+          <div class="gm-player-meta">${npc.career || 'UNKNOWN'}</div>
+        </summary>
+        <div class="gm-player-sheet">
+          <div class="gm-sheet-columns">
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Stats</div>
+              ${renderGMKeyValueLines(npc.stats)}
+            </div>
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Skill</div>
+              ${renderGMKeyValueLines(npc.skills)}
+            </div>
+          </div>
+          <div class="gm-sheet-roll">
+            <span class="gm-sheet-title">Last Roll</span>
+            <span class="gm-sheet-roll-value">${escapeGMValue(npc.lastRoll || '--')}</span>
+          </div>
+        </div>
+      </details>
+    `).join('');
+    }
+  }
+
+  function escapeGMValue(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderGMKeyValueLines(block) {
+    const entries = Object.entries(block || {});
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map(([key, value]) => `
+      <div class="gm-sheet-line">
+        <span class="gm-sheet-key">${escapeGMValue(key)}:</span>
+        <span class="gm-sheet-val">${escapeGMValue(value)}</span>
+      </div>
+    `).join('');
   }
 
   function disconnectGMRoom() {
@@ -37,30 +127,37 @@
     const roomRef = getSyncRoomRef(roomId);
     if (!roomRef) {
       setGMStatus('Firebase failed to initialize.');
+      setGMStatusVisual('disconnected');
       return;
     }
 
     disconnectGMRoom();
     setGMStatus(`Listening to room "${roomId}"...`);
-    setGMPayload(null);
+    setGMStatusVisual('pending');
+    renderGMPlayers(null);
     setGMLastUpdated(null);
 
-    activeRef = roomRef.child('player');
+    activeRef = roomRef.child('players');
     activeHandler = (snapshot) => {
       const data = snapshot.val();
-      if (!data) {
-        setGMStatus(`Connected to "${roomId}" but no player data yet.`);
-        setGMPayload(null);
+      if (!data || !Object.keys(data).length) {
+        setGMStatus(`Connected to "${roomId}" but no players are linked yet.`);
+        setGMStatusVisual('connected');
+        renderGMPlayers(null);
         setGMLastUpdated(null);
         return;
       }
+      const players = Object.values(data);
+      const lastUpdated = players.reduce((latest, player) => Math.max(latest, player.updatedAt || player.joinedAt || 0), 0);
       setGMStatus(`Live data received from "${roomId}".`);
-      setGMPayload(data);
-      setGMLastUpdated(data.updatedAt || data.timestamp || null);
+      setGMStatusVisual('connected');
+      renderGMPlayers(data);
+      setGMLastUpdated(lastUpdated || null);
     };
 
     activeRef.on('value', activeHandler, (error) => {
       setGMStatus(`Firebase listen error: ${error.message}`);
+      setGMStatusVisual('disconnected');
     });
   }
 
@@ -78,6 +175,6 @@
       });
     }
 
-    connectGMRoom();
+    setGMStatusVisual('disconnected');
   });
 })();

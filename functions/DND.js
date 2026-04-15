@@ -33,6 +33,8 @@ let systemTickerTimer = null;
 let systemTickerIndex = 0;
 let _toastTimer = null;
 let _modalCb = null;
+let activeRoomId = '';
+let roomSyncStatus = 'disconnected';
 
 const LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 let limbSP = { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 };
@@ -92,11 +94,94 @@ bindBackdropClose('roll-cinema-modal', () => closeRollCinemaModal());
 getById('inventory-item-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') saveInventoryItem();
 });
+getById('room-sync-connect-btn')?.addEventListener('click', () => connectPlayerRoom());
+getById('room-sync-disconnect-btn')?.addEventListener('click', () => disconnectPlayerRoom());
+getById('room-sync-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') connectPlayerRoom();
+});
 
 function showError(msg) {
   const bar = getById('status-bar');
   bar.textContent = msg;
   bar.style.display = 'block';
+}
+
+function getCurrentCharacterProfile() {
+  const stats = {};
+  Object.keys(sheetStats).forEach((key) => {
+    stats[key] = getEffectiveStatValue(key);
+  });
+  const skills = {};
+  sheetSkills.forEach((skill) => {
+    skills[skill.name] = skill.value || 0;
+  });
+  const lastRoll = currentRoll?.sides
+    ? `${currentRoll.qty}D${currentRoll.sides} = ${currentRoll.result}`
+    : '--';
+  return {
+    name: (getById('char-name')?.textContent || 'Unknown').trim() || 'Unknown',
+    career: (getById('char-career')?.textContent || 'UNKNOWN').trim() || 'UNKNOWN',
+    role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
+    stats,
+    skills,
+    lastRoll
+  };
+}
+
+function setRoomSyncStatus(status, detail = '') {
+  roomSyncStatus = status;
+  const statusNode = getById('room-sync-status');
+  const noteNode = getById('room-sync-note');
+  if (statusNode) {
+    statusNode.textContent = status.toUpperCase();
+    statusNode.className = `room-sync-status ${status}`;
+  }
+  if (noteNode) {
+    if (detail) noteNode.textContent = detail;
+    else if (status === 'connected') noteNode.textContent = `Live with room "${activeRoomId}" as ${(getById('room-sync-role')?.value || 'player').toUpperCase()}. Multiple clients can join the same room.`;
+    else if (status === 'pending') noteNode.textContent = 'Contacting the referee uplink...';
+    else noteNode.textContent = 'Push this character name to the referee monitor. Multiple clients can join the same room.';
+  }
+}
+
+async function connectPlayerRoom() {
+  const roomId = String(getById('room-sync-input')?.value || '').trim();
+  if (!roomId) {
+    showError('ENTER A ROOM ID BEFORE CONNECTING.');
+    return;
+  }
+  setRoomSyncStatus('pending');
+  try {
+    initFirebaseRealtime();
+    await connectPlayerPresence(roomId, getCurrentCharacterProfile());
+    activeRoomId = roomId;
+    setRoomSyncStatus('connected');
+    showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
+  } catch (error) {
+    activeRoomId = '';
+    setRoomSyncStatus('disconnected', 'Connection failed. Check Firebase or room settings.');
+    showError(`ROOM CONNECT ERROR: ${error.message}`);
+  }
+}
+
+async function disconnectPlayerRoom() {
+  try {
+    await disconnectPlayerPresence();
+  } catch (error) {
+    console.warn('Room disconnect failed.', error);
+  }
+  activeRoomId = '';
+  setRoomSyncStatus('disconnected');
+  showActionLog('ROOM LINK DISCONNECTED');
+}
+
+async function syncCurrentPlayerPresence() {
+  if (roomSyncStatus !== 'connected' || !activeRoomId) return;
+  try {
+    await updatePlayerPresence(getCurrentCharacterProfile());
+  } catch (error) {
+    console.warn('Failed to update player presence.', error);
+  }
 }
 
 function flashNode(node, className = 'react-flash') {

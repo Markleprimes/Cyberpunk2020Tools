@@ -273,6 +273,7 @@ function renderRollLab() {
   document.getElementById('roll-last-total').textContent = total;
   renderAimAction();
   updateSystemStrip();
+  syncCurrentPlayerPresence();
   if (!rollModifiers.length) {
     modList.innerHTML = '<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
     return;

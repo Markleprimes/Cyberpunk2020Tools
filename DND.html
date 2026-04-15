@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260415e">
+<link rel="stylesheet" href="DND.css?v=20260415g">
 </head>
 <body>
 <div class="wrapper">
@@ -54,6 +54,21 @@
       <div class="name-aliases" id="char-aliases"></div>
     </div>
     <div class="career-badge" id="char-career">UNKNOWN</div>
+  </div>
+
+  <div class="room-sync-strip">
+    <div class="room-sync-copy">
+      <div class="room-sync-label">ROOM LINK</div>
+      <div class="room-sync-note" id="room-sync-note">Push this character name to the referee monitor. Multiple clients can join the same room.</div>
+    </div>
+    <input class="room-sync-input" id="room-sync-input" type="text" value="test-room" placeholder="room id">
+    <select class="room-sync-role" id="room-sync-role">
+      <option value="player">PLAYER</option>
+      <option value="npc">NPC</option>
+    </select>
+    <span class="room-sync-status disconnected" id="room-sync-status">DISCONNECTED</span>
+    <button class="action-btn green" id="room-sync-connect-btn" type="button">CONNECT</button>
+    <button class="action-btn" id="room-sync-disconnect-btn" type="button">DISCONNECT</button>
   </div>
 
   <div class="sheet-actions">
@@ -457,20 +472,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260415a"></script>
-<script src="functions/DND.js?v=20260415f"></script>
+<script src="functions/firebase-sync.js?v=20260415b"></script>
+<script src="functions/DND.js?v=20260415g"></script>
 <script src="functions/createNewCharacter.js?v=20260415e"></script>
 <script src="functions/dossierSheet.js?v=20260415e"></script>
 <script src="functions/inventory.js?v=20260415e"></script>
 <script src="functions/rollLab.js?v=20260415f"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
 <script src="functions/netrunner.js?v=20260414d"></script>
-<script>
-  initFirebaseRealtime();
-getSyncRoomRef('test-room').child('player').update({
-  message: 'hello from player',
-  updatedAt: Date.now()
-});
-</script>
 </body>
 </html>

@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/26737002/README.md)
 # Cyberpunk 2020 Web Tools
 
 A browser-based Cyberpunk 2020 character dossier and minigame toolkit built as a static site.

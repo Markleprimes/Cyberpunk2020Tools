@@ -4,6 +4,7 @@
 // firebase-database-compat.js
 
 (function initCyberpunkFirebaseScope() {
+  const CLIENT_ID_STORAGE_KEY = 'cp2020_sync_client_id';
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyAIS55Q4jXZkb_2DGhPTReK68mV7OeBpb4",
     authDomain: "cyberpunk2020online.firebaseapp.com",
@@ -41,7 +42,77 @@
     return db.ref(`rooms/${cleanRoomId}`);
   }
 
+  function getSyncClientId() {
+    try {
+      const existing = window.localStorage?.getItem(CLIENT_ID_STORAGE_KEY);
+      if (existing) return existing;
+      const created = `client-${Math.random().toString(36).slice(2, 10)}`;
+      window.localStorage?.setItem(CLIENT_ID_STORAGE_KEY, created);
+      return created;
+    } catch (error) {
+      return `client-${Math.random().toString(36).slice(2, 10)}`;
+    }
+  }
+
+  function normalizePresencePayload(payload) {
+    if (typeof payload === 'string') return { name: payload };
+    return { ...(payload || {}) };
+  }
+
+  let activePresenceRef = null;
+  let activePresenceRoomId = '';
+
+  async function disconnectPlayerPresence() {
+    if (!activePresenceRef) return;
+    const ref = activePresenceRef;
+    activePresenceRef = null;
+    activePresenceRoomId = '';
+    try {
+      await ref.remove();
+    } catch (error) {
+      console.warn('Failed to remove player presence.', error);
+    }
+  }
+
+  async function connectPlayerPresence(roomId, payload) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) throw new Error('Firebase realtime database is unavailable.');
+    await disconnectPlayerPresence();
+    const playerRef = roomRef.child(`players/${getSyncClientId()}`);
+    const now = Date.now();
+    const data = {
+      name: 'Unknown',
+      updatedAt: now,
+      joinedAt: now,
+      ...normalizePresencePayload(payload)
+    };
+    await playerRef.set(data);
+    playerRef.onDisconnect().remove();
+    activePresenceRef = playerRef;
+    activePresenceRoomId = String(roomId || '').trim();
+    return data;
+  }
+
+  async function updatePlayerPresence(patch) {
+    if (!activePresenceRef) return null;
+    const nextPatch = {
+      ...normalizePresencePayload(patch),
+      updatedAt: Date.now()
+    };
+    await activePresenceRef.update(nextPatch);
+    return nextPatch;
+  }
+
+  function getActivePresenceRoomId() {
+    return activePresenceRoomId;
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
+  window.getSyncClientId = getSyncClientId;
+  window.connectPlayerPresence = connectPlayerPresence;
+  window.updatePlayerPresence = updatePlayerPresence;
+  window.disconnectPlayerPresence = disconnectPlayerPresence;
+  window.getActivePresenceRoomId = getActivePresenceRoomId;
 })();

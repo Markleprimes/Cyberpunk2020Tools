@@ -3,36 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyberpunk 2020 // GM Monitor</title>
+<title>Cyberpunk 2020 // Referee Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="gm.css?v=20260415a">
 </head>
 <body>
-  <h1>GM Monitor</h1>
-  <p>Simple live Firebase test page.</p>
+  <div class="gm-shell">
+    <header class="gm-header">
+      <div>
+        <div class="gm-kicker">REFEREE UPLINK // LIVE TABLE CONTROL</div>
+        <h1>CYBERPUNK 2020</h1>
+        <p class="gm-copy">Monitor connected players, keep an eye on the room link, and expand NPC controls later.</p>
+      </div>
+      <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
+    </header>
 
-  <div>
-    <label for="gm-room-id">Room ID</label>
-    <input id="gm-room-id" type="text" value="test-room">
-    <button type="button" id="gm-connect-btn">Connect</button>
+    <section class="gm-panel">
+      <div class="gm-panel-title">Room Settings</div>
+      <div class="gm-room-row">
+        <label class="gm-field">
+          <span>Room ID</span>
+          <input id="gm-room-id" type="text" value="test-room">
+        </label>
+        <button type="button" class="gm-btn" id="gm-connect-btn">CONNECT</button>
+      </div>
+      <div class="gm-meta-row">
+        <div><span class="gm-meta-label">Status</span><span id="gm-status">Idle</span></div>
+        <div><span class="gm-meta-label">Last Update</span><span id="gm-updated">--</span></div>
+      </div>
+    </section>
+
+    <section class="gm-panel">
+      <div class="gm-panel-title">Players</div>
+      <div class="gm-player-list" id="gm-player-list">
+        <div class="gm-empty">No players linked yet.</div>
+      </div>
+    </section>
+
+    <section class="gm-panel">
+      <div class="gm-panel-title">NPC</div>
+      <div class="gm-npc-list" id="gm-npc-list">
+        <div class="gm-empty">NPC controls can live here later.</div>
+      </div>
+    </section>
   </div>
-
-  <hr>
-
-  <div>
-    <strong>Status:</strong>
-    <span id="gm-status">Idle</span>
-  </div>
-
-  <div>
-    <strong>Last Update:</strong>
-    <span id="gm-updated">--</span>
-  </div>
-
-  <h2>Player Payload</h2>
-  <pre id="gm-payload">No data yet.</pre>
 
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260415a"></script>
-  <script src="functions/gm.js?v=20260415a"></script>
+  <script src="functions/firebase-sync.js?v=20260415b"></script>
+  <script src="functions/gm.js?v=20260415b"></script>
 </body>
 </html>

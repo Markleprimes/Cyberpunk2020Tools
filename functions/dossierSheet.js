@@ -4,6 +4,7 @@ function renderSheet(data) {
   document.getElementById('char-aliases').innerHTML = data.name.slice(1).map((a) => `<span class="alias-tag">${a}</span>`).join('');
   document.getElementById('char-career').textContent = data.career[0] || '???';
   renderBannerImage();
+  syncCurrentPlayerPresence();
 
   sheetStats = {};
   Object.entries(data.stats || {}).forEach(([k, v]) => {
@@ -70,6 +71,7 @@ function renderStats() {
       </div>`;
     grid.appendChild(card);
   });
+  syncCurrentPlayerPresence();
 }
 
 function changeStat(key, delta) {
@@ -157,6 +159,7 @@ function renderSkills() {
     list.appendChild(row);
   });
   if (!sheetSkills.length) list.innerHTML = '';
+  syncCurrentPlayerPresence();
 }
 
 function changeUpgradePoints(delta) {
