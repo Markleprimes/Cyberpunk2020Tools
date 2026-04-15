@@ -36,60 +36,65 @@
     if (!players.length) {
       playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
     } else {
-      playerNode.innerHTML = players.map((player) => `
-      <details class="gm-player-card gm-player-detail">
-        <summary class="gm-player-summary">
-          <div class="gm-player-name">${player.name || 'Unknown'}</div>
-          <div class="gm-player-meta">${player.career || 'UNKNOWN'}</div>
-        </summary>
-        <div class="gm-player-sheet">
-          <div class="gm-sheet-columns">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Stats</div>
-              ${renderGMKeyValueLines(player.stats)}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Skill</div>
-              ${renderGMKeyValueLines(player.skills)}
-            </div>
-          </div>
-          <div class="gm-sheet-roll">
-            <span class="gm-sheet-title">Last Roll</span>
-            <span class="gm-sheet-roll-value">${escapeGMValue(player.lastRoll || '--')}</span>
-          </div>
-        </div>
-      </details>
-    `).join('');
+      playerNode.innerHTML = players.map((player) => renderGMEntry(player)).join('');
     }
 
     if (!npcs.length) {
       npcNode.innerHTML = '<div class="gm-empty">No NPC links yet.</div>';
     } else {
-      npcNode.innerHTML = npcs.map((npc) => `
+      npcNode.innerHTML = npcs.map((npc) => renderGMEntry(npc)).join('');
+    }
+  }
+
+  function renderGMEntry(entry) {
+    return `
       <details class="gm-player-card gm-player-detail">
         <summary class="gm-player-summary">
-          <div class="gm-player-name">${npc.name || 'Unknown'}</div>
-          <div class="gm-player-meta">${npc.career || 'UNKNOWN'}</div>
+          <div class="gm-player-name">${escapeGMValue(entry.name || 'Unknown')}</div>
+          <div class="gm-player-meta">${escapeGMValue(entry.career || 'UNKNOWN')} // ${escapeGMValue((entry.role || 'player').toUpperCase())}</div>
         </summary>
         <div class="gm-player-sheet">
-          <div class="gm-sheet-columns">
+          <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Stats</div>
-              ${renderGMKeyValueLines(npc.stats)}
+              ${renderGMKeyValueLines(entry.stats)}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Skill</div>
-              ${renderGMKeyValueLines(npc.skills)}
+              ${renderGMKeyValueLines(entry.skills)}
+            </div>
+          </div>
+          <div class="gm-sheet-columns gm-sheet-columns-wide">
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Dossier</div>
+              ${renderGMKeyValueLines({
+                Upgrade: entry.upgradePoints ?? 0,
+                Reputation: entry.reputation ?? 0,
+                Wallet: entry.wallet ?? 0
+              })}
+            </div>
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Inventory</div>
+              ${renderGMInventoryLines(entry.inventory)}
+            </div>
+          </div>
+          <div class="gm-sheet-columns gm-sheet-columns-wide">
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Armor</div>
+              ${renderGMKeyValueLines(entry.armor)}
+            </div>
+            <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Damage</div>
+              ${renderGMKeyValueLines(entry.damage)}
             </div>
           </div>
           <div class="gm-sheet-roll">
             <span class="gm-sheet-title">Last Roll</span>
-            <span class="gm-sheet-roll-value">${escapeGMValue(npc.lastRoll || '--')}</span>
+            <span class="gm-sheet-roll-value">${renderGMRollSummary(entry.lastRoll)}</span>
           </div>
         </div>
       </details>
-    `).join('');
-    }
+    `;
   }
 
   function escapeGMValue(value) {
@@ -112,6 +117,26 @@
         <span class="gm-sheet-val">${escapeGMValue(value)}</span>
       </div>
     `).join('');
+  }
+
+  function renderGMInventoryLines(block) {
+    const entries = Object.entries(block || {});
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map(([category, items]) => `
+      <div class="gm-sheet-line gm-sheet-line-stack">
+        <span class="gm-sheet-key">${escapeGMValue(category)}:</span>
+        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue((items || []).join(', ') || '--')}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderGMRollSummary(lastRoll) {
+    if (!lastRoll || !lastRoll.dice) return '--';
+    const pool = Array.isArray(lastRoll.pool) ? `[${lastRoll.pool.join(', ')}]` : '[]';
+    const mod = Number(lastRoll.modifiers || 0);
+    return escapeGMValue(`${lastRoll.dice} ${pool} +${mod} => ${lastRoll.total ?? lastRoll.raw ?? '--'}`);
   }
 
   function disconnectGMRoom() {

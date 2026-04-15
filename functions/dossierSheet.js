@@ -206,6 +206,7 @@ function renderRep() {
   document.getElementById('rep-number').textContent = repValue;
   document.getElementById('rep-pips').innerHTML = Array.from({ length: Math.min(repValue, 40) }, () => '<div class="rep-pip"></div>').join('');
   updateSystemStrip();
+  syncCurrentPlayerPresence();
 }
 
 function changeRep(delta) {
@@ -219,6 +220,7 @@ function changeRep(delta) {
 function renderWallet() {
   document.getElementById('wallet-val').value = walletValue;
   updateSystemStrip();
+  syncCurrentPlayerPresence();
 }
 
 function changeWallet(delta) {
@@ -242,6 +244,7 @@ function renderPhysicalBody() {
   document.getElementById('body-val').textContent = weightVal;
   document.getElementById('stun-val').textContent = stunVal;
   updateSystemStrip();
+  syncCurrentPlayerPresence();
 }
 
 function changeBS(which, delta) {
@@ -285,6 +288,7 @@ function renderLimbs() {
     grid.appendChild(card);
   });
   renderWounds();
+  syncCurrentPlayerPresence();
 }
 
 function changeLimb(type, limb, delta) {

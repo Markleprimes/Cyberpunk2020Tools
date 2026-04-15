@@ -140,6 +140,7 @@ function renderInventory() {
   if (!categories.length) {
     div.innerHTML = '<div class="inventory-empty">[ NO INVENTORY LOADED ]</div>';
     updateSystemStrip();
+    syncCurrentPlayerPresence();
     return;
   }
   div.innerHTML = categories.map((category) => {
@@ -180,6 +181,7 @@ function renderInventory() {
       </div>`;
   }).join('');
   updateSystemStrip();
+  syncCurrentPlayerPresence();
 }
 
 function removeInventoryItem(category, idx) {

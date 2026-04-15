@@ -49,22 +49,25 @@ body::before{
 .gm-btn:hover{background:var(--accent-g);color:var(--bg);box-shadow:var(--glow-g)}
 .gm-meta-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px}
 .gm-meta-row > div{display:flex;flex-direction:column;gap:4px}
-.gm-player-list,.gm-npc-list{display:flex;gap:12px;flex-wrap:wrap}
+.gm-player-list,.gm-npc-list{display:flex;flex-direction:column;gap:12px}
 .gm-player-card,.gm-npc-card{min-width:170px;padding:14px 16px;border:1px solid rgba(255,77,109,.16);background:rgba(255,77,109,.05)}
 .gm-player-name{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.12em;color:var(--accent-y)}
 .gm-player-meta{margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.1em;color:var(--text-dim)}
-.gm-player-detail{min-width:220px;max-width:360px;padding:0}
+.gm-player-detail{width:100%;padding:0}
 .gm-player-summary{list-style:none;cursor:pointer;padding:14px 16px}
 .gm-player-summary::-webkit-details-marker{display:none}
 .gm-player-detail[open]{border-color:rgba(255,177,74,.22);box-shadow:var(--glow-r)}
 .gm-player-sheet{padding:0 16px 16px;border-top:1px solid rgba(255,77,109,.12)}
 .gm-sheet-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+.gm-sheet-columns-wide{grid-template-columns:repeat(2,minmax(0,1fr))}
 .gm-sheet-col{display:flex;flex-direction:column;gap:5px}
 .gm-sheet-title{font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent-r);text-transform:uppercase}
 .gm-sheet-line{display:grid;grid-template-columns:auto 1fr;gap:8px;font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--text)}
+.gm-sheet-line-stack{align-items:start}
 .gm-sheet-key{color:var(--text-dim)}
 .gm-sheet-val{text-align:right;color:var(--accent-y)}
+.gm-sheet-val-wrap{text-align:left;word-break:break-word}
 .gm-sheet-roll{display:flex;justify-content:space-between;gap:12px;margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,77,109,.08)}
 .gm-sheet-roll-value{font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--accent-g);letter-spacing:.08em}
 .gm-empty{width:100%;padding:14px 16px;border:1px dashed var(--border);font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.1em;color:var(--text-dim)}
-@media(max-width:760px){.gm-header{grid-template-columns:1fr}.gm-status-chip{justify-self:start}.gm-sheet-columns{grid-template-columns:1fr}}
+@media(max-width:760px){.gm-header{grid-template-columns:1fr}.gm-status-chip{justify-self:start}.gm-sheet-columns,.gm-sheet-columns-wide{grid-template-columns:1fr}.gm-sheet-line{grid-template-columns:1fr}.gm-sheet-val{text-align:left}}

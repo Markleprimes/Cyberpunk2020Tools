@@ -115,15 +115,38 @@ function getCurrentCharacterProfile() {
   sheetSkills.forEach((skill) => {
     skills[skill.name] = skill.value || 0;
   });
+  const armor = {};
+  const damage = {};
+  LIMBS.forEach((limb) => {
+    armor[limb] = limbSP[limb] || 0;
+    damage[limb] = limbDMG[limb] || 0;
+  });
+  const inventorySummary = {};
+  Object.keys(inventory || {}).forEach((category) => {
+    inventorySummary[category] = (inventory[category] || []).map((item) => item.name || humanizeLabel(item.id || category));
+  });
+  const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRoll = currentRoll?.sides
-    ? `${currentRoll.qty}D${currentRoll.sides} = ${currentRoll.result}`
-    : '--';
+    ? {
+        dice: `${currentRoll.qty}D${currentRoll.sides}`,
+        pool: [...(currentRoll.rolls || [])],
+        raw: currentRoll.result || 0,
+        modifiers: modifierTotal,
+        total: (currentRoll.result || 0) + modifierTotal
+      }
+    : null;
   return {
     name: (getById('char-name')?.textContent || 'Unknown').trim() || 'Unknown',
     career: (getById('char-career')?.textContent || 'UNKNOWN').trim() || 'UNKNOWN',
     role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
     stats,
     skills,
+    upgradePoints,
+    reputation: repValue,
+    wallet: walletValue,
+    armor,
+    damage,
+    inventory: inventorySummary,
     lastRoll
   };
 }
