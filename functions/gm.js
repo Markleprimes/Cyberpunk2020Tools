@@ -1,6 +1,7 @@
 (function initGMPage() {
   let activeRef = null;
   let activeHandler = null;
+  let activeRoomId = '';
   let gmLocalNpcSeed = 0;
   let gmLocalRollFrame = null;
   let gmLocalNpcs = [];
@@ -8,6 +9,7 @@
   let gmRollModifiers = [];
   let gmCurrentRoll = null;
   let gmPendingRollRequest = null;
+  let gmSelectedRollSubjectKey = '';
   let gmRollShakePower = 0;
   let gmRollShakeActive = false;
   let gmRollShakePointerId = null;
@@ -15,6 +17,7 @@
   let gmRollCinemaFrame = null;
   let gmRollCinemaNumberTimer = null;
   let gmRollCinemaRevealTimer = null;
+  let gmRollCinemaAutoCloseTimer = null;
   let gmRollCountAudio = null;
   let gmRollBounceAudios = [];
   let gmAimStackPoints = 0;
@@ -322,15 +325,76 @@
     };
   }
 
+  function getGMBlockValue(block, label) {
+    const entry = (Array.isArray(block) ? block : []).find((item) => String(item?.label || '').trim() === String(label || '').trim());
+    return parseGMNumericValue(entry?.value) ?? 0;
+  }
+
+  function getGMWoundLevel(dmg) {
+    const value = parseGMNumericValue(dmg) ?? 0;
+    if (value <= 0) return null;
+    if (value <= 4) return 'LIGHT';
+    if (value <= 6) return 'SERIOUS';
+    if (value <= 8) return 'CRITICAL';
+    return 'MORTAL';
+  }
+
+  function getGMWorstWound(entry) {
+    const order = ['LIGHT', 'SERIOUS', 'CRITICAL', 'MORTAL'];
+    let worst = null;
+    (entry?.damage || []).forEach((limb) => {
+      const level = getGMWoundLevel(limb?.value);
+      if (level && (!worst || order.indexOf(level) > order.indexOf(worst))) worst = level;
+    });
+    return worst;
+  }
+
+  function getGMNpcDebuffs(entry) {
+    const worst = getGMWorstWound(entry);
+    const debuffs = {};
+    if (worst === 'SERIOUS') {
+      debuffs.REF = { flat: 2, mult: 1, label: '-2 (SERIOUS)' };
+    } else if (worst === 'CRITICAL') {
+      ['REF', 'COOL', 'INT'].forEach((label) => {
+        debuffs[label] = { flat: 0, mult: 0.5, label: '/2 (CRITICAL)' };
+      });
+    } else if (worst === 'MORTAL') {
+      ['REF', 'COOL', 'INT'].forEach((label) => {
+        debuffs[label] = { flat: 0, mult: 1 / 3, label: '/3 (MORTAL)' };
+      });
+    }
+    return debuffs;
+  }
+
+  function getGMDisplayStats(entry) {
+    const debuffs = getGMNpcDebuffs(entry);
+    return (Array.isArray(entry?.stats) ? entry.stats : []).map((stat) => {
+      const base = parseGMNumericValue(stat?.value) ?? 0;
+      const label = String(stat?.label || '').trim();
+      const debuff = debuffs[label];
+      const effective = debuff ? Math.max(0, Math.floor(base * debuff.mult) - debuff.flat) : base;
+      return {
+        label,
+        value: debuff && effective !== base ? `${effective} (${base})` : effective,
+        rawValue: effective,
+        debuff: debuff?.label || ''
+      };
+    });
+  }
+
+  function getGMWeaponList(entry) {
+    return Array.isArray(entry?.inventoryMap?.weapon) ? entry.inventoryMap.weapon : [];
+  }
+
   function renderGMKeyValueLines(block, options = {}) {
     const entries = Array.isArray(block)
-      ? block.map((entry) => [entry?.label, entry?.value])
+      ? block.map((entry) => [entry?.label, entry?.value, entry?.rawValue])
       : Object.entries(block || {});
     if (!entries.length) {
       return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
     }
-    return entries.map(([key, value]) => {
-      const numericValue = parseGMNumericValue(value);
+    return entries.map(([key, value, rawValue]) => {
+      const numericValue = parseGMNumericValue(rawValue ?? value);
       const pickable = options.pickable && numericValue !== null;
       const pickAttrs = pickable
         ? ` data-gm-roll-source="${escapeGMValue(options.source || 'GM')}" data-gm-roll-label="${escapeGMValue(key)}" data-gm-roll-value="${escapeGMValue(numericValue)}" title="Add ${escapeGMValue(key)} to GM roll"`
@@ -344,9 +408,11 @@
     }).join('');
   }
 
-  function renderGMArmorDamageTable(armor, damage) {
+  function renderGMArmorDamageTable(armor, damage, options = {}) {
     const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
     const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
+    const editable = !!options.editable;
+    const npcId = options.npcId || '';
     return `
       <table class="gm-ad-table">
         <thead>
@@ -360,13 +426,47 @@
           ${GM_LIMBS.map((limb) => `
             <tr>
               <td>${escapeGMValue(limb)}</td>
-              <td>${escapeGMValue(armorMap.get(limb) ?? 0)}</td>
-              <td>${escapeGMValue(damageMap.get(limb) ?? 0)}</td>
+              <td>${editable
+                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(armorMap.get(limb) ?? 0)}" data-gm-npc-ad-input="armor" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                : escapeGMValue(armorMap.get(limb) ?? 0)}</td>
+              <td>${editable
+                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(damageMap.get(limb) ?? 0)}" data-gm-npc-ad-input="damage" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                : escapeGMValue(damageMap.get(limb) ?? 0)}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     `;
+  }
+
+  function renderGMWeaponList(entry) {
+    const weapons = getGMWeaponList(entry);
+    if (!weapons.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return weapons.map((weapon) => {
+      const fields = weapon.fields || {};
+      const damage = fields.Damage || fields['Damage/Ammo'] || '--';
+      const accuracy = fields.Accuracy ?? fields['Weapon Accuracy'] ?? fields.WA ?? '--';
+      return `
+        <div class="gm-sheet-line gm-sheet-line-stack">
+          <span class="gm-sheet-key">${escapeGMValue(weapon.name || 'Weapon')}:</span>
+          <span class="gm-sheet-val gm-sheet-val-wrap">ACC ${escapeGMValue(accuracy)} // DMG ${escapeGMValue(damage)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function updateLocalNpcArmorDamage(npcId, field, limb, value) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc || !['armor', 'damage'].includes(field)) return;
+    const target = Array.isArray(npc[field]) ? npc[field] : [];
+    const row = target.find((entry) => entry.label === limb);
+    if (!row) return;
+    row.value = Math.max(0, parseGMNumericValue(value) ?? 0);
+    renderGMNpcList();
+    setGMStatus(`${npc.name || 'NPC'} ${field.toUpperCase()} ${limb} set to ${row.value}.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
   }
 
   function renderGMItemList(items) {
@@ -417,6 +517,8 @@
 
   function renderGMEntry(clientId, entry, options = {}) {
     const pickSource = entry.name || 'NPC';
+    const displayStats = options.pickable ? getGMDisplayStats(entry) : entry.stats;
+    const wound = options.pickable ? getGMWorstWound(entry) : null;
     return `
       <div class="gm-player-card gm-player-detail">
         <div class="gm-player-summary">
@@ -431,7 +533,7 @@
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Stats</div>
-              ${renderGMKeyValueLines(entry.stats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
+              ${renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Skill</div>
@@ -457,6 +559,10 @@
           </div>
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
+              <div class="gm-sheet-title">Weapons</div>
+              ${renderGMWeaponList(entry)}
+            </div>
+            <div class="gm-sheet-col">
               <div class="gm-sheet-title">Inventory</div>
               ${renderGMItemList(entry.inventory)}
             </div>
@@ -464,7 +570,8 @@
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Armor & Damage</div>
-              ${renderGMArmorDamageTable(entry.armor, entry.damage)}
+              ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: !!options.removable, npcId: clientId })}
+              ${options.removable ? `<div class="gm-npc-wound">Wound Status: ${escapeGMValue(wound || 'CLEAR')}</div>` : ''}
             </div>
           </div>
           ${renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending)}
@@ -479,7 +586,7 @@
       if (!lastRoll || !lastRoll.dice) return;
       const node = document.getElementById(`gm-roll-total-${entry.id}`);
       if (!node) return;
-      const snapshot = `${lastRoll.dice}|${lastRoll.raw}|${lastRoll.modifiers}|${lastRoll.total}`;
+      const snapshot = `${lastRoll.dice}|${lastRoll.raw}|${lastRoll.modifiers}|${lastRoll.total}|${lastRoll.rolledAt || 0}`;
       const prevState = gmRollStateByClient[entry.id];
       if (prevState?.animationFrame) cancelAnimationFrame(prevState.animationFrame);
       if (prevState?.displayedSnapshot === snapshot) {
@@ -573,6 +680,7 @@
     Object.keys(gmDelayedRollsByClient).forEach((key) => delete gmDelayedRollsByClient[key]);
     activeRef = null;
     activeHandler = null;
+    activeRoomId = '';
   }
 
   function createRenderSafeEntry(id, entry) {
@@ -583,7 +691,7 @@
       copy.lastRollPending = false;
       return copy;
     }
-    const snapshot = `${roll.dice}|${roll.raw}|${roll.modifiers}|${roll.total}`;
+    const snapshot = `${roll.dice}|${roll.raw}|${roll.modifiers}|${roll.total}|${roll.rolledAt || 0}`;
     if (gmRollStateByClient[id]?.snapshot === snapshot) {
       copy.lastRollVisible = roll;
       copy.lastRollPending = false;
@@ -596,7 +704,7 @@
 
   function scheduleGMRollReveal(roomId, id, roll, onApply) {
     if (!roll || !roll.dice) return;
-    const snapshot = `${roll.dice}|${roll.raw}|${roll.modifiers}|${roll.total}`;
+    const snapshot = `${roll.dice}|${roll.raw}|${roll.modifiers}|${roll.total}|${roll.rolledAt || 0}`;
     if (gmRollStateByClient[id]?.snapshot === snapshot) return;
     clearTimeout(gmDelayedRollsByClient[id]);
     gmDelayedRollsByClient[id] = setTimeout(() => {
@@ -652,6 +760,7 @@
     }
 
     disconnectGMRoom();
+    activeRoomId = roomId;
     setGMStatus(`Listening to room "${roomId}"...`);
     setGMStatusVisual('pending');
     renderGMRemotePlayers(null);
@@ -670,31 +779,51 @@
   }
 
   function getGMRollModifierTotal() {
-    return gmRollModifiers.reduce((sum, modifier) => sum + (modifier.value || 0), 0);
+    const base = gmRollModifiers.reduce((sum, modifier) => sum + (modifier.value || 0), 0);
+    const selectedKey = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
+    const combatPenalty = typeof window.getGMCombatPenalty === 'function'
+      ? Number(window.getGMCombatPenalty(selectedKey) || 0)
+      : 0;
+    return base + combatPenalty;
   }
 
   function renderGMRollModifierList() {
     const node = document.getElementById('gm-roll-mod-list');
     if (!node) return;
-    if (!gmRollModifiers.length) {
+    const selectedKey = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
+    const combatPenalty = typeof window.getGMCombatPenalty === 'function'
+      ? Number(window.getGMCombatPenalty(selectedKey) || 0)
+      : 0;
+    const hasVisiblePenalty = combatPenalty !== 0;
+    if (!gmRollModifiers.length && !hasVisiblePenalty) {
       node.innerHTML = '<div class="gm-empty">No modifiers locked in.</div>';
       return;
     }
-    node.innerHTML = gmRollModifiers.map((modifier, index) => `
+    const items = gmRollModifiers.map((modifier, index) => `
       <div class="gm-mod-pill">
         <span>${escapeGMValue(modifier.source)} // ${escapeGMValue(modifier.label)} ${modifier.value >= 0 ? '+' : ''}${escapeGMValue(modifier.value)}</span>
         <button type="button" data-gm-remove-mod="${index}">X</button>
       </div>
-    `).join('');
+    `);
+    if (hasVisiblePenalty) {
+      items.push(`
+        <div class="gm-mod-pill">
+          <span>FACEDOWN // STAY STRONG PENALTY ${combatPenalty}</span>
+        </div>
+      `);
+    }
+    node.innerHTML = items.join('');
   }
 
   function clearGMRollCinemaTimers() {
     cancelAnimationFrame(gmRollCinemaFrame);
     clearInterval(gmRollCinemaNumberTimer);
     clearTimeout(gmRollCinemaRevealTimer);
+    clearTimeout(gmRollCinemaAutoCloseTimer);
     gmRollCinemaFrame = null;
     gmRollCinemaNumberTimer = null;
     gmRollCinemaRevealTimer = null;
+    gmRollCinemaAutoCloseTimer = null;
   }
 
   function updateGMRollExecuteMeter() {
@@ -787,7 +916,7 @@
     if (totalNode) totalNode.textContent = `${modTotal >= 0 ? '+' : ''}${modTotal}`;
   }
 
-  function animateGMRollCinemaCount(start, end) {
+  function animateGMRollCinemaCount(start, end, onComplete) {
     const target = document.getElementById('gm-roll-cinema-final');
     if (!target) return;
     const duration = 650;
@@ -803,7 +932,10 @@
       }
       target.textContent = value;
       if (pct < 1) gmRollCinemaFrame = requestAnimationFrame(tick);
-      else gmRollCinemaFrame = null;
+      else {
+        gmRollCinemaFrame = null;
+        if (typeof onComplete === 'function') onComplete();
+      }
     };
     gmRollCinemaFrame = requestAnimationFrame(tick);
   }
@@ -945,7 +1077,15 @@
           document.getElementById('gm-roll-cinema-raw-card')?.classList.remove('emphasis');
           setGMRollCinemaCards(true, true, true);
           document.getElementById('gm-roll-cinema-final-card')?.classList.add('emphasis');
-          animateGMRollCinemaCount(rawTotal, finalTotal);
+          animateGMRollCinemaCount(rawTotal, finalTotal, () => {
+            tryAutoSendRollToSelectedNpc();
+            gmRollCinemaAutoCloseTimer = setTimeout(() => {
+              if (gmRollModifiers.length) {
+                gmRollModifiers = [];
+                renderGMRollModifierList();
+              }
+            }, 300);
+          });
         }, 620);
         gmRollCinemaFrame = null;
         return;
@@ -974,9 +1114,16 @@
       raw,
       modifiers,
       total: raw + modifiers,
-      source: gmRollModifiers.length
-        ? gmRollModifiers.map((modifier) => `${modifier.source}: ${modifier.label}`).join(' // ')
-        : 'Manual GM roll'
+      rolledAt: Date.now(),
+      source: [
+        ...(gmRollModifiers.length
+          ? gmRollModifiers.map((modifier) => `${modifier.source}: ${modifier.label}`)
+          : ['Manual GM roll']),
+        ...((typeof window.getGMCombatPenalty === 'function'
+          && Number(window.getGMCombatPenalty(gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '') || 0) !== 0)
+          ? ['Facedown: Stay Strong penalty']
+          : [])
+      ].join(' // ')
     };
     renderGMRollDisplay();
     openGMRollCinemaAnimation(sides, qty, rolls, shakePowerSnapshot);
@@ -1093,14 +1240,60 @@
     renderGMRollModifierList();
   }
 
-  function getGMActiveCombatantData() {
-    return typeof window.getGMActiveCombatant === 'function' ? window.getGMActiveCombatant() : null;
+  function getGMRollSubjectOptions() {
+    const turnCombatants = typeof window.getGMTurnCombatants === 'function' ? window.getGMTurnCombatants() : [];
+    const turnNpcs = turnCombatants.filter((entry) => String(entry?.sourceType || '').toLowerCase() === 'npc');
+    if (turnNpcs.length) return turnNpcs;
+    return (typeof window.getGMLocalNpcs === 'function' ? window.getGMLocalNpcs() : []).map((entry) => ({
+      ...JSON.parse(JSON.stringify(entry)),
+      combatKey: `npc:${entry.id}`,
+      sourceType: 'npc'
+    }));
   }
 
-  function requireGMActiveCombatant() {
-    const combatant = getGMActiveCombatantData();
+  function renderGMRollSubjectSelect() {
+    const select = document.getElementById('gm-roll-subject-select');
+    if (!select) return;
+    const options = getGMRollSubjectOptions();
+    const currentTurnKey = typeof window.getGMCurrentTurnKey === 'function' ? window.getGMCurrentTurnKey() : '';
+    if (!options.length) {
+      select.innerHTML = '<option value="">No subject available</option>';
+      gmSelectedRollSubjectKey = '';
+      return;
+    }
+
+    if (currentTurnKey && options.some((entry) => entry.combatKey === currentTurnKey)) {
+      gmSelectedRollSubjectKey = currentTurnKey;
+    } else if (!gmSelectedRollSubjectKey || !options.some((entry) => entry.combatKey === gmSelectedRollSubjectKey)) {
+      gmSelectedRollSubjectKey = currentTurnKey && options.some((entry) => entry.combatKey === currentTurnKey)
+        ? currentTurnKey
+        : options[0].combatKey;
+    }
+
+    select.innerHTML = options.map((entry) => `
+      <option value="${escapeGMValue(entry.combatKey)}">${escapeGMValue(entry.name || 'Unknown')} // ${escapeGMValue(entry.sourceType?.toUpperCase?.() || entry.role?.toUpperCase?.() || 'NPC')}</option>
+    `).join('');
+    select.value = gmSelectedRollSubjectKey;
+  }
+
+  function getGMSelectedCombatantData() {
+    const key = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
+    if (!key) return null;
+    const pool = [
+      ...(typeof window.getGMLocalNpcs === 'function' ? window.getGMLocalNpcs() : [])
+    ];
+    const entry = pool.find((candidate) => candidate.combatKey === key || `player:${candidate.id}` === key || `npc:${candidate.id}` === key);
+    if (!entry) return null;
+    return {
+      ...entry,
+      combatKey: entry.combatKey || key
+    };
+  }
+
+  function requireGMSelectedCombatant() {
+    const combatant = getGMSelectedCombatantData();
     if (!combatant) {
-      setGMStatus('No current combat actor selected for GM preset roll.');
+      setGMStatus('No roll subject selected for GM preset roll.');
       return null;
     }
     return combatant;
@@ -1155,7 +1348,7 @@
   }
 
   function startOrKeepGMAim() {
-    if (!requireGMActiveCombatant()) return;
+    if (!requireGMSelectedCombatant()) return;
     if (gmAimStackPoints >= 3) return;
     gmAimStackPoints += 1;
     renderGMAimAction();
@@ -1184,7 +1377,7 @@
   }
 
   function openGMAimHitModal() {
-    const combatant = requireGMActiveCombatant();
+    const combatant = requireGMSelectedCombatant();
     if (!combatant) return;
     gmAimHitWeapons = getGMCombatWeapons(combatant);
     const select = document.getElementById('gm-aim-weapon-select');
@@ -1205,7 +1398,7 @@
   }
 
   function confirmGMAimHit() {
-    const combatant = getGMActiveCombatantData();
+    const combatant = getGMSelectedCombatantData();
     const select = document.getElementById('gm-aim-weapon-select');
     const weapon = gmAimHitWeapons[parseInt(select?.value, 10)];
     if (!combatant || !weapon) {
@@ -1227,7 +1420,7 @@
   }
 
   function rollGMAmbushPreset() {
-    const combatant = requireGMActiveCombatant();
+    const combatant = requireGMSelectedCombatant();
     if (!combatant) return;
     setGMPresetRoll('AMBUSH', [
       { source: combatant.name || 'Actor', label: 'Stealth', value: getGMCombatantSkillValue(combatant, 'Stealth') },
@@ -1236,7 +1429,7 @@
   }
 
   function rollGMAmbushCounterPreset() {
-    const combatant = requireGMActiveCombatant();
+    const combatant = requireGMSelectedCombatant();
     if (!combatant) return;
     setGMPresetRoll('AMBUSH COUNTER', [
       { source: combatant.name || 'Actor', label: 'Awareness', value: getGMCombatantSkillValue(combatant, 'Awareness', 'AwarenessNotice') }
@@ -1244,7 +1437,7 @@
   }
 
   function rollGMSuppressivePreset() {
-    const combatant = requireGMActiveCombatant();
+    const combatant = requireGMSelectedCombatant();
     if (!combatant) return;
     setGMPresetRoll('SUPPRESSIVE FIRE SAVE', [
       { source: combatant.name || 'Actor', label: 'Athletics', value: getGMCombatantSkillValue(combatant, 'Athletics', 'Athletic') },
@@ -1266,6 +1459,33 @@
   function rollGMDice(sides) {
     const qty = Math.max(1, Math.min(20, parseGMNumericValue(document.getElementById('gm-roll-qty')?.value) ?? 1));
     beginGMRollExecution(sides, qty);
+  }
+
+  function sendRollToSelectedNpc() {
+    const combatant = getGMSelectedCombatantData();
+    if (!combatant || !combatant.combatKey?.startsWith('npc:')) {
+      setGMStatus('Select an NPC in Roll Subject before sending a GM roll.');
+      return;
+    }
+    if (!gmCurrentRoll?.dice) {
+      setGMStatus('No GM roll result available to send.');
+      return;
+    }
+    if (typeof window.applyGMCombatantRoll !== 'function') {
+      setGMStatus('Combat board is not ready to receive GM rolls.');
+      return;
+    }
+    window.applyGMCombatantRoll(combatant.combatKey, gmCurrentRoll);
+    setGMStatus(`Sent GM roll to ${combatant.name || 'selected NPC'}.`);
+  }
+
+  function tryAutoSendRollToSelectedNpc() {
+    const combatant = getGMSelectedCombatantData();
+    if (!combatant || !combatant.combatKey?.startsWith('npc:')) return;
+    if (!gmCurrentRoll?.dice) return;
+    if (typeof window.applyGMCombatantRoll !== 'function') return;
+    window.applyGMCombatantRoll(combatant.combatKey, gmCurrentRoll);
+    setGMStatus(`Auto-sent GM roll to ${combatant.name || 'selected NPC'}.`);
   }
 
   function removeLocalNpc(npcId) {
@@ -1307,6 +1527,7 @@
     window.getGMLocalNpcs = () => gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
     window.addGMRollModifier = addGMRollModifier;
     window.getGMCurrentRoll = () => gmCurrentRoll ? JSON.parse(JSON.stringify(gmCurrentRoll)) : null;
+    window.getGMActiveRoomId = () => activeRoomId;
 
     document.getElementById('gm-connect-btn')?.addEventListener('click', connectGMRoom);
     document.getElementById('gm-room-id')?.addEventListener('keydown', (event) => {
@@ -1328,6 +1549,7 @@
 
     document.getElementById('gm-roll-add-mod-btn')?.addEventListener('click', addCustomGMRollModifier);
     document.getElementById('gm-roll-clear-mods-btn')?.addEventListener('click', clearGMRollModifiers);
+    document.getElementById('gm-roll-send-active-btn')?.addEventListener('click', sendRollToSelectedNpc);
     document.getElementById('gm-roll-ambush-btn')?.addEventListener('click', rollGMAmbushPreset);
     document.getElementById('gm-roll-ambush-counter-btn')?.addEventListener('click', rollGMAmbushCounterPreset);
     document.getElementById('gm-roll-suppressive-btn')?.addEventListener('click', rollGMSuppressivePreset);
@@ -1338,6 +1560,9 @@
     document.getElementById('gm-aim-hit-confirm')?.addEventListener('click', confirmGMAimHit);
     document.getElementById('gm-roll-custom-value')?.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') addCustomGMRollModifier();
+    });
+    document.getElementById('gm-roll-subject-select')?.addEventListener('change', (event) => {
+      gmSelectedRollSubjectKey = String(event.target.value || '');
     });
 
     document.querySelectorAll('.gm-die-btn').forEach((button) => {
@@ -1389,11 +1614,25 @@
       }
     });
 
+    document.addEventListener('change', (event) => {
+      const input = event.target.closest('[data-gm-npc-ad-input]');
+      if (!input) return;
+      updateLocalNpcArmorDamage(
+        input.getAttribute('data-gm-npc-id'),
+        input.getAttribute('data-gm-npc-ad-input'),
+        input.getAttribute('data-gm-limb'),
+        input.value
+      );
+    });
+
     renderGMRemotePlayers(null);
     renderGMNpcList();
     renderGMRollModifierList();
     renderGMRollDisplay();
     renderGMAimAction();
+    renderGMRollSubjectSelect();
+    window.addEventListener('gm-action-updated', renderGMRollSubjectSelect);
+    window.addEventListener('gm-monitor-updated', renderGMRollSubjectSelect);
     setGMStatusVisual('disconnected');
   });
 })();

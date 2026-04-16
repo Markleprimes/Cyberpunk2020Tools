@@ -9,7 +9,7 @@ let weightVal = 0;
 let stunVal = 0;
 let inventory = {};
 let rollModifiers = [];
-let currentRoll = { sides: null, qty: 1, rolls: [], result: 0 };
+let currentRoll = { sides: null, qty: 1, rolls: [], result: 0, modifiers: 0, total: 0, rolledAt: 0 };
 let aimStackPoints = 0;
 let _rollTimer = null;
 let bannerImageData = '';
@@ -22,6 +22,7 @@ let rollCinemaFrame = null;
 let rollCinemaNumberTimer = null;
 let rollCinemaCountTimer = null;
 let rollCinemaRevealTimer = null;
+let rollCinemaAutoCloseTimer = null;
 let rollCountAudio = null;
 let rollBounceAudios = [];
 let pendingRollRequest = null;
@@ -35,6 +36,9 @@ let _toastTimer = null;
 let _modalCb = null;
 let activeRoomId = '';
 let roomSyncStatus = 'disconnected';
+let playerPromptUnsubscribe = null;
+let activeRemotePrompt = null;
+let persistentRollPenalty = 0;
 
 const LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 let limbSP = { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 };
@@ -90,6 +94,7 @@ bindBackdropClose('aim-hit-modal', () => closeAimHitModal());
 bindBackdropClose('new-char-modal', () => closeNewCharacterModal());
 bindBackdropClose('roll-execute-modal', () => cancelRollExecution());
 bindBackdropClose('roll-cinema-modal', () => closeRollCinemaModal());
+bindBackdropClose('player-choice-modal', () => closePlayerChoiceModal());
 
 getById('inventory-item-name').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') saveInventoryItem();
@@ -99,6 +104,10 @@ getById('room-sync-disconnect-btn')?.addEventListener('click', () => disconnectP
 getById('room-sync-input')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') connectPlayerRoom();
 });
+getById('player-choice-backoff')?.addEventListener('click', () => submitPlayerChoicePrompt('backoff'));
+getById('player-choice-stay')?.addEventListener('click', () => submitPlayerChoicePrompt('stay'));
+
+window.getPersistentRollPenalty = () => Number(persistentRollPenalty || 0);
 
 function showError(msg) {
   const bar = getById('status-bar');
@@ -137,12 +146,13 @@ function getCurrentCharacterProfile() {
   });
   const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRoll = currentRoll?.sides
-    ? {
+      ? {
         dice: `${currentRoll.qty}D${currentRoll.sides}`,
         pool: [...(currentRoll.rolls || [])],
         raw: currentRoll.result || 0,
-        modifiers: modifierTotal,
-        total: (currentRoll.result || 0) + modifierTotal
+        modifiers: currentRoll.modifiers ?? modifierTotal,
+        total: currentRoll.total ?? ((currentRoll.result || 0) + modifierTotal),
+        rolledAt: currentRoll.rolledAt || 0
       }
     : null;
   return {
@@ -161,6 +171,7 @@ function getCurrentCharacterProfile() {
       stun: stunVal
     },
     inventory: inventoryItems,
+    combatPenalty: Number(persistentRollPenalty || 0),
     lastRoll
   };
 }
@@ -181,6 +192,87 @@ function setRoomSyncStatus(status, detail = '') {
   }
 }
 
+function setPersistentRollPenalty(value, reason = '') {
+  persistentRollPenalty = Number(value || 0);
+  renderRollLab();
+  syncCurrentPlayerPresence();
+  if (reason) showActionLog(reason);
+}
+
+function closePlayerChoiceModal() {
+  getById('player-choice-modal')?.classList.remove('show');
+}
+
+function renderPlayerChoiceModal(prompt) {
+  const title = getById('player-choice-title');
+  const message = getById('player-choice-msg');
+  const note = getById('player-choice-note');
+  const backoff = getById('player-choice-backoff');
+  const stay = getById('player-choice-stay');
+  if (!title || !message || !note || !backoff || !stay) return;
+  const penalty = Number(prompt?.penalty || -3);
+  title.textContent = 'FACEDOWN RESULT';
+  message.textContent = `${String(prompt?.loserName || getById('char-name')?.textContent || 'YOU').trim().toUpperCase()} LOST THE FACEDOWN. CHOOSE YOUR RESPONSE.`;
+  note.textContent = `BACK OFF removes you from combat. STAY STRONG keeps you in the fight and applies ${penalty >= 0 ? '+' : ''}${penalty} to future rolls until cleared by the referee.`;
+  backoff.disabled = false;
+  stay.disabled = false;
+  getById('player-choice-modal')?.classList.add('show');
+}
+
+function handleIncomingPlayerPrompt(prompt) {
+  activeRemotePrompt = prompt || null;
+  if (!prompt || prompt.status === 'resolved' || prompt.status === 'cleared') {
+    closePlayerChoiceModal();
+    return;
+  }
+  if (prompt.type !== 'facedown-choice') return;
+  if (prompt.status === 'answered') {
+    if (prompt.response?.choice === 'stay') {
+      setPersistentRollPenalty(Number(prompt.penalty || -3));
+    }
+    closePlayerChoiceModal();
+    return;
+  }
+  if (prompt.status === 'pending') renderPlayerChoiceModal(prompt);
+}
+
+function stopPlayerPromptWatch() {
+  if (typeof playerPromptUnsubscribe === 'function') playerPromptUnsubscribe();
+  playerPromptUnsubscribe = null;
+  activeRemotePrompt = null;
+  closePlayerChoiceModal();
+}
+
+function startPlayerPromptWatch(roomId) {
+  stopPlayerPromptWatch();
+  if (!roomId || typeof watchPlayerPrompt !== 'function') return;
+  playerPromptUnsubscribe = watchPlayerPrompt(roomId, handleIncomingPlayerPrompt);
+}
+
+async function submitPlayerChoicePrompt(choice) {
+  if (!activeRemotePrompt || !activeRoomId) return;
+  const backoff = getById('player-choice-backoff');
+  const stay = getById('player-choice-stay');
+  if (backoff) backoff.disabled = true;
+  if (stay) stay.disabled = true;
+  try {
+    await respondToPlayerPrompt(activeRoomId, activeRemotePrompt.promptId, { choice });
+    if (choice === 'stay') {
+      setPersistentRollPenalty(
+        Number(activeRemotePrompt.penalty || -3),
+        'FACEDOWN LOST // STAY STRONG PENALTY APPLIED'
+      );
+    } else {
+      showActionLog('FACEDOWN LOST // BACK OFF SENT TO REFEREE');
+    }
+    closePlayerChoiceModal();
+  } catch (error) {
+    showError(`FACEDOWN RESPONSE ERROR: ${error.message}`);
+    if (backoff) backoff.disabled = false;
+    if (stay) stay.disabled = false;
+  }
+}
+
 async function connectPlayerRoom() {
   const roomId = String(getById('room-sync-input')?.value || '').trim();
   if (!roomId) {
@@ -192,6 +284,7 @@ async function connectPlayerRoom() {
     initFirebaseRealtime();
     await connectPlayerPresence(roomId, getCurrentCharacterProfile());
     activeRoomId = roomId;
+    startPlayerPromptWatch(roomId);
     setRoomSyncStatus('connected');
     showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
   } catch (error) {
@@ -203,6 +296,7 @@ async function connectPlayerRoom() {
 
 async function disconnectPlayerRoom() {
   try {
+    stopPlayerPromptWatch();
     await disconnectPlayerPresence();
   } catch (error) {
     console.warn('Room disconnect failed.', error);
@@ -470,6 +564,8 @@ function resetSheet() {
     closeAimHitModal();
     cancelRollExecution();
     closeRollCinemaModal();
+    stopPlayerPromptWatch();
+    persistentRollPenalty = 0;
     clearInterval(_rollTimer);
     renderSheet(buildBlankSheetData());
     closeModal();

@@ -3,10 +3,12 @@ function clearRollCinemaTimers() {
   clearInterval(rollCinemaNumberTimer);
   clearInterval(rollCinemaCountTimer);
   clearTimeout(rollCinemaRevealTimer);
+  clearTimeout(rollCinemaAutoCloseTimer);
   rollCinemaFrame = null;
   rollCinemaNumberTimer = null;
   rollCinemaCountTimer = null;
   rollCinemaRevealTimer = null;
+  rollCinemaAutoCloseTimer = null;
 }
 
 function updateRollExecuteMeter() {
@@ -64,7 +66,9 @@ function executePendingRoll() {
   rollShakePower = 0;
   updateRollExecuteMeter();
   const rolls = Array.from({ length: qty }, () => Math.floor(Math.random() * sides) + 1);
-  currentRoll = { sides, qty, rolls, result: rolls.reduce((sum, val) => sum + val, 0) };
+  const raw = rolls.reduce((sum, val) => sum + val, 0);
+  const modifiers = getModifierTotal();
+  currentRoll = { sides, qty, rolls, result: raw, modifiers, total: raw + modifiers, rolledAt: Date.now() };
   renderRollLab();
   openRollCinemaAnimation(sides, qty, rolls, shakePowerSnapshot);
   showActionLog(`ROLLED ${qty}D${sides} FOR ${currentRoll.result}`);
@@ -141,7 +145,7 @@ function playRollBounceTick() {
   audio.play().catch(() => {});
 }
 
-function animateRollCinemaCount(start, end) {
+function animateRollCinemaCount(start, end, onComplete) {
   clearInterval(rollCinemaCountTimer);
   const target = document.getElementById('roll-cinema-final');
   const duration = 650;
@@ -160,6 +164,7 @@ function animateRollCinemaCount(start, end) {
       rollCinemaFrame = requestAnimationFrame(tick);
     } else {
       rollCinemaFrame = null;
+      if (typeof onComplete === 'function') onComplete();
     }
   };
   rollCinemaFrame = requestAnimationFrame(tick);
@@ -167,10 +172,11 @@ function animateRollCinemaCount(start, end) {
 
 function renderRollCinemaModifiers(modTotal) {
   const list = document.getElementById('roll-cinema-mod-list');
-  if (!rollModifiers.length) {
+  const displayModifiers = getDisplayRollModifiers();
+  if (!displayModifiers.length) {
     list.innerHTML = '<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
   } else {
-    list.innerHTML = rollModifiers.map((mod) => `
+    list.innerHTML = displayModifiers.map((mod) => `
       <div class="roll-cinema-mod-line">
         <span>${escapeHtml(mod.label)}</span>
         <span>${mod.value >= 0 ? '+' : ''}${mod.value}</span>
@@ -233,8 +239,22 @@ function attackAimAction() {
   openAimHitModal();
 }
 
+function getPersistentPenaltyModifier() {
+  const value = typeof window.getPersistentRollPenalty === 'function'
+    ? Number(window.getPersistentRollPenalty() || 0)
+    : 0;
+  return value
+    ? { source: 'STATUS', label: 'Facedown Penalty', value, persistent: true }
+    : null;
+}
+
+function getDisplayRollModifiers() {
+  const persistent = getPersistentPenaltyModifier();
+  return persistent ? [...rollModifiers, persistent] : [...rollModifiers];
+}
+
 function getModifierTotal() {
-  return rollModifiers.reduce((sum, mod) => sum + mod.value, 0);
+  return getDisplayRollModifiers().reduce((sum, mod) => sum + mod.value, 0);
 }
 
 function getRollQuantity() {
@@ -258,12 +278,13 @@ function changeRollQty(delta) {
 
 function renderRollLab() {
   const modList = document.getElementById('modifier-list');
-  const modTotal = getModifierTotal();
+  const displayModifiers = getDisplayRollModifiers();
+  const modTotal = currentRoll.sides ? (currentRoll.modifiers ?? getModifierTotal()) : getModifierTotal();
   const qty = currentRoll.qty || getRollQuantity();
   const hasRoll = !!currentRoll.sides;
   document.getElementById('modifier-total').textContent = modTotal;
   document.getElementById('last-die-label').textContent = hasRoll ? `${qty}D${currentRoll.sides}` : 'NONE';
-  const total = (currentRoll.result || 0) + modTotal;
+  const total = hasRoll ? (currentRoll.total ?? ((currentRoll.result || 0) + modTotal)) : modTotal;
   document.getElementById('roll-last-summary').textContent = hasRoll
     ? `${qty}D${currentRoll.sides} locked ${currentRoll.result}. Final total ${total}.`
     : `No die rolled yet. Current modifiers total ${modTotal >= 0 ? '+' : ''}${modTotal}.`;
@@ -274,16 +295,16 @@ function renderRollLab() {
   renderAimAction();
   updateSystemStrip();
   syncCurrentPlayerPresence();
-  if (!rollModifiers.length) {
+  if (!displayModifiers.length) {
     modList.innerHTML = '<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
     return;
   }
-  modList.innerHTML = rollModifiers.map((mod, idx) => `
+  modList.innerHTML = displayModifiers.map((mod, idx) => `
     <div class="modifier-item">
       <span class="modifier-source">${escapeHtml(mod.source)}</span>
       <span class="modifier-name">${escapeHtml(mod.label)}</span>
       <span class="modifier-value">${mod.value >= 0 ? '+' : ''}${mod.value}</span>
-      <button class="modifier-delete" type="button" onclick="removeRollModifier(${idx})">DELETE</button>
+      ${mod.persistent ? '' : `<button class="modifier-delete" type="button" onclick="removeRollModifier(${idx})">DELETE</button>`}
     </div>`).join('');
 }
 
@@ -447,7 +468,14 @@ function openRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
         document.getElementById('roll-cinema-raw-card').classList.remove('emphasis');
         setRollCinemaCards(true, true, true);
         document.getElementById('roll-cinema-final-card').classList.add('emphasis');
-        animateRollCinemaCount(rawTotal, finalTotal);
+        animateRollCinemaCount(rawTotal, finalTotal, () => {
+          rollCinemaAutoCloseTimer = setTimeout(() => {
+            if (rollModifiers.length) {
+              rollModifiers = [];
+              renderRollLab();
+            }
+          }, 300);
+        });
       }, 420);
       return;
     }

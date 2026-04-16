@@ -42,6 +42,13 @@
     return db.ref(`rooms/${cleanRoomId}`);
   }
 
+  function getPlayerPromptRef(roomId, clientId = getSyncClientId()) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) return null;
+    const cleanClientId = String(clientId || getSyncClientId()).trim() || getSyncClientId();
+    return roomRef.child(`playerPrompts/${cleanClientId}`);
+  }
+
   let runtimeClientId = '';
 
   function createClientId() {
@@ -136,12 +143,65 @@
     return activePresenceRoomId;
   }
 
+  function watchPlayerPrompt(roomId, callback, clientId = getSyncClientId()) {
+    const ref = getPlayerPromptRef(roomId, clientId);
+    if (!ref || typeof callback !== 'function') return () => {};
+    const handler = (snapshot) => callback(snapshot.val() || null);
+    ref.on('value', handler);
+    return () => ref.off('value', handler);
+  }
+
+  async function sendPlayerPrompt(roomId, clientId, prompt) {
+    const ref = getPlayerPromptRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const payload = {
+      ...(prompt || {}),
+      promptId: String(prompt?.promptId || `prompt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`),
+      status: String(prompt?.status || 'pending'),
+      updatedAt: Date.now()
+    };
+    await ref.set(payload);
+    return payload;
+  }
+
+  async function respondToPlayerPrompt(roomId, promptId, response, clientId = getSyncClientId()) {
+    const ref = getPlayerPromptRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const snapshot = await ref.get();
+    const current = snapshot.val();
+    if (!current) return null;
+    if (promptId && current.promptId && current.promptId !== promptId) return current;
+    const next = {
+      ...current,
+      status: 'answered',
+      response: {
+        ...(current.response || {}),
+        ...(response || {}),
+        respondedAt: Date.now()
+      },
+      updatedAt: Date.now()
+    };
+    await ref.set(next);
+    return next;
+  }
+
+  async function clearPlayerPrompt(roomId, clientId = getSyncClientId()) {
+    const ref = getPlayerPromptRef(roomId, clientId);
+    if (!ref) return;
+    await ref.remove();
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
+  window.getPlayerPromptRef = getPlayerPromptRef;
   window.getSyncClientId = getSyncClientId;
   window.connectPlayerPresence = connectPlayerPresence;
   window.updatePlayerPresence = updatePlayerPresence;
   window.disconnectPlayerPresence = disconnectPlayerPresence;
   window.getActivePresenceRoomId = getActivePresenceRoomId;
+  window.watchPlayerPrompt = watchPlayerPrompt;
+  window.sendPlayerPrompt = sendPlayerPrompt;
+  window.respondToPlayerPrompt = respondToPlayerPrompt;
+  window.clearPlayerPrompt = clearPlayerPrompt;
 })();

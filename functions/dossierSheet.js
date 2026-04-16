@@ -38,7 +38,7 @@ function renderSheet(data) {
 
   rollModifiers = [];
   aimStackPoints = 0;
-  currentRoll = { sides: null, qty: getRollQuantity(), rolls: [], result: 0 };
+  currentRoll = { sides: null, qty: getRollQuantity(), rolls: [], result: 0, modifiers: 0, total: 0, rolledAt: 0 };
   renderRollLab();
 
   LIMBS.forEach((limb) => {
