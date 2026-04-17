@@ -751,8 +751,13 @@
   }
 
   function connectGMRoom() {
-    const roomId = (document.getElementById('gm-room-id')?.value || 'test-room').trim() || 'test-room';
+    const roomId = (document.getElementById('gm-room-id')?.value || '').trim();
     const roomRef = getSyncRoomRef(roomId);
+    if (!roomId) {
+      setGMStatus('Enter a room ID before connecting.');
+      setGMStatusVisual('disconnected');
+      return;
+    }
     if (!roomRef) {
       setGMStatus('Firebase failed to initialize.');
       setGMStatusVisual('disconnected');
