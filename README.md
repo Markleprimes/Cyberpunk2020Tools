@@ -57,6 +57,109 @@ Recommended dossier zip contents:
 
 Exports are zip-based.
 
+### Character Format
+
+```txt
+name: {
+  "Character Name", "Street Name"
+}
+
+stats: {
+  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, EMPT=0
+}
+
+career: {
+  "Solo"
+}
+
+careerSkill: {
+  point=0
+  Awareness/Notice=0
+}
+
+reputation: {
+  rep=0
+}
+
+wallet: {
+  eddies=0
+}
+
+physicalBody: {
+  bodylevel=0
+  weight=0
+  stunpoint=0
+}
+
+armor: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}
+
+damage: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}
+```
+
+### Item Format
+
+```txt
+weapon: {
+  weapon1:{
+    name="",
+    Type="",
+    Accuracy=,
+    Concealability="",
+    Availability="",
+    Damage/Ammo="",
+    ShotsCapacity=,
+    "Rates of Fire"=,
+    Reliability="",
+    Range=,
+    Cost=,
+    info:{ "" }
+  }
+}
+
+cyberware: {
+  cyberware1:{
+    name="",
+    Type="",
+    HumanityCost="",
+    Cost=,
+    info:{ "" }
+  }
+}
+
+miscellaneous: {
+  misc1:{
+    name="",
+    Type="",
+    Cost=,
+    info:{ "" }
+  }
+}
+
+buff: {
+  buff1:{
+    name="",
+    Type="",
+    Duration="",
+    Effect="",
+    info:{ "" }
+  }
+}
+```
+
 ## Using The Room Link
 
 The room system is for live table use between player dossier pages and the GM page.
@@ -118,7 +221,7 @@ No traditional install is required for normal local use beyond opening the pages
 
 ## Development Note
 
-This project was built with heavy AI assistance during development, but the important part for use is the workflow:
+This project was built with roughly 80% AI assistance during development, but the important part for use is the workflow:
 
 - load or create a character
 - connect players to the GM room if needed
