@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Access Terminal</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="index.css?v=20260415a">
+<link rel="stylesheet" href="index.css?v=20260417a">
 </head>
 <body>
 <div class="launcher-shell">
@@ -13,7 +13,7 @@
     <div>
       <div class="launcher-kicker">NIGHT CITY ACCESS // ROLEPLAY DOSSIER UPLINK</div>
       <h1>CYBERPUNK 2020</h1>
-      <p class="launcher-copy">Jack in through an existing dossier file or spin up a new character shell before entering the sheet.</p>
+      <p class="launcher-copy">A browser-based Cyberpunk 2020 interface suite for dossiers, GM control, rolling, and session-side atmosphere.</p>
     </div>
     <div class="launcher-status">
       <span class="status-dot"></span>
@@ -29,7 +29,7 @@
       <button class="launcher-btn" id="launcher-load-btn" type="button">LOAD FILE</button>
       <input type="file" id="launcher-file-input" accept=".txt,.zip" hidden>
       <details class="format-guide">
-        <summary>UPLOAD FORMAT GUIDE</summary>
+        <summary>CHARACTER / ITEM FORMAT</summary>
         <div class="format-guide-body">
           <div class="format-block">
             <div class="format-title">Character .txt</div>
@@ -148,6 +148,52 @@ buff: {
       <a class="launcher-btn gm" href="gm.html">OPEN GM PAGE</a>
     </section>
   </main>
+
+  <section class="launcher-readme">
+    <div class="launcher-readme-head">
+      <div class="launcher-kicker">PROJECT README // PUBLIC NOTE</div>
+      <h2>What This Is</h2>
+      <p class="launcher-readme-copy">This page doubles as the public quick-read for the project, so someone landing here can understand the tool before opening the dossier or referee console.</p>
+    </div>
+
+    <div class="launcher-readme-grid">
+      <article class="readme-card readme-card-wide">
+        <div class="card-eyebrow">Project</div>
+        <h3>Interface Suite For Table Play</h3>
+        <p>This project is a static browser toolkit for Cyberpunk 2020 sessions. It combines a player dossier, a referee console, animated roll systems, inventory tracking, room sync, and a Netrunner minigame into one themed interface.</p>
+      </article>
+
+      <article class="readme-card readme-card-ai">
+        <div class="card-eyebrow">Disclosure</div>
+        <h3>AI-Assisted Build</h3>
+        <p>About 80% of this project was built with AI assistance. That includes a lot of scaffolding, implementation, and iteration work. The direction, feature choices, testing, and editing decisions were still human-led.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">Use Case</div>
+        <h3>Built For Actual Sessions</h3>
+        <p>The goal is not "perfect software purity." The goal is a stylish, fast, useful table tool that helps with character handling, combat pacing, GM monitoring, and hacking scenes.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">NPC / Mooks</div>
+        <h3>Use External Chatbot AI</h3>
+        <p>For fast random NPCs, mooks, or one-off enemies, the intended workflow is to use an outside chatbot AI, then format the result to match the upload template shown above and import it as a dossier file.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">Pages</div>
+        <h3>Three Main Entry Points</h3>
+        <p><strong>Launcher</strong> for access and upload, <strong>Dossier</strong> for player-side tracking, and <strong>Referee Access</strong> for live room monitoring and combat-side control.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">Publishing Note</div>
+        <h3>Transparent On Purpose</h3>
+        <p>This is being published with the AI usage stated openly. I would rather be honest about how it was made than hide the process behind fake "handmade" presentation.</p>
+      </article>
+    </div>
+  </section>
 
   <div class="launcher-hint">After you upload or confirm a new character, the system runs a short "CHIPPIN IN" glitch load before opening the dossier.</div>
   <div class="launcher-status-bar" id="launcher-status" aria-live="polite"></div>
