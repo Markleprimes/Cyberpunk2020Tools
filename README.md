@@ -1,151 +1,123 @@
 # Cyberpunk 2020 Web Tools
 
-A browser-based Cyberpunk 2020 character dossier and minigame toolkit built as a static site.
+A browser-based Cyberpunk 2020 interface suite for character dossiers, referee support, rolling, and lightweight online table play.
 
-## What It Includes
+## Project Overview
 
-- Character dossier page in `DND.html`
-- Front launcher page in `index.html`
-- Upload and download support for `.txt` and dossier `.zip` bundles
-- Inventory editor and item-file merge
-- Roll Lab with animated dice modal
+This project is built as a static web toolkit for Cyberpunk 2020 roleplay sessions. It is meant to feel like a playable in-universe interface rather than a plain sheet app.
+
+Core features include:
+
+- player dossier page
+- referee / GM monitor
+- dice and preset roll system
+- inventory and damage tracking
 - Netrunner breach protocol minigame
-- Audio-driven UI feedback and transition effects
+- `.txt` and `.zip` character import/export
+- Firebase-backed room sync for live table use
 
-## Project Files
+## AI Disclosure
+
+Roughly **80% of this project was built with AI assistance**.
+
+That includes a large amount of:
+
+- interface scaffolding
+- system wiring
+- repetitive implementation work
+- iteration on visual and interaction polish
+
+Human direction still shaped the project through:
+
+- feature selection
+- rule interpretation
+- testing and correction
+- pacing and usability decisions
+- deciding what stayed, what got removed, and what got rebuilt
+
+This disclosure is here on purpose. I would rather publish it honestly than pretend otherwise.
+
+## Why It Exists
+
+The goal is simple: make Cyberpunk 2020 table play feel faster, more tactile, and more stylish without needing a heavy install or custom backend.
+
+This toolkit is designed for:
+
+- running a dossier in browser
+- giving the GM a live monitor page
+- speeding up common rolls and combat flow
+- giving hacking scenes their own game feel
+
+## Pages
 
 - `index.html`
-  Front page / launcher
+  Front launcher and public-facing project page
 - `DND.html`
-  Main dossier interface
-- `index.css`
-  Launcher styles
-- `DND.css`
-  Dossier styles
-- `functions/index.js`
-  Launcher UI logic
-- `functions/index-transition.js`
-  "Chippin In" loading transition
-- `functions/createNewCharacter.js`
-  Blank-character creation helpers
-- `functions/upload-download.js`
-  Shared dossier/item upload and zip export logic
-- `functions/dossierSheet.js`
-  Core statistics, physical, reputation, wallet, skills, damage, armor
-- `functions/inventory.js`
-  Inventory parsing, editing, rendering
-- `functions/rollLab.js`
-  Roll presets, aim flow, dice execution modal, roll cinema
-- `functions/netrunner.js`
-  Netrunner breach protocol game
+  Player dossier
+- `gm.html`
+  Referee / GM console
 
-## How To Use
+## File Support
 
-1. Open `index.html` for the launcher flow.
-2. Load a character `.txt` / `.zip`, or create a blank dossier.
-3. Use `DND.html` directly if you want to skip the launcher.
+The project supports:
 
-Because this is a static site, there is no install step required for normal use.
+- character `.txt`
+- item `.txt`
+- bundled dossier `.zip`
 
-## Character File Format
-
-Example:
-
-```txt
-name: {
-  "Kaito Hakurada", "The Cold Fish"
-}
-
-stats: {
-  REF=10, INT=8, COOL=8, ATTR=6, TECH=5, LUCK=4, EMPT=4
-}
-
-career: {
-  "Solo"
-}
-
-careerSkill: {
-  point=6
-  Awareness/Notice=6
-  Handgun=5
-  Stealth=3
-}
-
-reputation: {
-  rep=3
-}
-
-wallet: {
-  eddies=2500
-}
-
-physicalBody: {
-  bodylevel=3
-  weight=54
-  stunpoint=7
-}
-
-armor: {
-  Head=10, Torso=18, R.Arm=12, L.Arm=12, R.Leg=14, L.Leg=14
-}
-
-damage: {
-  Head=0, Torso=0, R.Arm=0, L.Arm=0, R.Leg=0, L.Leg=0
-}
-```
-
-## Item File Format
-
-Example:
-
-```txt
-weapon: {
-  weapon1:{
-    name="Medium Pistol",
-    Type="Weapon",
-    Accuracy=0,
-    Damage/Ammo="2D6+1",
-    ShotsCapacity=12,
-    Cost=450,
-    info:{ "" }
-  }
-}
-
-miscellaneous: {
-  misc1:{
-    name="Trauma Team Card",
-    Type="Service",
-    Cost=500,
-    info:{ "" }
-  }
-}
-```
-
-## Zip Bundle Format
-
-Supported dossier zip contents:
+Recommended zip bundle contents:
 
 - `character.txt`
 - `items.txt`
 - optional banner image such as `banner.png`
 
-The dossier exports as zip only.
+Exports are zip-based for portability.
 
-## Netrunner Controls
+## NPC / Mook Generation
 
-- `Easy`, `Medium`, `Hard` buttons select difficulty
-- `Arrow Keys` move the runner
-- `R` generates a new breach
+For quick NPCs, mooks, throwaway enemies, or other random generation tasks, the intended workflow is to use an **external chatbot AI** and have it produce output in the same upload format shown on the front page.
 
-Rules:
+That keeps random generation flexible without forcing this site to become a full procedural content generator.
 
-- Hit a wall and the run fails
-- Cross your own path and the run fails
-- Reach the red node before time runs out
+Practical workflow:
 
-## Notes
+1. ask your preferred chatbot AI for a Cyberpunk 2020 NPC
+2. have it format the result to match the upload template
+3. save it as `.txt`
+4. import it into the GM page or dossier
 
-- This project is intended to run fully client-side in the browser.
-- If GitHub Pages serves the site, make sure `index.html` is at the published root.
-- Audio files are expected in the local `audio/` folder.
+## Tech Notes
 
+This project runs client-side in the browser and is built from:
+
+- HTML
+- CSS
+- JavaScript
+- Firebase Realtime Database for live room sync
+- JSZip for zip import/export
+
+No traditional install is required for local use beyond opening the pages in a browser.
+
+## Project Structure
+
+- `index.html`, `index.css`
+  launcher / public front page
+- `DND.html`, `DND.css`
+  dossier UI
+- `gm.html`, `gm.css`
+  referee UI
+- `functions/`
+  split JavaScript modules for upload, dossier logic, roll systems, sync, GM combat flow, and netrunning
+
+## Publishing Note
+
+This is being published as a creative tool project, not as a claim of hand-written purity.
+
+The important thing for me is that:
+
+- it works
+- it is usable at the table
+- it has personality
+- and the AI involvement is stated openly
+
+If you use or fork it, I strongly recommend keeping that same kind of transparency.
