@@ -1,123 +1,126 @@
 # Cyberpunk 2020 Web Tools
 
-A browser-based Cyberpunk 2020 interface suite for character dossiers, referee support, rolling, and lightweight online table play.
+A browser-based Cyberpunk 2020 toolkit for player dossiers, GM monitoring, rolling, combat support, and lightweight online table play.
 
-## Project Overview
+## What This Site Does
 
-This project is built as a static web toolkit for Cyberpunk 2020 roleplay sessions. It is meant to feel like a playable in-universe interface rather than a plain sheet app.
+This project is meant to give a Cyberpunk 2020 session a more tactile browser interface without needing a heavy install.
 
-Core features include:
+Main features:
 
 - player dossier page
-- referee / GM monitor
-- dice and preset roll system
-- inventory and damage tracking
+- GM / referee console
+- animated roll system with presets
+- inventory, reputation, wallet, physical data, and damage tracking
 - Netrunner breach protocol minigame
-- `.txt` and `.zip` character import/export
-- Firebase-backed room sync for live table use
+- `.txt` and `.zip` character import / export
+- Firebase room link for live GM-player sync
 
-## AI Disclosure
-
-Roughly **80% of this project was built with AI assistance**.
-
-That includes a large amount of:
-
-- interface scaffolding
-- system wiring
-- repetitive implementation work
-- iteration on visual and interaction polish
-
-Human direction still shaped the project through:
-
-- feature selection
-- rule interpretation
-- testing and correction
-- pacing and usability decisions
-- deciding what stayed, what got removed, and what got rebuilt
-
-This disclosure is here on purpose. I would rather publish it honestly than pretend otherwise.
-
-## Why It Exists
-
-The goal is simple: make Cyberpunk 2020 table play feel faster, more tactile, and more stylish without needing a heavy install or custom backend.
-
-This toolkit is designed for:
-
-- running a dossier in browser
-- giving the GM a live monitor page
-- speeding up common rolls and combat flow
-- giving hacking scenes their own game feel
-
-## Pages
+## Main Pages
 
 - `index.html`
-  Front launcher and public-facing project page
+  Launcher, upload page, and quick-start overview
 - `DND.html`
   Player dossier
 - `gm.html`
   Referee / GM console
 
-## File Support
+## Quick Start
 
-The project supports:
+You can use either:
+
+- live site: [https://markleprimes.github.io/Cyberpunk2020Tools/](https://markleprimes.github.io/Cyberpunk2020Tools/)
+- local files: open `index.html` directly in the browser
+
+1. Open the live site or `index.html`
+2. Choose one of these:
+   - `LOAD FILE`
+   - `CREATE NEW CHARACTER`
+   - `OPEN GM PAGE`
+3. If you load a character, use a `.txt` or bundled `.zip`
+4. If you create a new character, enter name, street name, and career
+5. The launcher will transition into the dossier
+
+## Character Files
+
+Supported:
 
 - character `.txt`
 - item `.txt`
 - bundled dossier `.zip`
 
-Recommended zip bundle contents:
+Recommended dossier zip contents:
 
 - `character.txt`
 - `items.txt`
 - optional banner image such as `banner.png`
 
-Exports are zip-based for portability.
+Exports are zip-based.
 
-## NPC / Mook Generation
+## Using The Room Link
 
-For quick NPCs, mooks, throwaway enemies, or other random generation tasks, the intended workflow is to use an **external chatbot AI** and have it produce output in the same upload format shown on the front page.
+The room system is for live table use between player dossier pages and the GM page.
 
-That keeps random generation flexible without forcing this site to become a full procedural content generator.
+Basic flow:
 
-Practical workflow:
+1. Open `gm.html`
+2. Enter a room ID and connect
+3. On the player dossier, enter the same room ID in `ROOM LINK`
+4. Choose whether the dossier connects as `PLAYER` or `NPC`
+5. Click `CONNECT`
 
-1. ask your preferred chatbot AI for a Cyberpunk 2020 NPC
-2. have it format the result to match the upload template
-3. save it as `.txt`
-4. import it into the GM page or dossier
+After that, the GM page can see linked characters and use the referee tools.
+
+## NPC / Random Generation
+
+For NPCs, mooks, throwaway enemies, or other random generated content, the intended workflow is to use an external chatbot AI and have it output text in the same upload format shown on the front page.
+
+Recommended flow:
+
+1. ask your preferred chatbot for a Cyberpunk 2020 NPC or item set
+2. tell it to match the upload format
+3. save the result as `.txt`
+4. import it into the dossier or GM page
+
+That keeps random generation flexible without forcing this site itself to become a full generator.
+
+## Front Page Format Guide
+
+The front page already includes the visible upload template for:
+
+- character files
+- item files
+
+That is the format to copy when preparing content from other tools.
 
 ## Tech Notes
 
-This project runs client-side in the browser and is built from:
+This project runs client-side in the browser and uses:
 
 - HTML
 - CSS
 - JavaScript
 - Firebase Realtime Database for live room sync
-- JSZip for zip import/export
+- JSZip for zip import / export
 
-No traditional install is required for local use beyond opening the pages in a browser.
+No traditional install is required for normal local use beyond opening the pages in a browser.
 
 ## Project Structure
 
 - `index.html`, `index.css`
-  launcher / public front page
+  launcher and public entry page
 - `DND.html`, `DND.css`
-  dossier UI
+  player dossier UI
 - `gm.html`, `gm.css`
   referee UI
 - `functions/`
-  split JavaScript modules for upload, dossier logic, roll systems, sync, GM combat flow, and netrunning
+  split JavaScript modules for upload, dossier logic, rolling, sync, GM combat flow, and netrunning
 
-## Publishing Note
+## Development Note
 
-This is being published as a creative tool project, not as a claim of hand-written purity.
+This project was built with heavy AI assistance during development, but the important part for use is the workflow:
 
-The important thing for me is that:
-
-- it works
-- it is usable at the table
-- it has personality
-- and the AI involvement is stated openly
-
-If you use or fork it, I strongly recommend keeping that same kind of transparency.
+- load or create a character
+- connect players to the GM room if needed
+- use the dossier and GM tools during play
+- use external chatbot generation when you need fast random content
