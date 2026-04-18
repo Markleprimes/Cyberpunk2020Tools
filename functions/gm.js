@@ -1,11 +1,15 @@
 (function initGMPage() {
   let activeRef = null;
   let activeHandler = null;
+  let activeEffectsRef = null;
+  let activeEffectsHandler = null;
   let activeRoomId = '';
   let gmLocalNpcSeed = 0;
   let gmLocalRollFrame = null;
   let gmLocalNpcs = [];
   let gmRemotePlayers = [];
+  let gmHoverAudio = null;
+  let gmHoveredControl = null;
   let gmRollModifiers = [];
   let gmCurrentRoll = null;
   let gmPendingRollRequest = null;
@@ -22,9 +26,12 @@
   let gmRollBounceAudios = [];
   let gmAimStackPoints = 0;
   let gmAimHitWeapons = [];
+  let gmEffectTargetClientId = '';
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
+  let gmRemotePlayerData = {};
+  let gmRemotePlayerEffects = {};
   const GM_LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 
   function setGMStatusVisual(status) {
@@ -487,6 +494,52 @@
     }).join('');
   }
 
+  function getGMEffectsForClient(clientId) {
+    return Object.values(gmRemotePlayerEffects?.[clientId] || {})
+      .map((effect) => ({
+        id: String(effect?.id || '').trim(),
+        label: String(effect?.label || 'Status Effect').trim() || 'Status Effect',
+        note: String(effect?.note || '').trim(),
+        source: String(effect?.source || 'GM').trim() || 'GM',
+        modifier: effect?.modifier === '' || effect?.modifier === null || typeof effect?.modifier === 'undefined'
+          ? null
+          : Number(effect.modifier || 0),
+        updatedAt: Number(effect?.updatedAt || 0)
+      }))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }
+
+  function renderGMEffectsSection(clientId, effects = [], editable = false) {
+    if (!editable && !effects.length) return '';
+    return `
+      <div class="gm-sheet-columns gm-sheet-columns-wide">
+        <div class="gm-sheet-col">
+          <div class="gm-sheet-title">Effects</div>
+          <div class="gm-effects-list">
+            ${effects.length ? effects.map((effect) => `
+              <div class="gm-effect-chip">
+                <div class="gm-effect-chip-head">
+                  <span class="gm-effect-chip-name">${escapeGMValue(effect.label || 'Status Effect')}</span>
+                  <span class="gm-effect-chip-mod">${Number.isFinite(Number(effect?.modifier)) ? `${Number(effect.modifier || 0) >= 0 ? '+' : ''}${escapeGMValue(effect.modifier)}` : 'NOTE'}</span>
+                </div>
+                <div class="gm-effect-chip-meta">${escapeGMValue(effect.source || 'GM')}</div>
+                ${effect.note ? `<div class="gm-effect-chip-note">${escapeGMValue(effect.note)}</div>` : ''}
+                ${editable ? `
+                  <div class="gm-effect-chip-actions">
+                    <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-effect="${escapeGMValue(clientId)}" data-gm-effect-id="${escapeGMValue(effect.id || '')}">REMOVE</button>
+                  </div>` : ''}
+              </div>
+            `).join('') : '<div class="gm-empty">No active effects.</div>'}
+          </div>
+          ${editable ? `
+            <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
+              <button type="button" class="gm-btn" data-gm-add-effect="${escapeGMValue(clientId)}">ADD EFFECT</button>
+            </div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
   function renderGMRollPanel(clientId, lastRoll, isPending = false) {
     if (!lastRoll || !lastRoll.dice) {
       return `
@@ -519,6 +572,7 @@
     const pickSource = entry.name || 'NPC';
     const displayStats = options.pickable ? getGMDisplayStats(entry) : entry.stats;
     const wound = options.pickable ? getGMWorstWound(entry) : null;
+    const effects = Array.isArray(options.effects) ? options.effects : [];
     return `
       <div class="gm-player-card gm-player-detail">
         <div class="gm-player-summary">
@@ -557,6 +611,7 @@
               })}
             </div>
           </div>
+          ${renderGMEffectsSection(clientId, effects, !!options.effectEditable)}
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Weapons</div>
@@ -645,7 +700,10 @@
     if (!players.length) {
       playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
     } else {
-      playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player)).join('');
+      playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player, {
+        effects: player.effects || [],
+        effectEditable: true
+      })).join('');
     }
 
     animateGMRollPanels(players);
@@ -676,11 +734,16 @@
 
   function disconnectGMRoom() {
     if (activeRef && activeHandler) activeRef.off('value', activeHandler);
+    if (activeEffectsRef && activeEffectsHandler) activeEffectsRef.off('value', activeEffectsHandler);
     Object.values(gmDelayedRollsByClient).forEach((timer) => clearTimeout(timer));
     Object.keys(gmDelayedRollsByClient).forEach((key) => delete gmDelayedRollsByClient[key]);
     activeRef = null;
     activeHandler = null;
+    activeEffectsRef = null;
+    activeEffectsHandler = null;
     activeRoomId = '';
+    gmRemotePlayerData = {};
+    gmRemotePlayerEffects = {};
   }
 
   function createRenderSafeEntry(id, entry) {
@@ -720,8 +783,12 @@
     }, 5000);
   }
 
-  function applyGMRoomData(roomId, data) {
-    const rawEntries = Object.entries(data || {}).map(([id, entry]) => ({ id, ...(entry || {}) }));
+  function applyGMRemoteState(roomId) {
+    const rawEntries = Object.entries(gmRemotePlayerData || {}).map(([id, entry]) => ({
+      id,
+      ...(entry || {}),
+      effects: getGMEffectsForClient(id)
+    }));
     if (!rawEntries.length) {
       setGMStatus(`Connected to "${roomId}" but no players are linked yet.`);
       setGMStatusVisual('connected');
@@ -731,7 +798,7 @@
     }
 
     rawEntries.forEach((entry) => {
-      scheduleGMRollReveal(roomId, entry.id, entry.lastRoll || null, () => applyGMRoomData(roomId, data));
+      scheduleGMRollReveal(roomId, entry.id, entry.lastRoll || null, () => applyGMRemoteState(roomId));
     });
 
     const renderEntries = rawEntries.map((entry) => ({
@@ -748,6 +815,16 @@
     setGMStatusVisual(pendingRoll ? 'pending' : 'connected');
     renderGMRemotePlayers(Object.fromEntries(renderEntries.map((entry) => [entry.id, entry])));
     setGMLastUpdated(lastUpdated || null);
+  }
+
+  function applyGMRoomData(roomId, data) {
+    gmRemotePlayerData = data || {};
+    applyGMRemoteState(roomId);
+  }
+
+  function applyGMEffectsData(roomId, data) {
+    gmRemotePlayerEffects = data || {};
+    applyGMRemoteState(roomId);
   }
 
   function connectGMRoom() {
@@ -776,11 +853,88 @@
       const data = snapshot.val();
       applyGMRoomData(roomId, data);
     };
+    activeEffectsRef = roomRef.child('playerEffects');
+    activeEffectsHandler = (snapshot) => {
+      const data = snapshot.val();
+      applyGMEffectsData(roomId, data);
+    };
 
     activeRef.on('value', activeHandler, (error) => {
       setGMStatus(`Firebase listen error: ${error.message}`);
       setGMStatusVisual('disconnected');
     });
+    activeEffectsRef.on('value', activeEffectsHandler, (error) => {
+      setGMStatus(`Firebase effect listen error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    });
+  }
+
+  function closeGMEffectModal() {
+    gmEffectTargetClientId = '';
+    document.getElementById('gm-effect-label').value = '';
+    document.getElementById('gm-effect-modifier').value = '';
+    document.getElementById('gm-effect-note').value = '';
+    document.getElementById('gm-effect-modal')?.classList.remove('show');
+  }
+
+  function openGMEffectModal(clientId) {
+    if (!activeRoomId) {
+      setGMStatus('Connect to a room before applying status effects.');
+      setGMStatusVisual('disconnected');
+      return;
+    }
+    const target = gmRemotePlayers.find((entry) => entry.id === clientId);
+    if (!target) {
+      setGMStatus('Selected player is no longer available.');
+      return;
+    }
+    gmEffectTargetClientId = clientId;
+    document.getElementById('gm-effect-label').value = '';
+    document.getElementById('gm-effect-modifier').value = '';
+    document.getElementById('gm-effect-note').value = '';
+    document.getElementById('gm-effect-modal')?.classList.add('show');
+  }
+
+  async function saveGMEffect() {
+    if (!activeRoomId || !gmEffectTargetClientId) return;
+    const label = String(document.getElementById('gm-effect-label')?.value || '').trim();
+    const note = String(document.getElementById('gm-effect-note')?.value || '').trim();
+    const modifierRaw = String(document.getElementById('gm-effect-modifier')?.value || '').trim();
+    const modifier = modifierRaw === '' ? null : parseGMNumericValue(modifierRaw);
+    if (!label) {
+      setGMStatus('Enter an effect label before applying it.');
+      return;
+    }
+    if (modifierRaw !== '' && modifier === null) {
+      setGMStatus('Modifier must be a whole number.');
+      return;
+    }
+    try {
+      await setPlayerEffect(activeRoomId, gmEffectTargetClientId, '', {
+        label,
+        modifier,
+        note,
+        source: 'GM'
+      });
+      closeGMEffectModal();
+      setGMStatus(`Applied "${label}" to player dossier.`);
+      setGMStatusVisual('connected');
+    } catch (error) {
+      setGMStatus(`Effect apply error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    }
+  }
+
+  async function removeGMEffect(clientId, effectId) {
+    if (!activeRoomId || !clientId || !effectId) return;
+    try {
+      await removePlayerEffect(activeRoomId, clientId, effectId);
+      setGMStatus('Removed status effect from player dossier.');
+      setGMStatusVisual('connected');
+    } catch (error) {
+      setGMStatus(`Effect remove error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    }
   }
 
   function getGMRollModifierTotal() {
@@ -864,6 +1018,15 @@
     const audio = gmRollBounceAudios[Math.floor(Math.random() * gmRollBounceAudios.length)];
     audio.currentTime = 0;
     audio.play().catch(() => {});
+  }
+
+  function playGMHoverSound() {
+    if (!gmHoverAudio) {
+      gmHoverAudio = new Audio('audio/menu-hover.mp3');
+      gmHoverAudio.preload = 'auto';
+    }
+    gmHoverAudio.currentTime = 0;
+    gmHoverAudio.play().catch(() => {});
   }
 
   function cancelGMRollExecution() {
@@ -1588,6 +1751,11 @@
     document.getElementById('gm-aim-hit-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeGMAimHitModal();
     });
+    document.getElementById('gm-effect-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMEffectModal();
+    });
+    document.getElementById('gm-effect-cancel')?.addEventListener('click', closeGMEffectModal);
+    document.getElementById('gm-effect-save')?.addEventListener('click', saveGMEffect);
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
     if (gmRollShakeBox) {
@@ -1610,6 +1778,21 @@
       const removeNpcButton = event.target.closest('[data-gm-remove-npc]');
       if (removeNpcButton) {
         removeLocalNpc(removeNpcButton.getAttribute('data-gm-remove-npc'));
+        return;
+      }
+
+      const addEffectButton = event.target.closest('[data-gm-add-effect]');
+      if (addEffectButton) {
+        openGMEffectModal(addEffectButton.getAttribute('data-gm-add-effect'));
+        return;
+      }
+
+      const removeEffectButton = event.target.closest('[data-gm-remove-effect]');
+      if (removeEffectButton) {
+        removeGMEffect(
+          removeEffectButton.getAttribute('data-gm-remove-effect'),
+          removeEffectButton.getAttribute('data-gm-effect-id')
+        );
         return;
       }
 
@@ -1639,5 +1822,22 @@
     window.addEventListener('gm-action-updated', renderGMRollSubjectSelect);
     window.addEventListener('gm-monitor-updated', renderGMRollSubjectSelect);
     setGMStatusVisual('disconnected');
+
+    document.addEventListener('mouseover', (event) => {
+      const control = event.target.closest('button, a, summary, select');
+      if (!control) return;
+      if (control === gmHoveredControl) return;
+      if (control.contains(event.relatedTarget)) return;
+      gmHoveredControl = control;
+      playGMHoverSound();
+    });
+
+    document.addEventListener('mouseout', (event) => {
+      const control = event.target.closest('button, a, summary, select');
+      if (!control) return;
+      if (control === gmHoveredControl && !control.contains(event.relatedTarget)) {
+        gmHoveredControl = null;
+      }
+    });
   });
 })();

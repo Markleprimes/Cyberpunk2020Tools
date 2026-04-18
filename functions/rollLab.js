@@ -248,9 +248,19 @@ function getPersistentPenaltyModifier() {
     : null;
 }
 
+function getStatusEffectRollModifiers() {
+  return typeof window.getStatusEffectModifiers === 'function'
+    ? window.getStatusEffectModifiers()
+    : [];
+}
+
 function getDisplayRollModifiers() {
   const persistent = getPersistentPenaltyModifier();
-  return persistent ? [...rollModifiers, persistent] : [...rollModifiers];
+  const effectModifiers = getStatusEffectRollModifiers();
+  const display = [...rollModifiers];
+  if (persistent) display.push(persistent);
+  if (effectModifiers.length) display.push(...effectModifiers);
+  return display;
 }
 
 function getModifierTotal() {

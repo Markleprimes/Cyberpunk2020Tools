@@ -37,8 +37,10 @@ let _modalCb = null;
 let activeRoomId = '';
 let roomSyncStatus = 'disconnected';
 let playerPromptUnsubscribe = null;
+let playerEffectsUnsubscribe = null;
 let activeRemotePrompt = null;
 let persistentRollPenalty = 0;
+let activeStatusEffects = [];
 
 const LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 let limbSP = { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 };
@@ -108,6 +110,15 @@ getById('player-choice-backoff')?.addEventListener('click', () => submitPlayerCh
 getById('player-choice-stay')?.addEventListener('click', () => submitPlayerChoicePrompt('stay'));
 
 window.getPersistentRollPenalty = () => Number(persistentRollPenalty || 0);
+window.getStatusEffectModifiers = () => activeStatusEffects
+  .filter((effect) => Number.isFinite(Number(effect?.modifier)))
+  .map((effect) => ({
+    source: effect.source || 'GM',
+    label: effect.label || 'Status Effect',
+    value: Number(effect.modifier || 0),
+    persistent: true,
+    note: effect.note || ''
+  }));
 
 function showError(msg) {
   const bar = getById('status-bar');
@@ -194,9 +205,64 @@ function setRoomSyncStatus(status, detail = '') {
 
 function setPersistentRollPenalty(value, reason = '') {
   persistentRollPenalty = Number(value || 0);
+  renderActiveEffects();
   renderRollLab();
   syncCurrentPlayerPresence();
   if (reason) showActionLog(reason);
+}
+
+function normalizeStatusEffects(effectMap) {
+  return Object.values(effectMap || {})
+    .map((effect) => ({
+      id: String(effect?.id || '').trim(),
+      label: String(effect?.label || 'Status Effect').trim() || 'Status Effect',
+      note: String(effect?.note || '').trim(),
+      source: String(effect?.source || 'GM').trim() || 'GM',
+      modifier: effect?.modifier === '' || effect?.modifier === null || typeof effect?.modifier === 'undefined'
+        ? null
+        : Number(effect.modifier || 0),
+      updatedAt: Number(effect?.updatedAt || 0)
+    }))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+function getRenderableStatusEffects() {
+  const effects = [...activeStatusEffects];
+  if (persistentRollPenalty) {
+    effects.unshift({
+      id: 'facedown-penalty',
+      label: 'Facedown Penalty',
+      note: 'Applied after choosing STAY STRONG.',
+      source: 'STATUS',
+      modifier: Number(persistentRollPenalty || 0),
+      locked: true
+    });
+  }
+  return effects;
+}
+
+function renderActiveEffects() {
+  const list = getById('active-effects-list');
+  if (!list) return;
+  const effects = getRenderableStatusEffects();
+  if (!effects.length) {
+    list.innerHTML = '<div class="inventory-empty">NO ACTIVE EFFECTS</div>';
+    return;
+  }
+  list.innerHTML = effects.map((effect) => {
+    const hasModifier = Number.isFinite(Number(effect?.modifier));
+    const modifier = hasModifier ? Number(effect.modifier || 0) : null;
+    return `
+      <div class="status-effect-item${effect.locked ? ' locked' : ''}">
+        <div class="status-effect-head">
+          <span class="status-effect-label">${escapeHtml(effect.label || 'Status Effect')}</span>
+          ${hasModifier ? `<span class="status-effect-mod">${modifier >= 0 ? '+' : ''}${modifier}</span>` : '<span class="status-effect-mod status-effect-mod-note">NOTE</span>'}
+        </div>
+        <div class="status-effect-meta">${escapeHtml(effect.source || 'GM')}</div>
+        ${effect.note ? `<div class="status-effect-note">${escapeHtml(effect.note)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 function closePlayerChoiceModal() {
@@ -249,6 +315,24 @@ function startPlayerPromptWatch(roomId) {
   playerPromptUnsubscribe = watchPlayerPrompt(roomId, handleIncomingPlayerPrompt);
 }
 
+function stopPlayerEffectsWatch() {
+  if (typeof playerEffectsUnsubscribe === 'function') playerEffectsUnsubscribe();
+  playerEffectsUnsubscribe = null;
+  activeStatusEffects = [];
+  renderActiveEffects();
+  renderRollLab();
+}
+
+function startPlayerEffectsWatch(roomId) {
+  stopPlayerEffectsWatch();
+  if (!roomId || typeof watchPlayerEffects !== 'function') return;
+  playerEffectsUnsubscribe = watchPlayerEffects(roomId, (effectMap) => {
+    activeStatusEffects = normalizeStatusEffects(effectMap);
+    renderActiveEffects();
+    renderRollLab();
+  });
+}
+
 async function submitPlayerChoicePrompt(choice) {
   if (!activeRemotePrompt || !activeRoomId) return;
   const backoff = getById('player-choice-backoff');
@@ -285,6 +369,7 @@ async function connectPlayerRoom() {
     await connectPlayerPresence(roomId, getCurrentCharacterProfile());
     activeRoomId = roomId;
     startPlayerPromptWatch(roomId);
+    startPlayerEffectsWatch(roomId);
     setRoomSyncStatus('connected');
     showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
   } catch (error) {
@@ -297,6 +382,7 @@ async function connectPlayerRoom() {
 async function disconnectPlayerRoom() {
   try {
     stopPlayerPromptWatch();
+    stopPlayerEffectsWatch();
     await disconnectPlayerPresence();
   } catch (error) {
     console.warn('Room disconnect failed.', error);
@@ -565,6 +651,7 @@ function resetSheet() {
     cancelRollExecution();
     closeRollCinemaModal();
     stopPlayerPromptWatch();
+    stopPlayerEffectsWatch();
     persistentRollPenalty = 0;
     clearInterval(_rollTimer);
     renderSheet(buildBlankSheetData());

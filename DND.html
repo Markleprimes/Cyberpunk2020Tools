@@ -71,6 +71,13 @@
     <button class="action-btn" id="room-sync-disconnect-btn" type="button">DISCONNECT</button>
   </div>
 
+  <div class="panel status-effects-panel">
+    <div class="panel-title">Active Effects</div>
+    <div class="status-effects-list" id="active-effects-list">
+      <div class="inventory-empty">NO ACTIVE EFFECTS</div>
+    </div>
+  </div>
+
   <div class="sheet-actions">
     <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
     <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
@@ -485,12 +492,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260416a"></script>
-<script src="functions/DND.js?v=20260416c"></script>
+<script src="functions/firebase-sync.js?v=20260418a"></script>
+<script src="functions/DND.js?v=20260418a"></script>
 <script src="functions/createNewCharacter.js?v=20260415e"></script>
-<script src="functions/dossierSheet.js?v=20260416a"></script>
+<script src="functions/dossierSheet.js?v=20260418a"></script>
 <script src="functions/inventory.js?v=20260415e"></script>
-<script src="functions/rollLab.js?v=20260416c"></script>
+<script src="functions/rollLab.js?v=20260418a"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
 <script src="functions/netrunner.js?v=20260414d"></script>
 </body>

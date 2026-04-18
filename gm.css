@@ -60,6 +60,7 @@ body::before{
 .gm-modal-box{position:relative;width:min(760px,96vw);padding:22px;background:var(--panel);border:1px solid var(--border);box-shadow:var(--glow-r)}
 .gm-modal-box h3{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:.16em;color:var(--accent-y);margin-bottom:12px}
 .gm-modal-btns{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.gm-effect-form{display:flex;flex-direction:column;gap:12px}
 .gm-facedown-outcome-box{margin:14px 0 18px;padding:14px 16px;border:1px solid rgba(255,177,74,.24);background:linear-gradient(135deg,rgba(255,177,74,.08),rgba(255,77,109,.06));box-shadow:var(--glow-y)}
 .gm-facedown-outcome-kicker{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.14em;color:var(--accent-y)}
 .gm-facedown-outcome-copy{margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.08em;color:var(--text-dim)}
@@ -80,6 +81,15 @@ body::before{
 .gm-sheet-title{font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent-r);text-transform:uppercase}
 .gm-sheet-line{display:grid;grid-template-columns:auto 1fr;gap:8px;font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--text)}
 .gm-sheet-line-stack{align-items:start}
+.gm-effects-list{display:flex;flex-direction:column;gap:8px}
+.gm-effect-chip{padding:9px 10px;border:1px solid rgba(255,177,74,.18);background:rgba(255,177,74,.05)}
+.gm-effect-chip-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.gm-effect-chip-name{font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:.1em;color:var(--accent-y)}
+.gm-effect-chip-mod{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;line-height:1;color:#fff}
+.gm-effect-chip-meta{margin-top:4px;font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--text-dim);letter-spacing:.12em;text-transform:uppercase}
+.gm-effect-chip-note{margin-top:6px;font-size:.82rem;line-height:1.35;color:var(--text)}
+.gm-effect-chip-actions{display:flex;justify-content:flex-end;margin-top:8px}
+.gm-effect-chip-actions .gm-btn{padding:6px 10px;font-size:.58rem}
 .gm-sheet-line.pickable{cursor:pointer;transition:background .18s,border-color .18s,color .18s;padding:3px 6px;margin:0 -6px;border:1px solid transparent}
 .gm-sheet-line.pickable:hover{background:rgba(0,217,139,.08);border-color:rgba(0,217,139,.18)}
 .gm-sheet-key{color:var(--text-dim)}

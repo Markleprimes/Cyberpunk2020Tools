@@ -225,6 +225,31 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-effect-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>APPLY STATUS EFFECT</h3>
+      <div class="gm-roll-execute-copy">Push a named effect to the selected player. Numeric modifiers affect future rolls. Notes are display-only.</div>
+      <div class="gm-effect-form">
+        <label class="gm-field">
+          <span>Effect Label</span>
+          <input id="gm-effect-label" type="text" placeholder="Suppressed, Flash Blind, Drug Rush...">
+        </label>
+        <label class="gm-field gm-field-small">
+          <span>Modifier</span>
+          <input id="gm-effect-modifier" type="number" step="1" placeholder="0">
+        </label>
+        <label class="gm-field">
+          <span>Note</span>
+          <input id="gm-effect-note" type="text" placeholder="Optional note visible on the dossier.">
+        </label>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-effect-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-effect-save">APPLY EFFECT</button>
+      </div>
+    </div>
+  </div>
+
   <div class="gm-modal-overlay gm-roll-execute-modal" id="gm-roll-execute-modal">
     <div class="gm-modal-box gm-roll-execute-box">
       <h3>ROLL EXECUTION</h3>
@@ -296,8 +321,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260416a"></script>
-  <script src="functions/gm.js?v=20260416i"></script>
+  <script src="functions/firebase-sync.js?v=20260418a"></script>
+  <script src="functions/gm.js?v=20260418a"></script>
 <script src="functions/gm-action-play.js?v=20260416k"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>

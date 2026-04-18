@@ -73,6 +73,22 @@ body::before{
   color:var(--text-dim);
   line-height:1.45;
 }
+.launcher-access-copy{
+  max-width:760px;
+  margin-top:10px;
+  font-family:'Share Tech Mono',monospace;
+  font-size:.72rem;
+  letter-spacing:.06em;
+  color:var(--text-dim);
+  line-height:1.6;
+}
+.launcher-access-copy a{
+  color:var(--accent-y);
+  text-decoration:none;
+}
+.launcher-access-copy a:hover{
+  color:var(--text);
+}
 .launcher-status{
   display:inline-flex;
   align-items:center;

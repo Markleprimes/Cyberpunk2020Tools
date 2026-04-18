@@ -49,6 +49,13 @@
     return roomRef.child(`playerPrompts/${cleanClientId}`);
   }
 
+  function getPlayerEffectsRef(roomId, clientId = getSyncClientId()) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) return null;
+    const cleanClientId = String(clientId || getSyncClientId()).trim() || getSyncClientId();
+    return roomRef.child(`playerEffects/${cleanClientId}`);
+  }
+
   let runtimeClientId = '';
 
   function createClientId() {
@@ -191,10 +198,44 @@
     await ref.remove();
   }
 
+  function watchPlayerEffects(roomId, callback, clientId = getSyncClientId()) {
+    const ref = getPlayerEffectsRef(roomId, clientId);
+    if (!ref || typeof callback !== 'function') return () => {};
+    const handler = (snapshot) => callback(snapshot.val() || null);
+    ref.on('value', handler);
+    return () => ref.off('value', handler);
+  }
+
+  async function setPlayerEffect(roomId, clientId, effectId, effect) {
+    const ref = getPlayerEffectsRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const cleanId = String(effectId || `effect-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`).trim();
+    const payload = {
+      id: cleanId,
+      label: String(effect?.label || 'Status Effect').trim() || 'Status Effect',
+      note: String(effect?.note || '').trim(),
+      source: String(effect?.source || 'GM').trim() || 'GM',
+      modifier: effect?.modifier === '' || effect?.modifier === null || typeof effect?.modifier === 'undefined'
+        ? null
+        : Number(effect.modifier || 0),
+      createdAt: Number(effect?.createdAt || Date.now()),
+      updatedAt: Date.now()
+    };
+    await ref.child(cleanId).set(payload);
+    return payload;
+  }
+
+  async function removePlayerEffect(roomId, clientId, effectId) {
+    const ref = getPlayerEffectsRef(roomId, clientId);
+    if (!ref || !effectId) return;
+    await ref.child(String(effectId).trim()).remove();
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
   window.getPlayerPromptRef = getPlayerPromptRef;
+  window.getPlayerEffectsRef = getPlayerEffectsRef;
   window.getSyncClientId = getSyncClientId;
   window.connectPlayerPresence = connectPlayerPresence;
   window.updatePlayerPresence = updatePlayerPresence;
@@ -204,4 +245,7 @@
   window.sendPlayerPrompt = sendPlayerPrompt;
   window.respondToPlayerPrompt = respondToPlayerPrompt;
   window.clearPlayerPrompt = clearPlayerPrompt;
+  window.watchPlayerEffects = watchPlayerEffects;
+  window.setPlayerEffect = setPlayerEffect;
+  window.removePlayerEffect = removePlayerEffect;
 })();
