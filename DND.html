@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260422a">
+<link rel="stylesheet" href="DND.css?v=20260422c">
 </head>
 <body>
 <div class="wrapper">
@@ -488,17 +488,63 @@
   </div>
 </div>
 
+<!-- REMOTE BREACH MODAL -->
+<div class="modal-overlay remote-breach-modal" id="remote-breach-modal">
+  <div class="modal-box remote-breach-box">
+    <div class="remote-breach-head">
+      <div>
+        <h3>REMOTE BREACH</h3>
+        <div class="remote-breach-sub" id="remote-breach-sub">GM INITIATED NETRUNNING OVERRIDE</div>
+      </div>
+      <div class="remote-breach-chip" id="remote-breach-chip">PENDING</div>
+    </div>
+    <div class="netrunner-layout remote-breach-layout">
+      <div class="nr-left remote-breach-left">
+        <div class="nr-section-label">MODE</div>
+        <div class="nr-mode-readout" id="remote-nr-mode">REMOTE // EASY</div>
+        <div class="nr-section-label" style="margin-top:22px;">KEYBINDS</div>
+        <div class="nr-info-list">
+          <div class="nr-info-row"><span class="nr-key">ARROWS</span><span class="nr-info-copy">Move runner</span></div>
+        </div>
+        <div class="nr-section-label" style="margin-top:22px;">RULES</div>
+        <div class="nr-info-list nr-rules-list">
+          <div class="nr-rule-copy">3 second sync window, then 10 seconds live.</div>
+          <div class="nr-rule-copy">Hit a wall and you die.</div>
+          <div class="nr-rule-copy">Touch your own path and you die.</div>
+          <div class="nr-rule-copy">Reach the red node to win.</div>
+        </div>
+      </div>
+      <div class="nr-center">
+        <div class="nr-header-bar">
+          <span class="nr-console-label">///Remote.Console.///</span>
+          <span class="nr-dots">.... .... .... ....</span>
+          <span class="nr-breach-timer">Breach Timer <span class="nr-timer-box" id="remote-nr-timer">0:13</span></span>
+        </div>
+        <div class="nr-maze-wrap">
+          <canvas id="remote-nr-maze-canvas"></canvas>
+          <div class="nr-maze-overlay" id="remote-nr-maze-overlay"></div>
+        </div>
+      </div>
+      <div class="nr-right">
+        <div class="nr-terminal-label">CMD.///Remote.Buffer.!</div>
+        <div class="nr-terminal-screen" id="remote-nr-terminal"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div><!-- wrapper -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260422a"></script>
-<script src="functions/DND.js?v=20260422a"></script>
+<script src="functions/firebase-sync.js?v=20260422c"></script>
+<script src="functions/DND.js?v=20260422c"></script>
 <script src="functions/createNewCharacter.js?v=20260415e"></script>
 <script src="functions/dossierSheet.js?v=20260422a"></script>
 <script src="functions/inventory.js?v=20260415e"></script>
 <script src="functions/rollLab.js?v=20260422a"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
-<script src="functions/netrunner.js?v=20260414d"></script>
+<script src="functions/netrunner.js?v=20260422c"></script>
+<script src="functions/remote-breach.js?v=20260422c"></script>
 </body>
 </html>

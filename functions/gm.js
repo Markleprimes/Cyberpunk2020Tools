@@ -671,7 +671,7 @@
       stun: entry.physical?.stun ?? 0
     };
     return `
-      <div class="gm-player-card gm-player-detail">
+      <div class="gm-player-card gm-player-detail" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-role="${escapeGMValue(entry.role || 'player')}" data-gm-player-name="${escapeGMValue(entry.name || 'Unknown')}">
         <div class="gm-player-summary">
           <div class="gm-player-name">${escapeGMValue(entry.name || 'Unknown')}</div>
           <div class="gm-player-meta">${escapeGMValue(entry.career || 'UNKNOWN')} // ${escapeGMValue((entry.role || 'player').toUpperCase())}</div>

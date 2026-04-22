@@ -39,6 +39,7 @@ let roomSyncStatus = 'disconnected';
 let playerPromptUnsubscribe = null;
 let playerEffectsUnsubscribe = null;
 let playerCommandUnsubscribe = null;
+let remoteBreachUnsubscribe = null;
 let activeRemotePrompt = null;
 let persistentRollPenalty = 0;
 let activeStatusEffects = [];
@@ -353,6 +354,24 @@ function stopPlayerCommandWatch() {
   playerCommandUnsubscribe = null;
 }
 
+function stopRemoteBreachWatch() {
+  if (typeof remoteBreachUnsubscribe === 'function') remoteBreachUnsubscribe();
+  remoteBreachUnsubscribe = null;
+  if (typeof window.handleIncomingRemoteBreachSession === 'function') {
+    window.handleIncomingRemoteBreachSession(null, { roomId: activeRoomId, clientId: getSyncClientId() });
+  }
+}
+
+function startRemoteBreachWatch(roomId) {
+  stopRemoteBreachWatch();
+  if (!roomId || typeof watchRemoteBreach !== 'function') return;
+  remoteBreachUnsubscribe = watchRemoteBreach(roomId, (session) => {
+    if (typeof window.handleIncomingRemoteBreachSession === 'function') {
+      window.handleIncomingRemoteBreachSession(session, { roomId, clientId: getSyncClientId() });
+    }
+  });
+}
+
 function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellaneous') {
   const category = sanitizeInventoryCategory(payload?.category || fallbackCategory);
   const fields = {};
@@ -501,6 +520,7 @@ async function connectPlayerRoom() {
     startPlayerPromptWatch(roomId);
     startPlayerEffectsWatch(roomId);
     startPlayerCommandWatch(roomId);
+    startRemoteBreachWatch(roomId);
     setRoomSyncStatus('connected');
     showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
   } catch (error) {
@@ -515,6 +535,7 @@ async function disconnectPlayerRoom() {
     stopPlayerPromptWatch();
     stopPlayerEffectsWatch();
     stopPlayerCommandWatch();
+    stopRemoteBreachWatch();
     await disconnectPlayerPresence();
   } catch (error) {
     console.warn('Room disconnect failed.', error);
@@ -785,6 +806,7 @@ function resetSheet() {
     stopPlayerPromptWatch();
     stopPlayerEffectsWatch();
     stopPlayerCommandWatch();
+    stopRemoteBreachWatch();
     persistentRollPenalty = 0;
     clearInterval(_rollTimer);
     renderSheet(buildBlankSheetData());

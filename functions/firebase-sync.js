@@ -63,6 +63,13 @@
     return roomRef.child(`playerCommands/${cleanClientId}`);
   }
 
+  function getRemoteBreachRef(roomId, clientId = getSyncClientId()) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) return null;
+    const cleanClientId = String(clientId || getSyncClientId()).trim() || getSyncClientId();
+    return roomRef.child(`remoteBreaches/${cleanClientId}`);
+  }
+
   let runtimeClientId = '';
 
   function createClientId() {
@@ -265,12 +272,49 @@
     await ref.child(String(commandId).trim()).remove();
   }
 
+  function watchRemoteBreach(roomId, callback, clientId = getSyncClientId()) {
+    const ref = getRemoteBreachRef(roomId, clientId);
+    if (!ref || typeof callback !== 'function') return () => {};
+    const handler = (snapshot) => callback(snapshot.val() || null);
+    ref.on('value', handler);
+    return () => ref.off('value', handler);
+  }
+
+  async function setRemoteBreachSession(roomId, clientId, session) {
+    const ref = getRemoteBreachRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const payload = {
+      ...(session || {}),
+      updatedAt: Date.now()
+    };
+    await ref.set(payload);
+    return payload;
+  }
+
+  async function updateRemoteBreachSession(roomId, clientId, patch) {
+    const ref = getRemoteBreachRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const payload = {
+      ...(patch || {}),
+      updatedAt: Date.now()
+    };
+    await ref.update(payload);
+    return payload;
+  }
+
+  async function clearRemoteBreachSession(roomId, clientId = getSyncClientId()) {
+    const ref = getRemoteBreachRef(roomId, clientId);
+    if (!ref) return;
+    await ref.remove();
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
   window.getPlayerPromptRef = getPlayerPromptRef;
   window.getPlayerEffectsRef = getPlayerEffectsRef;
   window.getPlayerCommandsRef = getPlayerCommandsRef;
+  window.getRemoteBreachRef = getRemoteBreachRef;
   window.getSyncClientId = getSyncClientId;
   window.connectPlayerPresence = connectPlayerPresence;
   window.updatePlayerPresence = updatePlayerPresence;
@@ -286,4 +330,8 @@
   window.watchPlayerCommands = watchPlayerCommands;
   window.sendPlayerCommand = sendPlayerCommand;
   window.clearPlayerCommand = clearPlayerCommand;
+  window.watchRemoteBreach = watchRemoteBreach;
+  window.setRemoteBreachSession = setRemoteBreachSession;
+  window.updateRemoteBreachSession = updateRemoteBreachSession;
+  window.clearRemoteBreachSession = clearRemoteBreachSession;
 })();

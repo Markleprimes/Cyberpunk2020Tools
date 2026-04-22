@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260422a">
+<link rel="stylesheet" href="gm.css?v=20260422c">
 </head>
 <body>
   <div class="gm-shell">
@@ -288,6 +288,30 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-breach-modal">
+    <div class="gm-modal-box gm-breach-box">
+      <div class="gm-breach-head">
+        <div>
+          <h3>REMOTE BREACH MONITOR</h3>
+          <div class="gm-roll-execute-copy" id="gm-breach-copy">Stand by for synchronized breach feed.</div>
+        </div>
+        <div class="gm-breach-mode" id="gm-breach-mode">EASY</div>
+      </div>
+      <div class="gm-breach-status-row">
+        <div class="gm-breach-status" id="gm-breach-status">PENDING</div>
+        <div class="gm-breach-timer" id="gm-breach-timer">13.0s</div>
+      </div>
+      <div class="gm-breach-progress">
+        <span class="gm-breach-progress-fill" id="gm-breach-progress-fill"></span>
+      </div>
+      <div class="gm-breach-terminal" id="gm-breach-terminal"></div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-breach-cancel">CANCEL BREACH</button>
+        <button class="gm-btn" type="button" id="gm-breach-close">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
   <div class="gm-modal-overlay gm-roll-execute-modal" id="gm-roll-execute-modal">
     <div class="gm-modal-box gm-roll-execute-box">
       <h3>ROLL EXECUTION</h3>
@@ -359,8 +383,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260422b"></script>
-  <script src="functions/gm.js?v=20260422b"></script>
+  <script src="functions/firebase-sync.js?v=20260422c"></script>
+  <script src="functions/gm.js?v=20260422c"></script>
+  <script src="functions/gm-breach.js?v=20260422c"></script>
 <script src="functions/gm-action-play.js?v=20260416k"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>
