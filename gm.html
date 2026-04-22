@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260416d">
+<link rel="stylesheet" href="gm.css?v=20260422a">
 </head>
 <body>
   <div class="gm-shell">
@@ -250,6 +250,44 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-inventory-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>ADD INVENTORY ITEM</h3>
+      <div class="gm-effect-form">
+        <label class="gm-field">
+          <span>Item Name</span>
+          <input id="gm-item-name" type="text" placeholder="Very Heavy Pistol">
+        </label>
+        <label class="gm-field">
+          <span>Type</span>
+          <select id="gm-item-type">
+            <option value="weapon">Weapon</option>
+            <option value="cyberware">Cyberware</option>
+            <option value="miscellaneous">Miscellaneous</option>
+            <option value="buff">Buff</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label class="gm-field" id="gm-item-custom-type-wrap" style="display:none;">
+          <span>Custom Type</span>
+          <input id="gm-item-custom-type" type="text" placeholder="ammo, armor, gear...">
+        </label>
+        <label class="gm-field">
+          <span>Stats</span>
+          <textarea id="gm-item-stats" rows="6" placeholder="Accuracy=1&#10;Damage/Ammo=4D6"></textarea>
+        </label>
+        <label class="gm-field">
+          <span>Description</span>
+          <textarea id="gm-item-info" rows="5" placeholder="One line per note"></textarea>
+        </label>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-item-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-item-save">ADD ITEM</button>
+      </div>
+    </div>
+  </div>
+
   <div class="gm-modal-overlay gm-roll-execute-modal" id="gm-roll-execute-modal">
     <div class="gm-modal-box gm-roll-execute-box">
       <h3>ROLL EXECUTION</h3>
@@ -321,8 +359,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260418a"></script>
-  <script src="functions/gm.js?v=20260418a"></script>
+  <script src="functions/firebase-sync.js?v=20260422b"></script>
+  <script src="functions/gm.js?v=20260422b"></script>
 <script src="functions/gm-action-play.js?v=20260416k"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>

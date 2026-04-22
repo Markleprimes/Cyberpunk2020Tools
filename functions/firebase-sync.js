@@ -56,6 +56,13 @@
     return roomRef.child(`playerEffects/${cleanClientId}`);
   }
 
+  function getPlayerCommandsRef(roomId, clientId = getSyncClientId()) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) return null;
+    const cleanClientId = String(clientId || getSyncClientId()).trim() || getSyncClientId();
+    return roomRef.child(`playerCommands/${cleanClientId}`);
+  }
+
   let runtimeClientId = '';
 
   function createClientId() {
@@ -231,11 +238,39 @@
     await ref.child(String(effectId).trim()).remove();
   }
 
+  function watchPlayerCommands(roomId, callback, clientId = getSyncClientId()) {
+    const ref = getPlayerCommandsRef(roomId, clientId);
+    if (!ref || typeof callback !== 'function') return () => {};
+    const handler = (snapshot) => callback(snapshot.key, snapshot.val() || null);
+    ref.on('child_added', handler);
+    return () => ref.off('child_added', handler);
+  }
+
+  async function sendPlayerCommand(roomId, clientId, command) {
+    const ref = getPlayerCommandsRef(roomId, clientId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const pushRef = ref.push();
+    const payload = {
+      ...(command || {}),
+      commandId: pushRef.key,
+      updatedAt: Date.now()
+    };
+    await pushRef.set(payload);
+    return payload;
+  }
+
+  async function clearPlayerCommand(roomId, clientId, commandId) {
+    const ref = getPlayerCommandsRef(roomId, clientId);
+    if (!ref || !commandId) return;
+    await ref.child(String(commandId).trim()).remove();
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
   window.getPlayerPromptRef = getPlayerPromptRef;
   window.getPlayerEffectsRef = getPlayerEffectsRef;
+  window.getPlayerCommandsRef = getPlayerCommandsRef;
   window.getSyncClientId = getSyncClientId;
   window.connectPlayerPresence = connectPlayerPresence;
   window.updatePlayerPresence = updatePlayerPresence;
@@ -248,4 +283,7 @@
   window.watchPlayerEffects = watchPlayerEffects;
   window.setPlayerEffect = setPlayerEffect;
   window.removePlayerEffect = removePlayerEffect;
+  window.watchPlayerCommands = watchPlayerCommands;
+  window.sendPlayerCommand = sendPlayerCommand;
+  window.clearPlayerCommand = clearPlayerCommand;
 })();

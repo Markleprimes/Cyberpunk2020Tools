@@ -38,6 +38,7 @@ let activeRoomId = '';
 let roomSyncStatus = 'disconnected';
 let playerPromptUnsubscribe = null;
 let playerEffectsUnsubscribe = null;
+let playerCommandUnsubscribe = null;
 let activeRemotePrompt = null;
 let persistentRollPenalty = 0;
 let activeStatusEffects = [];
@@ -127,6 +128,10 @@ function showError(msg) {
 }
 
 function getCurrentCharacterProfile() {
+  const baseStats = Object.keys(sheetStats).map((key) => ({
+    label: key,
+    value: sheetStats[key] || 0
+  }));
   const stats = Object.keys(sheetStats).map((key) => ({
     label: key,
     value: getEffectiveStatValue(key)
@@ -144,6 +149,7 @@ function getCurrentCharacterProfile() {
     value: limbDMG[limb] || 0
   }));
   const inventoryItems = [];
+  const inventoryDetailed = [];
   Object.keys(inventory || {}).forEach((category) => {
     (inventory[category] || []).forEach((item) => {
       inventoryItems.push({
@@ -152,6 +158,13 @@ function getCurrentCharacterProfile() {
         description: Array.isArray(item.info) && item.info.length
           ? item.info.join(' | ')
           : '--'
+      });
+      inventoryDetailed.push({
+        category,
+        id: item.id || buildInventoryId(category),
+        name: item.name || humanizeLabel(item.id || category),
+        fields: Object.entries(item.fields || {}).map(([label, value]) => ({ label, value })),
+        info: [...(item.info || [])]
       });
     });
   });
@@ -170,6 +183,7 @@ function getCurrentCharacterProfile() {
     name: (getById('char-name')?.textContent || 'Unknown').trim() || 'Unknown',
     career: (getById('char-career')?.textContent || 'UNKNOWN').trim() || 'UNKNOWN',
     role: (getById('room-sync-role')?.value || 'player').trim() || 'player',
+    baseStats,
     stats,
     skills,
     armor,
@@ -182,6 +196,7 @@ function getCurrentCharacterProfile() {
       stun: stunVal
     },
     inventory: inventoryItems,
+    inventoryDetailed,
     combatPenalty: Number(persistentRollPenalty || 0),
     lastRoll
   };
@@ -333,6 +348,121 @@ function startPlayerEffectsWatch(roomId) {
   });
 }
 
+function stopPlayerCommandWatch() {
+  if (typeof playerCommandUnsubscribe === 'function') playerCommandUnsubscribe();
+  playerCommandUnsubscribe = null;
+}
+
+function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellaneous') {
+  const category = sanitizeInventoryCategory(payload?.category || fallbackCategory);
+  const fields = {};
+  (payload?.fields || []).forEach((field) => {
+    const label = String(field?.label || '').trim();
+    if (!label) return;
+    fields[label] = String(field?.value ?? '').trim();
+  });
+  return {
+    category,
+    item: {
+      id: String(payload?.id || buildInventoryId(category)).trim() || buildInventoryId(category),
+      name: String(payload?.name || 'Item').trim() || 'Item',
+      fields,
+      info: Array.isArray(payload?.info) ? payload.info.map((line) => String(line || '').trim()).filter(Boolean) : []
+    }
+  };
+}
+
+function applyRemoteInventoryUpsert(payload) {
+  const { category, item } = rebuildInventoryItemFromPayload(payload, payload?.category);
+  if (!inventory[category]) inventory[category] = [];
+  const existingIndex = inventory[category].findIndex((entry) => entry.id === item.id);
+  if (existingIndex > -1) inventory[category][existingIndex] = item;
+  else inventory[category].push(item);
+  renderInventory();
+}
+
+function applyRemoteInventoryDelete(payload) {
+  const category = sanitizeInventoryCategory(payload?.category);
+  const itemId = String(payload?.id || '').trim();
+  if (!category || !inventory[category]?.length) return;
+  inventory[category] = inventory[category].filter((item) => item.id !== itemId);
+  if (!inventory[category].length) delete inventory[category];
+  renderInventory();
+}
+
+function applyRemotePlayerCommand(commandId, command) {
+  if (!command || !command.type) return;
+  const num = (value) => Math.max(0, parseInt(value, 10) || 0);
+  switch (command.type) {
+    case 'setStat':
+      if (command.key) {
+        sheetStats[command.key] = num(command.value);
+        renderStats();
+      }
+      break;
+    case 'setSkill': {
+      const label = String(command.label || '').trim();
+      if (!label) break;
+      const idx = sheetSkills.findIndex((skill) => skill.name === label);
+      if (idx > -1) sheetSkills[idx].value = num(command.value);
+      else sheetSkills.push({ name: label, value: num(command.value) });
+      renderSkills();
+      break;
+    }
+    case 'setReputation':
+      repValue = num(command.value);
+      renderRep();
+      break;
+    case 'setWallet':
+      walletValue = num(command.value);
+      renderWallet();
+      break;
+    case 'setPhysical':
+      if (command.field === 'bodyLevel') bodyLevelVal = Math.max(0, Math.min(4, num(command.value)));
+      else if (command.field === 'weight') weightVal = num(command.value);
+      else if (command.field === 'stun') stunVal = num(command.value);
+      renderPhysicalBody();
+      break;
+    case 'setArmor':
+      if (LIMBS.includes(command.limb)) {
+        limbSP[command.limb] = num(command.value);
+        renderLimbs();
+      }
+      break;
+    case 'setDamage':
+      if (LIMBS.includes(command.limb)) {
+        limbDMG[command.limb] = num(command.value);
+        renderLimbs();
+      }
+      break;
+    case 'inventoryUpsert':
+      applyRemoteInventoryUpsert(command.item || {});
+      break;
+    case 'inventoryDelete':
+      applyRemoteInventoryDelete(command.item || {});
+      break;
+    default:
+      return;
+  }
+  showActionLog(`REFEREE UPDATE // ${String(command.label || command.type).toUpperCase()}`);
+}
+
+function startPlayerCommandWatch(roomId) {
+  stopPlayerCommandWatch();
+  if (!roomId || typeof watchPlayerCommands !== 'function') return;
+  playerCommandUnsubscribe = watchPlayerCommands(roomId, async (commandId, command) => {
+    try {
+      applyRemotePlayerCommand(commandId, command);
+    } finally {
+      try {
+        await clearPlayerCommand(roomId, getSyncClientId(), commandId);
+      } catch (error) {
+        console.warn('Failed to clear remote player command.', error);
+      }
+    }
+  });
+}
+
 async function submitPlayerChoicePrompt(choice) {
   if (!activeRemotePrompt || !activeRoomId) return;
   const backoff = getById('player-choice-backoff');
@@ -370,6 +500,7 @@ async function connectPlayerRoom() {
     activeRoomId = roomId;
     startPlayerPromptWatch(roomId);
     startPlayerEffectsWatch(roomId);
+    startPlayerCommandWatch(roomId);
     setRoomSyncStatus('connected');
     showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
   } catch (error) {
@@ -383,6 +514,7 @@ async function disconnectPlayerRoom() {
   try {
     stopPlayerPromptWatch();
     stopPlayerEffectsWatch();
+    stopPlayerCommandWatch();
     await disconnectPlayerPresence();
   } catch (error) {
     console.warn('Room disconnect failed.', error);
@@ -652,6 +784,7 @@ function resetSheet() {
     closeRollCinemaModal();
     stopPlayerPromptWatch();
     stopPlayerEffectsWatch();
+    stopPlayerCommandWatch();
     persistentRollPenalty = 0;
     clearInterval(_rollTimer);
     renderSheet(buildBlankSheetData());

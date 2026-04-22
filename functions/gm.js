@@ -27,6 +27,7 @@
   let gmAimStackPoints = 0;
   let gmAimHitWeapons = [];
   let gmEffectTargetClientId = '';
+  let gmInventoryTargetClientId = '';
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
@@ -82,6 +83,26 @@
     const str = String(value ?? '').trim();
     if (/^[-+]?\d+$/.test(str)) return parseInt(str, 10);
     return null;
+  }
+
+  function parseGMEditorFields(text) {
+    const fields = {};
+    String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => {
+      const idx = line.indexOf('=');
+      if (idx === -1) return;
+      const key = line.slice(0, idx).trim();
+      const value = line.slice(idx + 1).trim();
+      if (key) fields[key] = value;
+    });
+    return fields;
+  }
+
+  function sanitizeGMCategory(value) {
+    return String(value || 'miscellaneous').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w.-]/g, '') || 'miscellaneous';
+  }
+
+  function buildGMInventoryId(category) {
+    return `${category}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
   }
 
   function extractTopLevelBlocks(text) {
@@ -415,11 +436,27 @@
     }).join('');
   }
 
+  function renderGMEditableNumberLines(block, options = {}) {
+    const entries = Array.isArray(block)
+      ? block.map((entry) => ({ label: entry?.label, value: parseGMNumericValue(entry?.rawValue ?? entry?.value) ?? 0, commandField: entry?.label }))
+      : Object.entries(block || {}).map(([label, value]) => ({ label, value: parseGMNumericValue(value) ?? 0, commandField: label }));
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map((entry) => `
+      <div class="gm-sheet-line">
+        <span class="gm-sheet-key">${escapeGMValue(entry.label)}:</span>
+        <input class="gm-ad-input gm-remote-input" type="number" min="0" value="${escapeGMValue(entry.value)}" data-gm-remote-edit="${escapeGMValue(options.commandType || 'setValue')}" data-gm-client-id="${escapeGMValue(options.clientId || '')}" data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">
+      </div>
+    `).join('');
+  }
+
   function renderGMArmorDamageTable(armor, damage, options = {}) {
     const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
     const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
     const editable = !!options.editable;
-    const npcId = options.npcId || '';
+    const targetType = options.targetType || 'npc';
+    const targetId = options.targetId || options.npcId || '';
     return `
       <table class="gm-ad-table">
         <thead>
@@ -434,10 +471,10 @@
             <tr>
               <td>${escapeGMValue(limb)}</td>
               <td>${editable
-                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(armorMap.get(limb) ?? 0)}" data-gm-npc-ad-input="armor" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(armorMap.get(limb) ?? 0)}" data-gm-ad-input="armor" data-gm-target-type="${escapeGMValue(targetType)}" data-gm-target-id="${escapeGMValue(targetId)}" data-gm-limb="${escapeGMValue(limb)}">`
                 : escapeGMValue(armorMap.get(limb) ?? 0)}</td>
               <td>${editable
-                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(damageMap.get(limb) ?? 0)}" data-gm-npc-ad-input="damage" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(damageMap.get(limb) ?? 0)}" data-gm-ad-input="damage" data-gm-target-type="${escapeGMValue(targetType)}" data-gm-target-id="${escapeGMValue(targetId)}" data-gm-limb="${escapeGMValue(limb)}">`
                 : escapeGMValue(damageMap.get(limb) ?? 0)}</td>
             </tr>
           `).join('')}
@@ -476,6 +513,16 @@
     setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
   }
 
+  function updateRemotePlayerArmorDamage(clientId, field, limb, value) {
+    if (!['armor', 'damage'].includes(field) || !GM_LIMBS.includes(limb)) return;
+    sendGMRemotePlayerCommand(clientId, {
+      type: field === 'armor' ? 'setArmor' : 'setDamage',
+      label: `${field} ${limb}`,
+      limb,
+      value: Math.max(0, parseGMNumericValue(value) ?? 0)
+    });
+  }
+
   function renderGMItemList(items) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!list.length) {
@@ -492,6 +539,50 @@
         </div>
       `;
     }).join('');
+  }
+
+  function renderGMRemoteInventory(entry, clientId) {
+    const items = Array.isArray(entry?.inventoryDetailed) ? entry.inventoryDetailed : [];
+    if (!items.length) {
+      return `
+        <div class="gm-empty">No inventory items.</div>
+        <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
+          <button type="button" class="gm-btn" data-gm-add-item="${escapeGMValue(clientId)}">ADD ITEM</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="gm-remote-inventory-list">
+        ${items.map((item) => `
+          <div class="gm-remote-item">
+            <div class="gm-remote-item-head">
+              <div>
+                <div class="gm-remote-item-name">${escapeGMValue(item.name || 'Item')}</div>
+                <div class="gm-remote-item-type">${escapeGMValue(humanizeLabel(item.category || 'miscellaneous'))}</div>
+              </div>
+            </div>
+            ${(item.info || []).length ? `<div class="gm-remote-item-note">${escapeGMValue(item.info.join(' | '))}</div>` : ''}
+            <div class="gm-remote-item-actions">
+              <button type="button" class="gm-btn gm-btn-muted" data-gm-delete-item="${escapeGMValue(clientId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">DELETE</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
+        <button type="button" class="gm-btn" data-gm-add-item="${escapeGMValue(clientId)}">ADD ITEM</button>
+      </div>
+    `;
+  }
+
+  function renderGMRemoteWeapons(entry) {
+    const items = (Array.isArray(entry?.inventoryDetailed) ? entry.inventoryDetailed : []).filter((item) => item.category === 'weapon');
+    if (!items.length) return '<div class="gm-empty">No weapon entries.</div>';
+    return items.map((item) => `
+      <div class="gm-sheet-line gm-sheet-line-stack">
+        <span class="gm-sheet-key">${escapeGMValue(item.name || 'Weapon')}:</span>
+        <span class="gm-sheet-val gm-sheet-val-wrap">${escapeGMValue((item.info || []).join(' | ') || '--')}</span>
+      </div>
+    `).join('');
   }
 
   function getGMEffectsForClient(clientId) {
@@ -573,6 +664,12 @@
     const displayStats = options.pickable ? getGMDisplayStats(entry) : entry.stats;
     const wound = options.pickable ? getGMWorstWound(entry) : null;
     const effects = Array.isArray(options.effects) ? options.effects : [];
+    const editableStats = Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats;
+    const editablePhysical = {
+      bodyLevel: entry.physical?.bodyLevel ?? 0,
+      weight: entry.physical?.weight ?? 0,
+      stun: entry.physical?.stun ?? 0
+    };
     return `
       <div class="gm-player-card gm-player-detail">
         <div class="gm-player-summary">
@@ -587,45 +684,60 @@
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Stats</div>
-              ${renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
+              ${options.remoteEditable
+                ? renderGMEditableNumberLines(editableStats, { commandType: 'setStat', clientId })
+                : renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Skill</div>
-              ${renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` })}
+              ${options.remoteEditable
+                ? renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })
+                : renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` })}
             </div>
           </div>
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Dossier</div>
-              ${renderGMKeyValueLines({
-                Reputation: entry.reputation ?? 0,
-                Wallet: entry.wallet ?? 0
-              })}
+              ${options.remoteEditable
+                ? `${renderGMEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', clientId })}
+                   ${renderGMEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', clientId })}`
+                : renderGMKeyValueLines({
+                  Reputation: entry.reputation ?? 0,
+                  Wallet: entry.wallet ?? 0
+                })}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Physical</div>
-              ${renderGMKeyValueLines({
-                BodyLevel: entry.physical?.bodyLevel ?? 0,
-                Weight: entry.physical?.weight ?? 0,
-                Stun: entry.physical?.stun ?? 0
-              })}
+              ${options.remoteEditable
+                ? renderGMEditableNumberLines([
+                  { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
+                  { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
+                  { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+                ], { commandType: 'setPhysical', clientId })
+                : renderGMKeyValueLines({
+                  BodyLevel: entry.physical?.bodyLevel ?? 0,
+                  Weight: entry.physical?.weight ?? 0,
+                  Stun: entry.physical?.stun ?? 0
+                })}
             </div>
           </div>
           ${renderGMEffectsSection(clientId, effects, !!options.effectEditable)}
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Weapons</div>
-              ${renderGMWeaponList(entry)}
+              ${options.remoteEditable ? renderGMRemoteWeapons(entry) : renderGMWeaponList(entry)}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Inventory</div>
-              ${renderGMItemList(entry.inventory)}
+              ${options.remoteEditable ? renderGMRemoteInventory(entry, clientId) : renderGMItemList(entry.inventory)}
             </div>
           </div>
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Armor & Damage</div>
-              ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: !!options.removable, npcId: clientId })}
+              ${renderGMArmorDamageTable(entry.armor, entry.damage, options.remoteEditable
+                ? { editable: true, targetType: 'player', targetId: clientId }
+                : { editable: !!options.removable, targetType: 'npc', targetId: clientId })}
               ${options.removable ? `<div class="gm-npc-wound">Wound Status: ${escapeGMValue(wound || 'CLEAR')}</div>` : ''}
             </div>
           </div>
@@ -702,7 +814,8 @@
     } else {
       playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player, {
         effects: player.effects || [],
-        effectEditable: true
+        effectEditable: true,
+        remoteEditable: true
       })).join('');
     }
 
@@ -935,6 +1048,89 @@
       setGMStatus(`Effect remove error: ${error.message}`);
       setGMStatusVisual('disconnected');
     }
+  }
+
+  async function sendGMRemotePlayerCommand(clientId, command) {
+    if (!activeRoomId || !clientId) return;
+    try {
+      await sendPlayerCommand(activeRoomId, clientId, command);
+      setGMStatus(`Sent ${String(command?.label || command?.type || 'update')} to player dossier.`);
+      setGMStatusVisual('connected');
+    } catch (error) {
+      setGMStatus(`Player update error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    }
+  }
+
+  function closeGMInventoryModal() {
+    gmInventoryTargetClientId = '';
+    document.getElementById('gm-item-name').value = '';
+    document.getElementById('gm-item-type').value = 'weapon';
+    document.getElementById('gm-item-custom-type').value = '';
+    document.getElementById('gm-item-stats').value = '';
+    document.getElementById('gm-item-info').value = '';
+    document.getElementById('gm-item-custom-type-wrap').style.display = 'none';
+    document.getElementById('gm-inventory-modal')?.classList.remove('show');
+  }
+
+  function toggleGMCustomItemType() {
+    const wrap = document.getElementById('gm-item-custom-type-wrap');
+    if (!wrap) return;
+    wrap.style.display = document.getElementById('gm-item-type')?.value === 'custom' ? 'block' : 'none';
+  }
+
+  function openGMInventoryModal(clientId) {
+    if (!activeRoomId) {
+      setGMStatus('Connect to a room before editing player inventory.');
+      return;
+    }
+    gmInventoryTargetClientId = clientId;
+    closeGMInventoryModal();
+    gmInventoryTargetClientId = clientId;
+    document.getElementById('gm-inventory-modal')?.classList.add('show');
+  }
+
+  async function saveGMInventoryItem() {
+    if (!gmInventoryTargetClientId) return;
+    const name = String(document.getElementById('gm-item-name')?.value || '').trim();
+    if (!name) {
+      setGMStatus('Item name is required.');
+      return;
+    }
+    const typeSelect = document.getElementById('gm-item-type')?.value || 'miscellaneous';
+    const rawCategory = typeSelect === 'custom'
+      ? (document.getElementById('gm-item-custom-type')?.value || '')
+      : typeSelect;
+    const category = sanitizeGMCategory(rawCategory);
+    const fields = Object.entries(parseGMEditorFields(document.getElementById('gm-item-stats')?.value || ''))
+      .map(([label, value]) => ({ label, value }));
+    const info = String(document.getElementById('gm-item-info')?.value || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    await sendGMRemotePlayerCommand(gmInventoryTargetClientId, {
+      type: 'inventoryUpsert',
+      label: `inventory ${name}`,
+      item: {
+        category,
+        id: buildGMInventoryId(category),
+        name,
+        fields,
+        info
+      }
+    });
+    closeGMInventoryModal();
+  }
+
+  async function deleteGMRemoteInventoryItem(clientId, category, itemId) {
+    await sendGMRemotePlayerCommand(clientId, {
+      type: 'inventoryDelete',
+      label: `inventory ${itemId}`,
+      item: {
+        category,
+        id: itemId
+      }
+    });
   }
 
   function getGMRollModifierTotal() {
@@ -1756,6 +1952,12 @@
     });
     document.getElementById('gm-effect-cancel')?.addEventListener('click', closeGMEffectModal);
     document.getElementById('gm-effect-save')?.addEventListener('click', saveGMEffect);
+    document.getElementById('gm-item-cancel')?.addEventListener('click', closeGMInventoryModal);
+    document.getElementById('gm-item-save')?.addEventListener('click', saveGMInventoryItem);
+    document.getElementById('gm-item-type')?.addEventListener('change', toggleGMCustomItemType);
+    document.getElementById('gm-inventory-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMInventoryModal();
+    });
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
     if (gmRollShakeBox) {
@@ -1796,6 +1998,22 @@
         return;
       }
 
+      const addItemButton = event.target.closest('[data-gm-add-item]');
+      if (addItemButton) {
+        openGMInventoryModal(addItemButton.getAttribute('data-gm-add-item'));
+        return;
+      }
+
+      const deleteItemButton = event.target.closest('[data-gm-delete-item]');
+      if (deleteItemButton) {
+        deleteGMRemoteInventoryItem(
+          deleteItemButton.getAttribute('data-gm-delete-item'),
+          deleteItemButton.getAttribute('data-gm-item-category'),
+          deleteItemButton.getAttribute('data-gm-item-id')
+        );
+        return;
+      }
+
       const removeModButton = event.target.closest('[data-gm-remove-mod]');
       if (removeModButton) {
         removeGMRollModifier(parseInt(removeModButton.getAttribute('data-gm-remove-mod'), 10));
@@ -1803,14 +2021,54 @@
     });
 
     document.addEventListener('change', (event) => {
-      const input = event.target.closest('[data-gm-npc-ad-input]');
+      const remoteEdit = event.target.closest('[data-gm-remote-edit]');
+      if (remoteEdit) {
+        const type = remoteEdit.getAttribute('data-gm-remote-edit');
+        const clientId = remoteEdit.getAttribute('data-gm-client-id');
+        const label = remoteEdit.getAttribute('data-gm-label');
+        const value = Math.max(0, parseGMNumericValue(remoteEdit.value) ?? 0);
+        if (type === 'setStat') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setStat', label, key: label, value });
+          return;
+        }
+        if (type === 'setSkill') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setSkill', label, value });
+          return;
+        }
+        if (type === 'setReputation') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setReputation', label: 'reputation', value });
+          return;
+        }
+        if (type === 'setWallet') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setWallet', label: 'wallet', value });
+          return;
+        }
+        if (type === 'setPhysical') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setPhysical', label, field: label, value });
+        }
+        return;
+      }
+
+      const input = event.target.closest('[data-gm-ad-input]');
       if (!input) return;
-      updateLocalNpcArmorDamage(
-        input.getAttribute('data-gm-npc-id'),
-        input.getAttribute('data-gm-npc-ad-input'),
-        input.getAttribute('data-gm-limb'),
-        input.value
-      );
+      const targetType = input.getAttribute('data-gm-target-type');
+      if (targetType === 'npc') {
+        updateLocalNpcArmorDamage(
+          input.getAttribute('data-gm-target-id'),
+          input.getAttribute('data-gm-ad-input'),
+          input.getAttribute('data-gm-limb'),
+          input.value
+        );
+        return;
+      }
+      if (targetType === 'player') {
+        updateRemotePlayerArmorDamage(
+          input.getAttribute('data-gm-target-id'),
+          input.getAttribute('data-gm-ad-input'),
+          input.getAttribute('data-gm-limb'),
+          input.value
+        );
+      }
     });
 
     renderGMRemotePlayers(null);
