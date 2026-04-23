@@ -1,4 +1,20 @@
 (function initGMPage() {
+  window.toggleGMRoomDrawer = function toggleGMRoomDrawer() {
+    document.getElementById('gm-room-drawer')?.classList.toggle('open');
+  };
+
+  window.closeGMRoomDrawer = function closeGMRoomDrawer() {
+    document.getElementById('gm-room-drawer')?.classList.remove('open');
+  };
+
+  window.toggleGMActionDrawer = function toggleGMActionDrawer() {
+    document.getElementById('gm-action-drawer')?.classList.toggle('open');
+  };
+
+  window.closeGMActionDrawer = function closeGMActionDrawer() {
+    document.getElementById('gm-action-drawer')?.classList.remove('open');
+  };
+
   let activeRef = null;
   let activeHandler = null;
   let activeEffectsRef = null;
@@ -846,6 +862,7 @@
   }
 
   function disconnectGMRoom() {
+    const previousRoomId = activeRoomId;
     if (activeRef && activeHandler) activeRef.off('value', activeHandler);
     if (activeEffectsRef && activeEffectsHandler) activeEffectsRef.off('value', activeEffectsHandler);
     Object.values(gmDelayedRollsByClient).forEach((timer) => clearTimeout(timer));
@@ -857,6 +874,11 @@
     activeRoomId = '';
     gmRemotePlayerData = {};
     gmRemotePlayerEffects = {};
+    if (previousRoomId && typeof clearCombatSummary === 'function') {
+      clearCombatSummary(previousRoomId).catch((error) => {
+        console.warn('Failed to clear combat summary on disconnect.', error);
+      });
+    }
   }
 
   function createRenderSafeEntry(id, entry) {

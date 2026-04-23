@@ -70,6 +70,12 @@
     return roomRef.child(`remoteBreaches/${cleanClientId}`);
   }
 
+  function getCombatSummaryRef(roomId) {
+    const roomRef = getSyncRoomRef(roomId);
+    if (!roomRef) return null;
+    return roomRef.child('combatSummary');
+  }
+
   let runtimeClientId = '';
 
   function createClientId() {
@@ -308,6 +314,31 @@
     await ref.remove();
   }
 
+  function watchCombatSummary(roomId, callback) {
+    const ref = getCombatSummaryRef(roomId);
+    if (!ref || typeof callback !== 'function') return () => {};
+    const handler = (snapshot) => callback(snapshot.val() || null);
+    ref.on('value', handler);
+    return () => ref.off('value', handler);
+  }
+
+  async function setCombatSummary(roomId, summary) {
+    const ref = getCombatSummaryRef(roomId);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const payload = {
+      ...(summary || {}),
+      updatedAt: Date.now()
+    };
+    await ref.set(payload);
+    return payload;
+  }
+
+  async function clearCombatSummary(roomId) {
+    const ref = getCombatSummaryRef(roomId);
+    if (!ref) return;
+    await ref.remove();
+  }
+
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
   window.getSyncRoomRef = getSyncRoomRef;
@@ -315,6 +346,7 @@
   window.getPlayerEffectsRef = getPlayerEffectsRef;
   window.getPlayerCommandsRef = getPlayerCommandsRef;
   window.getRemoteBreachRef = getRemoteBreachRef;
+  window.getCombatSummaryRef = getCombatSummaryRef;
   window.getSyncClientId = getSyncClientId;
   window.connectPlayerPresence = connectPlayerPresence;
   window.updatePlayerPresence = updatePlayerPresence;
@@ -334,4 +366,7 @@
   window.setRemoteBreachSession = setRemoteBreachSession;
   window.updateRemoteBreachSession = updateRemoteBreachSession;
   window.clearRemoteBreachSession = clearRemoteBreachSession;
+  window.watchCombatSummary = watchCombatSummary;
+  window.setCombatSummary = setCombatSummary;
+  window.clearCombatSummary = clearCombatSummary;
 })();

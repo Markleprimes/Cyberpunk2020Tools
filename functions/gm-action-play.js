@@ -19,6 +19,8 @@
   const initiativeAnimFrames = {};
   const initiativeRevealTimers = {};
   const INITIATIVE_PLAYER_REVEAL_DELAY_MS = 1600;
+  let lastPublishedCombatSummary = '';
+  let lastPublishedCombatRoomId = '';
   let facedownPromptUnsubscribe = null;
   let confirmModalAction = null;
   const turnRollAnimFrames = {};
@@ -497,6 +499,72 @@
     button.disabled = getFacedownCombatants().length !== 2;
   }
 
+  function buildCombatSummary() {
+    if (!actionState.turnOrder.length) return null;
+    const nextIndex = actionState.turnOrder.length > 1
+      ? (actionState.liveTurnIndex + 1) % actionState.turnOrder.length
+      : actionState.liveTurnIndex;
+    return {
+      activeKey: actionState.turnOrder[actionState.liveTurnIndex]?.key || '',
+      nextKey: actionState.turnOrder[nextIndex]?.key || '',
+      entries: actionState.turnOrder.map((entry, index) => {
+        const combatant = getCombatantByKey(entry.key);
+        const sourceType = combatant?.sourceType || (String(entry.key || '').startsWith('player:') ? 'player' : 'npc');
+        return {
+          key: entry.key,
+          name: combatant?.name || entry.name || 'Unknown',
+          career: combatant?.career || 'UNKNOWN',
+          side: entry.side || 'ally',
+          sourceType,
+          total: Number(entry.total || 0),
+          active: index === actionState.liveTurnIndex,
+          next: index === nextIndex
+        };
+      })
+    };
+  }
+
+  function publishCombatSummary() {
+    const roomId = typeof window.getGMActiveRoomId === 'function'
+      ? String(window.getGMActiveRoomId() || '').trim()
+      : '';
+    const summary = buildCombatSummary();
+    const snapshot = summary ? JSON.stringify(summary) : '';
+
+    if (lastPublishedCombatRoomId && lastPublishedCombatRoomId !== roomId && typeof clearCombatSummary === 'function') {
+      clearCombatSummary(lastPublishedCombatRoomId).catch((error) => {
+        console.warn('Failed to clear stale combat summary.', error);
+      });
+      lastPublishedCombatSummary = '';
+    }
+
+    if (!roomId) {
+      lastPublishedCombatRoomId = '';
+      lastPublishedCombatSummary = '';
+      return;
+    }
+
+    if (!summary) {
+      if (lastPublishedCombatSummary && typeof clearCombatSummary === 'function') {
+        clearCombatSummary(roomId).catch((error) => {
+          console.warn('Failed to clear combat summary.', error);
+        });
+      }
+      lastPublishedCombatRoomId = roomId;
+      lastPublishedCombatSummary = '';
+      return;
+    }
+
+    if (roomId === lastPublishedCombatRoomId && snapshot === lastPublishedCombatSummary) return;
+    lastPublishedCombatRoomId = roomId;
+    lastPublishedCombatSummary = snapshot;
+    if (typeof setCombatSummary === 'function') {
+      setCombatSummary(roomId, summary).catch((error) => {
+        console.warn('Failed to publish combat summary.', error);
+      });
+    }
+  }
+
   function renderActionPlay() {
     normalizeActionState();
     renderActionPool();
@@ -518,6 +586,7 @@
       updateFacedownModalFromMonitor();
       renderFacedownModal();
     }
+    publishCombatSummary();
     window.dispatchEvent(new CustomEvent('gm-action-updated', {
       detail: {
         turnOrder: clone(actionState.turnOrder),
@@ -1166,6 +1235,9 @@
     document.querySelectorAll('.gm-tab-panel').forEach((panel) => {
       panel.classList.toggle('active', panel.id === `gm-tab-${tabName}`);
     });
+    if (tabName !== 'action' && typeof window.closeGMActionDrawer === 'function') {
+      window.closeGMActionDrawer();
+    }
   }
 
   function wireDropZone(node) {

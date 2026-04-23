@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260422c">
+<link rel="stylesheet" href="DND.css?v=20260423p">
 </head>
 <body>
 <div class="wrapper">
 
 <header>
   <div class="logo-block">
-    <h1>CYBERPUNK<br>2020</h1>
+    <h1>CYBERPUNK 2020</h1>
     <div class="edition">// CHARACTER DOSSIER // NIGHT CITY //</div>
   </div>
   <div class="corner-tag">
@@ -53,31 +53,79 @@
       </div>
       <div class="name-aliases" id="char-aliases"></div>
     </div>
-    <div class="career-badge" id="char-career">UNKNOWN</div>
-  </div>
-
-  <div class="room-sync-strip">
-    <div class="room-sync-copy">
-      <div class="room-sync-label">ROOM LINK</div>
-      <div class="room-sync-note" id="room-sync-note">Push this character name to the referee monitor. Multiple clients can join the same room.</div>
+    <div class="career-badge" id="char-career">
+      <span class="role-logo" id="char-career-logo" aria-hidden="true"></span>
+      <span class="career-badge-text" id="char-career-text">UNKNOWN</span>
     </div>
-    <input class="room-sync-input" id="room-sync-input" type="text" value="" placeholder="room id">
-    <select class="room-sync-role" id="room-sync-role">
-      <option value="player">PLAYER</option>
-      <option value="npc">NPC</option>
-    </select>
-    <span class="room-sync-status disconnected" id="room-sync-status">DISCONNECTED</span>
-    <button class="action-btn green" id="room-sync-connect-btn" type="button">CONNECT</button>
-    <button class="action-btn" id="room-sync-disconnect-btn" type="button">DISCONNECT</button>
   </div>
 
-  <div class="sheet-actions">
-    <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
-    <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
-    <input type="file" id="file-input2" accept=".txt,.zip" style="display:none">
-    <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
-    <button class="action-btn new-btn" onclick="openNewCharacterModal()">NEW</button>
+  <div class="side-drawer-edge side-drawer-edge-dossier" aria-hidden="true">
+    <span class="drawer-tab-lines" aria-hidden="true"></span>
   </div>
+  <aside class="side-drawer side-drawer-dossier" id="dossier-room-drawer">
+    <div class="side-drawer-head">
+      <div class="side-drawer-title">SYSTEM MENU</div>
+      <button class="side-drawer-close" type="button" onclick="closeDossierRoomDrawer()">CLOSE</button>
+    </div>
+    <div class="room-sync-strip room-sync-strip-drawer">
+      <div class="room-sync-copy">
+        <div class="room-sync-label">ROOM LINK</div>
+        <div class="room-sync-note" id="room-sync-note">Push this character name to the referee monitor. Multiple clients can join the same room.</div>
+      </div>
+      <input class="room-sync-input" id="room-sync-input" type="text" value="" placeholder="room id">
+      <select class="room-sync-role" id="room-sync-role">
+        <option value="player">PLAYER</option>
+        <option value="npc">NPC</option>
+      </select>
+      <span class="room-sync-status disconnected" id="room-sync-status">DISCONNECTED</span>
+      <button class="action-btn green" id="room-sync-connect-btn" type="button">CONNECT</button>
+      <button class="action-btn" id="room-sync-disconnect-btn" type="button">DISCONNECT</button>
+    </div>
+    <div class="side-drawer-section">
+      <div class="room-sync-label">CHARACTER</div>
+    </div>
+    <div class="sheet-actions side-drawer-actions">
+      <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
+      <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
+      <input type="file" id="file-input2" accept=".txt,.zip" style="display:none">
+      <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
+      <button class="action-btn new-btn" onclick="openNewCharacterModal()">NEW</button>
+    </div>
+  </aside>
+  <div class="combat-drawer-edge" aria-hidden="true">
+    <span class="combat-drawer-tab-label" aria-hidden="true">TURN ACTION</span>
+  </div>
+  <aside class="combat-drawer" id="dossier-combat-drawer">
+    <div class="combat-drawer-head">
+      <div class="side-drawer-title">ACTIVE COMBAT</div>
+    </div>
+    <div class="combat-drawer-block">
+      <div class="room-sync-label">STATUS</div>
+      <div class="combat-drawer-note" id="combat-order-status">Room link offline.</div>
+    </div>
+    <div class="combat-drawer-grid">
+      <div class="combat-drawer-block">
+        <div class="room-sync-label">ACTIVE</div>
+        <div class="combat-focus-card" id="combat-order-active">
+          <div class="combat-focus-name">--</div>
+          <div class="combat-focus-meta">No active turn.</div>
+        </div>
+      </div>
+      <div class="combat-drawer-block">
+        <div class="room-sync-label">NEXT</div>
+        <div class="combat-focus-card" id="combat-order-next">
+          <div class="combat-focus-name">--</div>
+          <div class="combat-focus-meta">Waiting for initiative.</div>
+        </div>
+      </div>
+    </div>
+    <div class="combat-drawer-block">
+      <div class="room-sync-label">ORDER</div>
+      <div class="combat-order-list" id="combat-order-list">
+        <div class="inventory-empty">NO ACTIVE COMBAT ORDER</div>
+      </div>
+    </div>
+  </aside>
 
   <div class="sheet-section">
   
@@ -99,7 +147,18 @@
 
       <label>
         <div class="create-field-label">Career</div>
-        <input class="create-field-input" id="new-career" type="text">
+        <select class="create-field-input" id="new-career">
+          <option value="Solo">Solo</option>
+          <option value="Netrunner">Netrunner</option>
+          <option value="Techie">Techie</option>
+          <option value="Medtech">Medtech</option>
+          <option value="Fixer">Fixer</option>
+          <option value="Media">Media</option>
+          <option value="Cop">Cop</option>
+          <option value="Nomad">Nomad</option>
+          <option value="Rockerboy">Rockerboy</option>
+          <option value="Hobo">Hobo</option>
+        </select>
       </label>
 
     </div>
@@ -537,10 +596,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260422c"></script>
-<script src="functions/DND.js?v=20260422c"></script>
-<script src="functions/createNewCharacter.js?v=20260415e"></script>
-<script src="functions/dossierSheet.js?v=20260422a"></script>
+<script src="functions/firebase-sync.js?v=20260423b"></script>
+<script src="functions/DND.js?v=20260423p"></script>
+<script src="functions/createNewCharacter.js?v=20260423a"></script>
+<script src="functions/dossierSheet.js?v=20260423e"></script>
 <script src="functions/inventory.js?v=20260415e"></script>
 <script src="functions/rollLab.js?v=20260422a"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>

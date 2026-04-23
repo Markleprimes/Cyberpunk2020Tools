@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260422c">
+<link rel="stylesheet" href="gm.css?v=20260423q">
 </head>
 <body>
   <div class="gm-shell">
@@ -23,9 +23,14 @@
       <button type="button" class="gm-tab-btn" data-gm-tab="action">Action Play</button>
     </div>
 
-    <div class="gm-tab-panel active" id="gm-tab-monitor">
-    <section class="gm-panel">
-      <div class="gm-panel-title">Room Settings</div>
+    <div class="gm-side-drawer-edge" aria-hidden="true">
+      <span class="drawer-tab-lines" aria-hidden="true"></span>
+    </div>
+    <aside class="gm-side-drawer" id="gm-room-drawer">
+      <div class="gm-side-drawer-head">
+        <div class="gm-panel-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Room Settings</div>
+        <button type="button" class="gm-side-drawer-close" onclick="closeGMRoomDrawer()">CLOSE</button>
+      </div>
       <div class="gm-room-row">
         <label class="gm-field">
           <span>Room ID</span>
@@ -37,7 +42,9 @@
         <div><span class="gm-meta-label">Status</span><span id="gm-status">Idle</span></div>
         <div><span class="gm-meta-label">Last Update</span><span id="gm-updated">--</span></div>
       </div>
-    </section>
+    </aside>
+
+    <div class="gm-tab-panel active" id="gm-tab-monitor">
 
     <section class="gm-panel">
       <div class="gm-panel-title">Players</div>
@@ -64,6 +71,28 @@
     </div>
 
     <div class="gm-tab-panel" id="gm-tab-action">
+      <button type="button" class="gm-right-drawer-trigger" onclick="toggleGMActionDrawer()" aria-label="Toggle turn action drawer">
+        <span class="gm-right-drawer-label" aria-hidden="true">TURN ACTION</span>
+      </button>
+      <aside class="gm-right-drawer" id="gm-action-drawer">
+        <div class="gm-side-drawer-head">
+          <div class="gm-panel-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Turn Action</div>
+          <button type="button" class="gm-side-drawer-close" onclick="closeGMActionDrawer()">CLOSE</button>
+        </div>
+        <div class="gm-action-checks">
+          <button type="button" class="gm-btn" id="gm-init-check-btn">INITIATION CHECK</button>
+          <button type="button" class="gm-btn" id="gm-facedown-btn" disabled>FACEDOWN</button>
+        </div>
+        <div class="gm-action-controls">
+          <button type="button" class="gm-btn" id="gm-next-turn-btn">NEXT TURN</button>
+          <button type="button" class="gm-btn" id="gm-prev-turn-btn">PREVIOUS TURN</button>
+          <button type="button" class="gm-btn gm-btn-muted" id="gm-end-combat-btn">END COMBAT</button>
+        </div>
+        <div class="gm-turn-note" id="gm-turn-note">Set up both sides, then run initiative.</div>
+        <div class="gm-turn-order" id="gm-turn-order">
+          <div class="gm-empty">No active combat order yet.</div>
+        </div>
+      </aside>
       <section class="gm-panel">
         <div class="gm-panel-title">Character Pool</div>
         <div class="gm-action-pool" id="gm-action-pool">
@@ -93,22 +122,6 @@
           </div>
         </section>
 
-        <section class="gm-panel">
-          <div class="gm-panel-title">Turn Action</div>
-          <div class="gm-action-checks">
-            <button type="button" class="gm-btn" id="gm-init-check-btn">INITIATION CHECK</button>
-            <button type="button" class="gm-btn" id="gm-facedown-btn" disabled>FACEDOWN</button>
-          </div>
-          <div class="gm-action-controls">
-            <button type="button" class="gm-btn" id="gm-next-turn-btn">NEXT TURN</button>
-            <button type="button" class="gm-btn" id="gm-prev-turn-btn">PREVIOUS TURN</button>
-            <button type="button" class="gm-btn gm-btn-muted" id="gm-end-combat-btn">END COMBAT</button>
-          </div>
-          <div class="gm-turn-note" id="gm-turn-note">Set up both sides, then run initiative.</div>
-          <div class="gm-turn-order" id="gm-turn-order">
-            <div class="gm-empty">No active combat order yet.</div>
-          </div>
-        </section>
       </div>
 
       <section class="gm-panel">
@@ -383,10 +396,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260422c"></script>
-  <script src="functions/gm.js?v=20260422c"></script>
-  <script src="functions/gm-breach.js?v=20260422c"></script>
-<script src="functions/gm-action-play.js?v=20260416k"></script>
+  <script src="functions/firebase-sync.js?v=20260423b"></script>
+  <script src="functions/gm.js?v=20260423k"></script>
+  <script src="functions/gm-breach.js?v=20260423a"></script>
+<script src="functions/gm-action-play.js?v=20260423b"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>
 </html>

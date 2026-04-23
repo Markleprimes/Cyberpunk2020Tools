@@ -40,9 +40,11 @@ let playerPromptUnsubscribe = null;
 let playerEffectsUnsubscribe = null;
 let playerCommandUnsubscribe = null;
 let remoteBreachUnsubscribe = null;
+let combatSummaryUnsubscribe = null;
 let activeRemotePrompt = null;
 let persistentRollPenalty = 0;
 let activeStatusEffects = [];
+let activeCombatSummary = null;
 
 const LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 let limbSP = { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 };
@@ -70,6 +72,92 @@ const BOOT_BUNDLE_KEY = 'cp2020_boot_bundle_payload';
 // DOM helpers and shared event wiring
 function getById(id) {
   return document.getElementById(id);
+}
+
+function toggleDossierRoomDrawer() {
+  getById('dossier-room-drawer')?.classList.toggle('open');
+}
+
+function closeDossierRoomDrawer() {
+  getById('dossier-room-drawer')?.classList.remove('open');
+}
+
+function normalizeCombatSummary(summary) {
+  if (!summary || !Array.isArray(summary.entries)) return null;
+  return {
+    activeKey: String(summary.activeKey || '').trim(),
+    nextKey: String(summary.nextKey || '').trim(),
+    entries: summary.entries.map((entry) => ({
+      key: String(entry?.key || '').trim(),
+      name: String(entry?.name || 'Unknown').trim() || 'Unknown',
+      career: String(entry?.career || 'UNKNOWN').trim() || 'UNKNOWN',
+      side: String(entry?.side || 'ally').trim() || 'ally',
+      sourceType: String(entry?.sourceType || 'npc').trim() || 'npc',
+      total: Number(entry?.total || 0),
+      active: !!entry?.active,
+      next: !!entry?.next
+    })).filter((entry) => entry.key)
+  };
+}
+
+function renderCombatFocusCard(id, entry, stateClass, fallbackMeta) {
+  const node = getById(id);
+  if (!node) return;
+  if (!entry) {
+    node.className = 'combat-focus-card';
+    node.innerHTML = `
+      <div class="combat-focus-name">--</div>
+      <div class="combat-focus-meta">${escapeHtml(fallbackMeta)}</div>
+    `;
+    return;
+  }
+  node.className = `combat-focus-card ${stateClass}`.trim();
+  node.innerHTML = `
+    <div class="combat-focus-name">${escapeHtml(entry.name)}</div>
+    <div class="combat-focus-meta">${escapeHtml(`${entry.side === 'ally' ? 'PROTAGONIST' : 'ANTAGONIST'} // ${entry.career} // ${entry.sourceType.toUpperCase()} // INIT ${entry.total}`)}</div>
+  `;
+}
+
+function renderCombatSummaryDrawer() {
+  const statusNode = getById('combat-order-status');
+  const listNode = getById('combat-order-list');
+  const selfKey = `player:${getSyncClientId()}`;
+
+  if (statusNode) {
+    if (roomSyncStatus !== 'connected' || !activeRoomId) statusNode.textContent = 'Room link offline.';
+    else if (!activeCombatSummary?.entries?.length) statusNode.textContent = `Listening to room "${activeRoomId}" for combat order.`;
+    else statusNode.textContent = `Live turn feed from room "${activeRoomId}".`;
+  }
+
+  const activeEntry = activeCombatSummary?.entries?.find((entry) => entry.active || entry.key === activeCombatSummary.activeKey) || null;
+  const nextEntry = activeCombatSummary?.entries?.find((entry) => entry.next || entry.key === activeCombatSummary.nextKey) || null;
+
+  renderCombatFocusCard('combat-order-active', activeEntry, 'active', 'No active turn.');
+  renderCombatFocusCard('combat-order-next', nextEntry, 'next', 'Waiting for initiative.');
+
+  if (!listNode) return;
+  if (!activeCombatSummary?.entries?.length) {
+    listNode.innerHTML = '<div class="inventory-empty">NO ACTIVE COMBAT ORDER</div>';
+    return;
+  }
+
+  listNode.innerHTML = activeCombatSummary.entries.map((entry, index) => {
+    const classes = [
+      'combat-order-row',
+      entry.active || entry.key === activeCombatSummary.activeKey ? 'active' : '',
+      entry.next || entry.key === activeCombatSummary.nextKey ? 'next' : '',
+      entry.key === selfKey ? 'self' : ''
+    ].filter(Boolean).join(' ');
+    return `
+      <div class="${classes}">
+        <div class="combat-order-top">
+          <div class="combat-order-name">${escapeHtml(entry.name)}</div>
+          <div class="combat-order-total">${escapeHtml(String(entry.total))}</div>
+        </div>
+        <div class="combat-order-meta">${escapeHtml(`#${index + 1} // ${entry.side === 'ally' ? 'PROTAGONIST' : 'ANTAGONIST'} // ${entry.career} // ${entry.sourceType.toUpperCase()}`)}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function bindFilePicker(id, handler) {
@@ -372,6 +460,22 @@ function startRemoteBreachWatch(roomId) {
   });
 }
 
+function stopCombatSummaryWatch() {
+  if (typeof combatSummaryUnsubscribe === 'function') combatSummaryUnsubscribe();
+  combatSummaryUnsubscribe = null;
+  activeCombatSummary = null;
+  renderCombatSummaryDrawer();
+}
+
+function startCombatSummaryWatch(roomId) {
+  stopCombatSummaryWatch();
+  if (!roomId || typeof watchCombatSummary !== 'function') return;
+  combatSummaryUnsubscribe = watchCombatSummary(roomId, (summary) => {
+    activeCombatSummary = normalizeCombatSummary(summary);
+    renderCombatSummaryDrawer();
+  });
+}
+
 function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellaneous') {
   const category = sanitizeInventoryCategory(payload?.category || fallbackCategory);
   const fields = {};
@@ -521,7 +625,9 @@ async function connectPlayerRoom() {
     startPlayerEffectsWatch(roomId);
     startPlayerCommandWatch(roomId);
     startRemoteBreachWatch(roomId);
+    startCombatSummaryWatch(roomId);
     setRoomSyncStatus('connected');
+    renderCombatSummaryDrawer();
     showActionLog(`CONNECTED TO ROOM ${roomId.toUpperCase()}`);
   } catch (error) {
     activeRoomId = '';
@@ -536,12 +642,14 @@ async function disconnectPlayerRoom() {
     stopPlayerEffectsWatch();
     stopPlayerCommandWatch();
     stopRemoteBreachWatch();
+    stopCombatSummaryWatch();
     await disconnectPlayerPresence();
   } catch (error) {
     console.warn('Room disconnect failed.', error);
   }
   activeRoomId = '';
   setRoomSyncStatus('disconnected');
+  renderCombatSummaryDrawer();
   showActionLog('ROOM LINK DISCONNECTED');
 }
 
@@ -790,6 +898,8 @@ function closeModal() {
 getById('modal').addEventListener('click', (e) => {
   if (e.target === getById('modal')) closeModal();
 });
+
+renderCombatSummaryDrawer();
 
 function resetSheet() {
   showModal('CLEAR DOSSIER?', 'Discard current character and reset the dossier to blank values?', () => {

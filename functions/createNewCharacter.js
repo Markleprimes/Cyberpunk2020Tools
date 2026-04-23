@@ -1,3 +1,46 @@
+const CP2020_MAIN_ROLES = [
+  'Solo',
+  'Netrunner',
+  'Techie',
+  'Medtech',
+  'Fixer',
+  'Media',
+  'Cop',
+  'Nomad',
+  'Rockerboy',
+  'Hobo'
+];
+
+const CP2020_ROLE_KEYS = {
+  solo: 'solo',
+  netrunner: 'netrunner',
+  techie: 'techie',
+  tech: 'techie',
+  medtech: 'medtech',
+  medtechie: 'medtech',
+  fixer: 'fixer',
+  media: 'media',
+  cop: 'cop',
+  lawman: 'cop',
+  nomad: 'nomad',
+  rockerboy: 'rockerboy',
+  rocker: 'rockerboy',
+  hobo: 'hobo'
+};
+
+function normalizeRoleLookup(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getKnownRoleKey(value) {
+  return CP2020_ROLE_KEYS[normalizeRoleLookup(value)] || '';
+}
+
+function getKnownRoleLabel(value) {
+  const key = getKnownRoleKey(value);
+  return CP2020_MAIN_ROLES.find((role) => normalizeRoleLookup(role) === key) || String(value || '').trim();
+}
+
 function buildBlankSheetData(name = '--', aliases = [], career = 'UNKNOWN') {
   const stats = {};
   const statKeys = typeof DEFAULT_STATS !== 'undefined'
@@ -31,7 +74,7 @@ function openNewCharacterModal() {
   if (!modal) return;
   document.getElementById('new-name').value = '';
   document.getElementById('new-street').value = '';
-  document.getElementById('new-career').value = '';
+  document.getElementById('new-career').value = 'Solo';
   modal.classList.add('show');
   document.getElementById('new-name').focus();
 }

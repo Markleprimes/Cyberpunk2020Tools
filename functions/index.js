@@ -20,6 +20,9 @@ function clearLauncherStatus() {
 
 function openLauncherModal() {
   clearLauncherStatus();
+  document.getElementById('launcher-name').value = '';
+  document.getElementById('launcher-street').value = '';
+  document.getElementById('launcher-career').value = 'Solo';
   launcherModal.classList.add('show');
   launcherModal.setAttribute('aria-hidden', 'false');
   document.getElementById('launcher-name').focus();

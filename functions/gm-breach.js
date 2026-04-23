@@ -260,21 +260,22 @@
 
   function injectButtons() {
     document.querySelectorAll('#gm-player-list .gm-player-card[data-gm-client-id][data-gm-role="player"]').forEach((card) => {
-      if (card.querySelector('.gm-breach-btn-row')) return;
+      if (card.querySelector('.gm-breach-section')) return;
       const sheet = card.querySelector('.gm-player-sheet');
       if (!sheet) return;
       const clientId = card.getAttribute('data-gm-client-id') || '';
       const wrap = document.createElement('div');
-      wrap.className = 'gm-card-actions gm-card-actions-split';
+      wrap.className = 'gm-breach-section';
       wrap.innerHTML = `
-        <div class="gm-sheet-title">Remote Breach</div>
+        <div class="gm-sheet-title">Remote Breach Activation</div>
+        <div class="gm-roll-source">Launch a live breach directly on this character.</div>
         <div class="gm-breach-btn-row">
           <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="easy">EASY</button>
           <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="medium">MEDIUM</button>
           <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="hard">HARD</button>
         </div>
       `;
-      sheet.insertBefore(wrap, sheet.firstChild);
+      sheet.appendChild(wrap);
     });
   }
 

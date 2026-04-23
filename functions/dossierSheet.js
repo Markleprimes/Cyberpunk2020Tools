@@ -1,8 +1,72 @@
+const DOSSIER_ROLE_KEYS = {
+  solo: 'solo',
+  netrunner: 'netrunner',
+  techie: 'techie',
+  tech: 'techie',
+  medtech: 'medtech',
+  medtechie: 'medtech',
+  fixer: 'fixer',
+  media: 'media',
+  cop: 'cop',
+  lawman: 'cop',
+  nomad: 'nomad',
+  rockerboy: 'rockerboy',
+  rocker: 'rockerboy',
+  hobo: 'hobo'
+};
+
+const DOSSIER_ROLE_LABELS = {
+  solo: 'Solo',
+  netrunner: 'Netrunner',
+  techie: 'Techie',
+  medtech: 'Medtech',
+  fixer: 'Fixer',
+  media: 'Media',
+  cop: 'Cop',
+  nomad: 'Nomad',
+  rockerboy: 'Rockerboy',
+  hobo: 'Hobo'
+};
+
+function getDossierRoleLogoPath(key) {
+  return `images/roles/${key}.png`;
+}
+
+function getDossierRoleKey(value) {
+  const clean = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return DOSSIER_ROLE_KEYS[clean] || '';
+}
+
+function renderCareerBadge(career) {
+  const badge = document.getElementById('char-career');
+  if (!badge) return;
+  const label = String(career || '???').trim() || '???';
+  const key = getDossierRoleKey(label);
+  badge.className = 'career-badge';
+  badge.dataset.career = label;
+  badge.removeAttribute('title');
+  badge.removeAttribute('aria-label');
+
+  if (key) {
+    const roleLabel = DOSSIER_ROLE_LABELS[key] || label;
+    badge.classList.add('career-logo-only', `role-${key}`);
+    badge.dataset.career = roleLabel;
+    badge.dataset.roleLogo = key;
+    badge.title = roleLabel;
+    badge.setAttribute('aria-label', roleLabel);
+    badge.innerHTML = `<img class="role-logo-img role-logo-img-${key}" src="${getDossierRoleLogoPath(key)}" alt="">`;
+    return;
+  }
+
+  badge.innerHTML = `<span class="career-badge-text">${escapeHtml(label)}</span>`;
+  delete badge.dataset.roleLogo;
+}
+
 function renderSheet(data) {
   document.getElementById('status-bar').style.display = 'none';
   document.getElementById('char-name').textContent = data.name[0] || 'Unknown';
   document.getElementById('char-aliases').innerHTML = data.name.slice(1).map((a) => `<span class="alias-tag">${a}</span>`).join('');
-  document.getElementById('char-career').textContent = data.career[0] || '???';
+  renderCareerBadge(data.career[0] || '???');
   renderBannerImage();
   syncCurrentPlayerPresence();
 
