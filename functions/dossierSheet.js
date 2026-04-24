@@ -84,6 +84,17 @@ function renderSheet(data) {
   upgradePoints = parseInt(data.careerSkill?.point, 10) || 0;
   renderSkills();
 
+  sheetSpecialSkills = Array.isArray(data.specialSkills)
+    ? data.specialSkills.map((skill, idx) => ({
+      id: String(skill?.id || `specialskill${idx + 1}`).trim() || `specialskill${idx + 1}`,
+      name: String(skill?.name || `Special Skill ${idx + 1}`).trim() || `Special Skill ${idx + 1}`,
+      tiedSkill: String(skill?.tiedSkill || '').trim(),
+      value: parseInt(skill?.value, 10) || 0,
+      description: String(skill?.description || '').trim()
+    }))
+    : [];
+  renderSpecialSkills();
+
   repValue = parseInt(data.reputation?.rep, 10) || 0;
   renderRep();
   walletValue = parseInt(data.wallet?.eddies, 10) || 0;
@@ -96,13 +107,16 @@ function renderSheet(data) {
   if (Number.isNaN(stunVal)) stunVal = parseInt(data.stunpoint?.stun, 10) || 0;
   renderPhysicalBody();
 
+  if (typeof clearInventoryFieldEffects === 'function') clearInventoryFieldEffects();
   inventory = {};
   mergeInventory(data.inventory || {});
   renderInventory();
 
   rollModifiers = [];
   aimStackPoints = 0;
-  currentRoll = { sides: null, qty: getRollQuantity(), rolls: [], result: 0, modifiers: 0, total: 0, rolledAt: 0 };
+  if (typeof resetQueuedDiceSilently === 'function') resetQueuedDiceSilently();
+  if (typeof resetCombatLuck === 'function') resetCombatLuck(false);
+  currentRoll = { sides: null, qty: 0, diceTypes: [], diceLabel: '', rolls: [], result: 0, modifiers: 0, total: 0, rolledAt: 0 };
   renderActiveEffects();
   renderRollLab();
 
@@ -123,13 +137,20 @@ function renderStats() {
   Object.entries(sheetStats).forEach(([k, v]) => {
     const col = STAT_COLORS[k] || 'var(--accent)';
     const debuff = debuffs[k] || null;
-    const effective = debuff ? Math.max(0, Math.floor(v * debuff.mult) - debuff.flat) : v;
+    const effective = getEffectiveStatValue(k);
+    const isLuckSpent = k === 'LUCK' && effective !== v;
+    const rollTitle = k === 'LUCK'
+      ? 'Add current LUCK to roll and double raw dice result. In combat, using it spends 1 LUCK on your turn.'
+      : `Add ${k} to roll`;
+    const rollAction = k === 'LUCK'
+      ? 'addLuckRollModifier()'
+      : `addRollModifier('STAT','${k}',${effective})`;
     const card = document.createElement('div');
     card.className = `stat-item${debuff ? ' debuffed' : ''}`;
     card.innerHTML = `
       <div class="stat-label">${k}</div>
-      <div class="stat-value pickable" id="sv-${k}" style="color:${col};text-shadow:var(--stat-core-glow)" title="Add ${k} to roll" onclick="addRollModifier('STAT','${k}',${effective})">${effective}${debuff && effective !== v ? `<span style="font-size:.55em;opacity:.6"> (${v})</span>` : ''}</div>
-      <div class="stat-debuff-tag" id="sdt-${k}">${debuff ? debuff.label : ''}</div>
+      <div class="stat-value pickable" id="sv-${k}" style="color:${col};text-shadow:var(--stat-core-glow)" title="${rollTitle}" onclick="${rollAction}">${effective}${(debuff && effective !== v) || isLuckSpent ? `<span style="font-size:.55em;opacity:.6"> (${v})</span>` : ''}</div>
+      <div class="stat-debuff-tag" id="sdt-${k}">${debuff ? debuff.label : isLuckSpent ? `-${v - effective} (COMBAT)` : ''}</div>
       <div class="stat-controls">
         <button class="ctrl-btn" onclick="changeStat('${k}',1)">+</button>
         <button class="ctrl-btn minus" onclick="changeStat('${k}',-1)">-</button>
@@ -183,7 +204,12 @@ function computeStatDebuffs() {
 }
 
 function getEffectiveStatValue(key) {
-  const base = sheetStats[key] || 0;
+  let base = typeof getBaseStatWithInventoryBonus === 'function'
+    ? getBaseStatWithInventoryBonus(key)
+    : (sheetStats[key] || 0);
+  if (key === 'LUCK' && typeof getAvailableCombatLuck === 'function') {
+    base = getAvailableCombatLuck();
+  }
   const debuff = computeStatDebuffs()[key];
   return debuff ? Math.max(0, Math.floor(base * debuff.mult) - debuff.flat) : base;
 }
@@ -194,7 +220,9 @@ function getSkillValueByNames(...names) {
   sheetSkills.forEach((skill) => {
     const lookup = normalizeLookup(skill.name);
     if (targets.some((target) => lookup === target || lookup.includes(target) || target.includes(lookup))) {
-      best = Math.max(best, skill.value || 0);
+      best = Math.max(best, typeof getSkillValueWithInventoryBonus === 'function'
+        ? getSkillValueWithInventoryBonus(skill.name, skill.value || 0)
+        : (skill.value || 0));
     }
   });
   return best;
@@ -208,14 +236,17 @@ function renderSkills() {
   list.innerHTML = '';
   const maxVal = Math.max(...sheetSkills.map((skill) => skill.value), 10);
   sheetSkills.forEach((skill, idx) => {
-    const pct = Math.min(100, (skill.value / maxVal) * 100);
+    const effectiveValue = typeof getSkillValueWithInventoryBonus === 'function'
+      ? getSkillValueWithInventoryBonus(skill.name, skill.value || 0)
+      : (skill.value || 0);
+    const pct = Math.min(100, (effectiveValue / maxVal) * 100);
     const row = document.createElement('div');
     row.className = 'skill-row';
     row.innerHTML = `
-      <div class="skill-main" title="Add ${skill.name} to roll" onclick="addRollModifier('SKILL','${skill.name.replace(/'/g, "\\'")}',${skill.value})">
+      <div class="skill-main" title="Add ${skill.name} to roll" onclick="addRollModifier('SKILL','${skill.name.replace(/'/g, "\\'")}',${effectiveValue})">
         <span class="skill-name">${skill.name}</span>
         <div class="skill-bar-wrap"><div class="skill-bar" style="width:${pct}%"></div></div>
-        <span class="skill-val pickable">${skill.value}</span>
+        <span class="skill-val pickable">${effectiveValue}${effectiveValue !== (skill.value || 0) ? `<span style="font-size:.55em;opacity:.6"> (${skill.value || 0})</span>` : ''}</span>
       </div>
       <div class="skill-ctrl-wrap">
         <button class="skill-ctrl-btn" onclick="event.stopPropagation();changeSkill(${idx},1)">+</button>
@@ -224,6 +255,40 @@ function renderSkills() {
     list.appendChild(row);
   });
   if (!sheetSkills.length) list.innerHTML = '';
+  syncCurrentPlayerPresence();
+}
+
+function renderSpecialSkillTiedOptions() {
+  const list = document.getElementById('special-skill-tied-options');
+  if (!list) return;
+  list.innerHTML = sheetSkills
+    .map((skill) => `<option value="${escapeHtml(skill.name)}"></option>`)
+    .join('');
+}
+
+function renderSpecialSkills() {
+  const list = document.getElementById('special-skill-list');
+  if (!list) return;
+  renderSpecialSkillTiedOptions();
+  if (!sheetSpecialSkills.length) {
+    list.innerHTML = '<div class="inventory-empty">NO SPECIAL SKILLS LOADED</div>';
+    syncCurrentPlayerPresence();
+    return;
+  }
+  list.innerHTML = sheetSpecialSkills.map((skill, idx) => `
+    <div class="special-skill-row">
+      <div class="special-skill-main" title="Add ${escapeHtml(skill.name)} to roll" onclick="addRollModifier('SPECIAL','${escapeJsString(skill.name)}',${parseInt(skill.value, 10) || 0})">
+        <div class="special-skill-name">${escapeHtml(skill.name)}</div>
+        <div class="special-skill-meta">${escapeHtml(skill.tiedSkill || 'UNLINKED')} // VALUE ${parseInt(skill.value, 10) || 0}</div>
+        <div class="special-skill-desc">${escapeHtml(skill.description || 'No description.')}</div>
+      </div>
+      <div class="special-skill-actions">
+        <div class="special-skill-value">${parseInt(skill.value, 10) || 0}</div>
+        <button class="add-skill-btn" type="button" onclick="event.stopPropagation();openSpecialSkillEditor(${idx})">EDIT</button>
+        <button class="action-btn red" type="button" onclick="event.stopPropagation();removeSpecialSkill(${idx})">DEL</button>
+      </div>
+    </div>
+  `).join('');
   syncCurrentPlayerPresence();
 }
 
@@ -267,11 +332,73 @@ function addCustomSkill() {
   showActionLog(`ADDED CUSTOM SKILL ${name.toUpperCase()}`);
 }
 
+function openSpecialSkillEditor(idx = -1) {
+  specialSkillEditState = { idx };
+  const editing = idx > -1 && sheetSpecialSkills[idx];
+  const skill = editing ? sheetSpecialSkills[idx] : { name: '', tiedSkill: '', value: 0, description: '' };
+  document.getElementById('special-skill-editor-title').textContent = editing ? 'EDIT SPECIAL SKILL' : 'ADD SPECIAL SKILL';
+  document.getElementById('special-skill-name').value = skill.name || '';
+  document.getElementById('special-skill-tied').value = skill.tiedSkill || '';
+  document.getElementById('special-skill-value').value = parseInt(skill.value, 10) || 0;
+  document.getElementById('special-skill-description').value = skill.description || '';
+  renderSpecialSkillTiedOptions();
+  document.getElementById('special-skill-editor-modal').classList.add('show');
+  document.getElementById('special-skill-name').focus();
+}
+
+function closeSpecialSkillEditor() {
+  document.getElementById('special-skill-editor-modal').classList.remove('show');
+  specialSkillEditState = null;
+}
+
+function saveSpecialSkill() {
+  const name = document.getElementById('special-skill-name').value.trim();
+  if (!name) {
+    showError('SPECIAL SKILL NAME IS REQUIRED.');
+    return;
+  }
+  const tiedSkill = document.getElementById('special-skill-tied').value.trim();
+  const value = Math.max(0, parseInt(document.getElementById('special-skill-value').value, 10) || 0);
+  const description = document.getElementById('special-skill-description').value.trim();
+  const editing = specialSkillEditState && specialSkillEditState.idx > -1 && sheetSpecialSkills[specialSkillEditState.idx];
+  const skill = {
+    id: editing?.id || `specialskill${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+    name,
+    tiedSkill,
+    value,
+    description
+  };
+  if (editing) sheetSpecialSkills[specialSkillEditState.idx] = skill;
+  else sheetSpecialSkills.push(skill);
+  closeSpecialSkillEditor();
+  renderSpecialSkills();
+  pulsePanelFromNode(document.getElementById('special-skill-list'));
+  showActionLog(`${editing ? 'UPDATED' : 'ADDED'} SPECIAL SKILL ${name.toUpperCase()}`);
+}
+
+function removeSpecialSkill(idx) {
+  const skill = sheetSpecialSkills[idx];
+  if (!skill) return;
+  showModal('DELETE SPECIAL SKILL?', `Remove "${skill.name}" from special skills?`, () => {
+    sheetSpecialSkills.splice(idx, 1);
+    renderSpecialSkills();
+    closeModal();
+    showActionLog(`REMOVED SPECIAL SKILL ${skill.name.toUpperCase()}`);
+  });
+}
+
 function renderRep() {
-  document.getElementById('rep-number').textContent = repValue;
-  document.getElementById('rep-pips').innerHTML = Array.from({ length: Math.min(repValue, 40) }, () => '<div class="rep-pip"></div>').join('');
+  const effectiveRep = typeof getEffectiveReputationValue === 'function' ? getEffectiveReputationValue() : repValue;
+  document.getElementById('rep-number').innerHTML = effectiveRep !== repValue
+    ? `${effectiveRep}<span style="font-size:.45em;opacity:.6"> (${repValue})</span>`
+    : String(effectiveRep);
+  document.getElementById('rep-pips').innerHTML = Array.from({ length: Math.min(effectiveRep, 40) }, () => '<div class="rep-pip"></div>').join('');
   updateSystemStrip();
   syncCurrentPlayerPresence();
+}
+
+function addEffectiveReputationModifier() {
+  addRollModifier('REP', 'Reputation', typeof getEffectiveReputationValue === 'function' ? getEffectiveReputationValue() : repValue);
 }
 
 function changeRep(delta) {
@@ -283,7 +410,11 @@ function changeRep(delta) {
 }
 
 function renderWallet() {
+  const effectiveWallet = typeof getEffectiveWalletValue === 'function' ? getEffectiveWalletValue() : walletValue;
   document.getElementById('wallet-val').value = walletValue;
+  document.getElementById('wallet-val').title = effectiveWallet !== walletValue
+    ? `Base ${walletValue} EB // Effective ${effectiveWallet} EB`
+    : `${walletValue} EB`;
   updateSystemStrip();
   syncCurrentPlayerPresence();
 }
@@ -305,11 +436,27 @@ function setWallet(value) {
 }
 
 function renderPhysicalBody() {
-  document.getElementById('body-level-val').textContent = bodyLevelVal;
-  document.getElementById('body-val').textContent = weightVal;
-  document.getElementById('stun-val').textContent = stunVal;
+  const effective = typeof getEffectivePhysicalValues === 'function'
+    ? getEffectivePhysicalValues()
+    : { bodyLevel: bodyLevelVal, weight: weightVal, stun: stunVal };
+  document.getElementById('body-level-val').innerHTML = effective.bodyLevel !== bodyLevelVal
+    ? `${effective.bodyLevel}<span style="font-size:.45em;opacity:.6"> (${bodyLevelVal})</span>`
+    : String(effective.bodyLevel);
+  document.getElementById('body-val').innerHTML = effective.weight !== weightVal
+    ? `${effective.weight}<span style="font-size:.45em;opacity:.6"> (${weightVal})</span>`
+    : String(effective.weight);
+  document.getElementById('stun-val').innerHTML = effective.stun !== stunVal
+    ? `${effective.stun}<span style="font-size:.45em;opacity:.6"> (${stunVal})</span>`
+    : String(effective.stun);
   updateSystemStrip();
   syncCurrentPlayerPresence();
+}
+
+function addEffectiveBodyLevelModifier() {
+  const effective = typeof getEffectivePhysicalValues === 'function'
+    ? getEffectivePhysicalValues()
+    : { bodyLevel: bodyLevelVal };
+  addRollModifier('PHYSICAL', 'Body Level', effective.bodyLevel);
 }
 
 function changeBS(which, delta) {
@@ -329,6 +476,8 @@ function renderLimbs() {
   grid.innerHTML = '';
   LIMBS.forEach((limb) => {
     const sp = limbSP[limb] || 0;
+    const effectiveSp = typeof getEffectiveArmorValue === 'function' ? getEffectiveArmorValue(limb) : sp;
+    const bonusSp = typeof getEffectiveArmorBonus === 'function' ? getEffectiveArmorBonus(limb) : 0;
     const dmg = limbDMG[limb] || 0;
     const lvl = getWoundLevel(dmg);
     const cls = lvl ? `wounded-${lvl}` : '';
@@ -340,6 +489,7 @@ function renderLimbs() {
       <div class="limb-name">${limb}</div>
       <div class="limb-field-label">SP</div>
       <input class="limb-input" type="number" min="0" value="${sp}" id="sp-${idKey}" onchange="setSP('${limb}',this.value)">
+      <div class="limb-total-note${bonusSp ? ' boosted' : ''}">TOTAL ${effectiveSp}${bonusSp ? ` // GEAR ${bonusSp >= 0 ? '+' : ''}${bonusSp}` : ''}</div>
       <div class="limb-ctrl">
         <button class="limb-btn" onclick="changeLimb('sp','${limb}',1)">+</button>
         <button class="limb-btn minus" onclick="changeLimb('sp','${limb}',-1)">-</button>

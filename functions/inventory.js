@@ -75,6 +75,14 @@ function saveInventoryItem() {
   inventory[category].push(item);
   closeInventoryEditor();
   renderInventory();
+  renderStats();
+  renderSkills();
+  renderRep();
+  renderWallet();
+  renderPhysicalBody();
+  renderLimbs();
+  renderActiveEffects();
+  renderRollLab();
   showActionLog(`${existing ? 'UPDATED' : 'ADDED'} ${name.toUpperCase()} IN INVENTORY`);
 }
 
@@ -134,6 +142,74 @@ function getAimHitAccuracy(item) {
   return getItemNumericField(item, 'Accuracy', 'Weapon Accuracy', 'WA');
 }
 
+function refreshInventoryDerivedPanels() {
+  if (typeof renderStats === 'function') renderStats();
+  if (typeof renderSkills === 'function') renderSkills();
+  if (typeof renderRep === 'function') renderRep();
+  if (typeof renderWallet === 'function') renderWallet();
+  if (typeof renderPhysicalBody === 'function') renderPhysicalBody();
+  if (typeof renderLimbs === 'function') renderLimbs();
+  if (typeof renderActiveEffects === 'function') renderActiveEffects();
+  if (typeof renderRollLab === 'function') renderRollLab();
+}
+
+function addInventoryFieldRollModifier(itemId, fieldLabel) {
+  const found = typeof findInventoryItemById === 'function' ? findInventoryItemById(itemId) : null;
+  if (!found?.item) return;
+  const descriptor = getInventoryFieldDescriptor(fieldLabel, found.item.fields?.[fieldLabel]);
+  if (descriptor.kind !== 'modifier') return;
+  addRollModifier('ITEM', `${found.item.name || 'Item'}: ${fieldLabel}`, descriptor.numericValue);
+}
+
+function queueInventoryFieldDice(itemId, fieldLabel) {
+  const found = typeof findInventoryItemById === 'function' ? findInventoryItemById(itemId) : null;
+  if (!found?.item) return;
+  const descriptor = getInventoryFieldDescriptor(fieldLabel, found.item.fields?.[fieldLabel]);
+  if (descriptor.kind !== 'dice') return;
+  if (!Array.isArray(manualRollDicePool)) manualRollDicePool = [];
+  manualRollDicePool.push(...descriptor.dicePool);
+  if (descriptor.flatBonus) {
+    addRollModifier('ITEM', `${found.item.name || 'Item'}: ${fieldLabel} Bonus`, descriptor.flatBonus);
+  } else {
+    renderRollLab();
+  }
+  showActionLog(`QUEUED ${String(found.item.name || 'ITEM').toUpperCase()} // ${String(fieldLabel).toUpperCase()} ${descriptor.displayValue}`);
+}
+
+function renderInventoryField(item, label, value) {
+  const descriptor = getInventoryFieldDescriptor(label, value);
+  const autoApplied = typeof isInventoryDescriptorAutoApplied === 'function'
+    ? isInventoryDescriptorAutoApplied(descriptor)
+    : false;
+  const itemId = escapeJsString(item.id || '');
+  const fieldName = escapeJsString(label);
+  const actionLabel = descriptor.kind === 'dice'
+    ? 'QUEUE'
+    : descriptor.kind === 'armor_sp'
+      ? (isInventoryFieldEffectActive(item.id, label) ? 'UNEQUIP' : 'EQUIP')
+      : descriptor.kind === 'effect'
+        ? (autoApplied ? '' : (isInventoryFieldEffectActive(item.id, label) ? 'REMOVE' : 'APPLY'))
+        : descriptor.kind === 'modifier'
+          ? 'ADD'
+          : '';
+  const clickable = descriptor.kind === 'dice' || descriptor.kind === 'modifier';
+  const active = ['effect', 'armor_sp'].includes(descriptor.kind) && (autoApplied || isInventoryFieldEffectActive(item.id, label));
+  const onClick = descriptor.kind === 'dice'
+    ? ` onclick="queueInventoryFieldDice('${itemId}','${fieldName}')"`
+    : descriptor.kind === 'modifier'
+      ? ` onclick="addInventoryFieldRollModifier('${itemId}','${fieldName}')"`
+      : '';
+  const actionButton = actionLabel
+    ? `<button class="inventory-stat-action" type="button" onclick="event.preventDefault();event.stopPropagation();${['effect', 'armor_sp'].includes(descriptor.kind) ? `toggleInventoryFieldEffect('${itemId}','${fieldName}')` : descriptor.kind === 'dice' ? `queueInventoryFieldDice('${itemId}','${fieldName}')` : `addInventoryFieldRollModifier('${itemId}','${fieldName}')`}">${actionLabel}</button>`
+    : '';
+  return `
+    <div class="inventory-stat inventory-stat-${descriptor.kind}${clickable ? ' pickable' : ''}${active ? ' active' : ''}"${onClick}>
+      <span class="inventory-stat-label">${escapeHtml(humanizeLabel(label))}</span>
+      <span class="inventory-stat-value">${escapeHtml(descriptor.displayValue || value)}</span>
+      ${actionButton}
+    </div>`;
+}
+
 function renderInventory() {
   const div = document.getElementById('inventory-list');
   const categories = orderedInventoryCategories();
@@ -152,22 +228,20 @@ function renderInventory() {
           <span class="inventory-category-count">${items.length} ITEM${items.length === 1 ? '' : 'S'}</span>
         </div>
         ${items.map((item, idx) => {
-    const itemRollName = escapeJsString(item.name || category);
     const categoryKey = escapeJsString(category);
-    const statHtml = Object.entries(item.fields || {}).map(([label, value]) => {
-      const rollValue = parseRollableValue(value);
-      return `
-            <div class="inventory-stat${rollValue !== null ? ' pickable' : ''}"${rollValue !== null ? ` title="Add ${escapeHtml(label)} to roll" onclick="addRollModifier('ITEM','${itemRollName}: ${escapeJsString(label)}',${rollValue})"` : ''}>
-              <span class="inventory-stat-label">${escapeHtml(humanizeLabel(label))}</span>
-              <span class="inventory-stat-value">${escapeHtml(value)}</span>
-            </div>`;
-    }).join('');
+    const activeCount = Object.keys(item.fields || {}).filter((label) => {
+      const descriptor = getInventoryFieldDescriptor(label, item.fields?.[label]);
+      return (typeof isInventoryDescriptorAutoApplied === 'function' && isInventoryDescriptorAutoApplied(descriptor))
+        || isInventoryFieldEffectActive(item.id, label);
+    }).length;
+    const statHtml = Object.entries(item.fields || {}).map(([label, value]) => renderInventoryField(item, label, value)).join('');
     const infoHtml = (item.info || []).map((line) => `<div class="inventory-info-line">${escapeHtml(line)}</div>`).join('');
     return `
             <details class="inventory-item">
               <summary class="inventory-summary">
                 <span class="inventory-badge"></span>
                 <span class="inventory-name">${escapeHtml(item.name || humanizeLabel(item.id || category))}</span>
+                ${activeCount ? `<span class="inventory-live-tag">${activeCount} ACTIVE</span>` : ''}
                 <span class="inventory-tag">${escapeHtml(humanizeLabel(category))}</span>
                 <button class="inventory-edit" type="button" onclick="event.preventDefault();event.stopPropagation();openInventoryEditor('${categoryKey}',${idx})">EDIT</button>
                 <button class="inventory-delete" type="button" onclick="event.preventDefault();event.stopPropagation();removeInventoryItem('${categoryKey}',${idx})">DEL</button>
@@ -182,6 +256,7 @@ function renderInventory() {
   }).join('');
   updateSystemStrip();
   syncCurrentPlayerPresence();
+  refreshInventoryDerivedPanels();
 }
 
 function removeInventoryItem(category, idx) {
@@ -189,9 +264,18 @@ function removeInventoryItem(category, idx) {
   if (!item) return;
   showModal('REMOVE ITEM?', `Delete "${item.name || humanizeLabel(category)}" from inventory?`, () => {
     const removedName = item.name || humanizeLabel(category);
+    if (typeof clearInventoryFieldEffectsForItem === 'function') clearInventoryFieldEffectsForItem(item.id);
     inventory[category].splice(idx, 1);
     if (!inventory[category].length) delete inventory[category];
     renderInventory();
+    renderStats();
+    renderSkills();
+    renderRep();
+    renderWallet();
+    renderPhysicalBody();
+    renderLimbs();
+    renderActiveEffects();
+    renderRollLab();
     showActionLog(`REMOVED ${removedName.toUpperCase()} FROM INVENTORY`);
     closeModal();
   });

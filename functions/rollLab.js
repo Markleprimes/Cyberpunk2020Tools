@@ -1,3 +1,48 @@
+let manualRollDicePool = [];
+
+function describeDicePool(dicePool = []) {
+  const counts = new Map();
+  dicePool.forEach((side) => {
+    const sides = Number(side);
+    if (!sides) return;
+    counts.set(sides, (counts.get(sides) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([sides, qty]) => `${qty}D${sides}`)
+    .join(' + ') || 'NONE';
+}
+
+function hasCurrentRoll() {
+  return !!(currentRoll?.diceLabel || currentRoll?.sides);
+}
+
+function getCurrentRollLabel() {
+  if (currentRoll?.diceLabel) return currentRoll.diceLabel;
+  if (currentRoll?.sides) return `${currentRoll.qty || 1}D${currentRoll.sides}`;
+  return 'NONE';
+}
+
+function renderManualDicePool() {
+  const list = document.getElementById('manual-dice-list');
+  const summary = document.getElementById('manual-dice-summary');
+  const launchBtn = document.getElementById('manual-roll-btn');
+  const label = describeDicePool(manualRollDicePool);
+  if (summary) summary.textContent = label;
+  if (launchBtn) launchBtn.disabled = manualRollDicePool.length <= 0;
+  if (!list) return;
+  if (!manualRollDicePool.length) {
+    list.innerHTML = '<div class="inventory-empty">NO DICE QUEUED</div>';
+    return;
+  }
+  list.innerHTML = manualRollDicePool.map((side, idx) => `
+    <button class="dice-pool-chip" type="button" onclick="removeQueuedRollDie(${idx})" title="Remove ${side}-sided die from queue">
+      <span>D${side}</span>
+      <span class="dice-pool-chip-index">#${idx + 1}</span>
+    </button>
+  `).join('');
+}
+
 function clearRollCinemaTimers() {
   cancelAnimationFrame(rollCinemaFrame);
   clearInterval(rollCinemaNumberTimer);
@@ -44,13 +89,22 @@ function closeRollCinemaModal() {
   document.getElementById('roll-cinema-modal').classList.remove('show');
 }
 
-function beginRollExecution(sides, qty) {
-  pendingRollRequest = { sides, qty };
+function beginRollExecution(dicePool, options = {}) {
+  const normalizedPool = (Array.isArray(dicePool) ? dicePool : [dicePool])
+    .map((side) => Number(side))
+    .filter((side) => side > 0);
+  if (!normalizedPool.length) return;
+  pendingRollRequest = {
+    dicePool: normalizedPool,
+    diceLabel: String(options.diceLabel || describeDicePool(normalizedPool)).trim() || describeDicePool(normalizedPool),
+    kicker: String(options.kicker || '').trim(),
+    extraModifiers: Array.isArray(options.extraModifiers) ? options.extraModifiers.filter((mod) => Number.isFinite(Number(mod?.value))) : []
+  };
   rollShakePower = 0;
   rollShakeActive = false;
   rollShakePointerId = null;
   rollShakeLastPoint = null;
-  document.getElementById('roll-shake-label').textContent = `${qty}D${sides}`;
+  document.getElementById('roll-shake-label').textContent = pendingRollRequest.diceLabel;
   document.getElementById('roll-shake-box').classList.remove('shaking');
   document.getElementById('roll-shake-core').style.transform = 'translate(0,0) rotate(0deg)';
   updateRollExecuteMeter();
@@ -59,19 +113,41 @@ function beginRollExecution(sides, qty) {
 
 function executePendingRoll() {
   if (!pendingRollRequest) return;
-  const { sides, qty } = pendingRollRequest;
+  const { dicePool, diceLabel, kicker, extraModifiers = [] } = pendingRollRequest;
   const shakePowerSnapshot = rollShakePower;
   document.getElementById('roll-execute-modal').classList.remove('show');
   pendingRollRequest = null;
   rollShakePower = 0;
   updateRollExecuteMeter();
-  const rolls = Array.from({ length: qty }, () => Math.floor(Math.random() * sides) + 1);
-  const raw = rolls.reduce((sum, val) => sum + val, 0);
-  const modifiers = getModifierTotal();
-  currentRoll = { sides, qty, rolls, result: raw, modifiers, total: raw + modifiers, rolledAt: Date.now() };
+  const rolls = dicePool.map((sides) => Math.floor(Math.random() * sides) + 1);
+  const qty = dicePool.length;
+  const sides = qty === 1 ? dicePool[0] : null;
+  const rawBase = rolls.reduce((sum, val) => sum + val, 0);
+  const modifierSnapshot = [...getDisplayRollModifiers(), ...extraModifiers];
+  const rawMultiplier = getRawRollMultiplier(modifierSnapshot);
+  const raw = rawBase * rawMultiplier;
+  const modifiers = getModifierTotal(modifierSnapshot);
+  currentRoll = {
+    sides,
+    qty,
+    diceTypes: [...dicePool],
+    diceLabel: diceLabel || describeDicePool(dicePool),
+    rolls,
+    rawBase,
+    rawMultiplier,
+    result: raw,
+    modifiers,
+    modifierSnapshot,
+    total: raw + modifiers,
+    rolledAt: Date.now()
+  };
+  const usedLuck = rollModifiers.some((mod) => mod?.effectType === 'luck');
+  const spentLuckInCombat = usedLuck && typeof window.consumeCombatLuckUse === 'function'
+    ? window.consumeCombatLuckUse()
+    : false;
   renderRollLab();
-  openRollCinemaAnimation(sides, qty, rolls, shakePowerSnapshot);
-  showActionLog(`ROLLED ${qty}D${sides} FOR ${currentRoll.result}`);
+  openRollCinemaAnimation(dicePool, rolls, shakePowerSnapshot, kicker || `${currentRoll.diceLabel} EXECUTION`);
+  showActionLog(`ROLLED ${currentRoll.diceLabel}${rawMultiplier > 1 ? ` RAW x${rawMultiplier}` : ''} FOR ${currentRoll.result}${spentLuckInCombat ? ' // LUCK -1' : ''}`);
 }
 
 function handleRollShakeStart(event) {
@@ -170,9 +246,9 @@ function animateRollCinemaCount(start, end, onComplete) {
   rollCinemaFrame = requestAnimationFrame(tick);
 }
 
-function renderRollCinemaModifiers(modTotal) {
+function renderRollCinemaModifiers(modTotal, modifiers = null) {
   const list = document.getElementById('roll-cinema-mod-list');
-  const displayModifiers = getDisplayRollModifiers();
+  const displayModifiers = Array.isArray(modifiers) ? modifiers : getDisplayRollModifiers();
   if (!displayModifiers.length) {
     list.innerHTML = '<div class="inventory-empty">NO MODIFIERS LOCKED IN</div>';
   } else {
@@ -186,8 +262,6 @@ function renderRollCinemaModifiers(modTotal) {
 }
 
 function setPresetRoll(label, modifiers, sides = 10) {
-  const rollQty = document.getElementById('roll-qty');
-  if (rollQty) rollQty.value = 1;
   rollModifiers = modifiers
     .filter((mod) => parseRollableValue(mod.value) !== null)
     .map((mod) => ({ source: mod.source || 'PRESET', label: mod.label, value: parseRollableValue(mod.value) }));
@@ -254,6 +328,14 @@ function getStatusEffectRollModifiers() {
     : [];
 }
 
+function getRawRollMultiplier(modifiers = null) {
+  const source = Array.isArray(modifiers) ? modifiers : getDisplayRollModifiers();
+  return source.reduce((multiplier, mod) => {
+    const next = Number(mod?.rawMultiplier || 1);
+    return next > multiplier ? next : multiplier;
+  }, 1);
+}
+
 function getDisplayRollModifiers() {
   const persistent = getPersistentPenaltyModifier();
   const effectModifiers = getStatusEffectRollModifiers();
@@ -263,45 +345,45 @@ function getDisplayRollModifiers() {
   return display;
 }
 
-function getModifierTotal() {
-  return getDisplayRollModifiers().reduce((sum, mod) => sum + mod.value, 0);
+function getModifierTotal(modifiers = null) {
+  const source = Array.isArray(modifiers) ? modifiers : getDisplayRollModifiers();
+  return source.reduce((sum, mod) => sum + mod.value, 0);
 }
 
 function getRollQuantity() {
-  const input = document.getElementById('roll-qty');
-  if (!input) return 1;
-  return Math.max(1, Math.min(20, parseInt(input.value, 10) || 1));
+  return Math.max(1, manualRollDicePool.length || 1);
 }
 
 function normalizeRollQty() {
-  const input = document.getElementById('roll-qty');
-  if (!input) return;
-  input.value = getRollQuantity();
+  renderManualDicePool();
 }
 
 function changeRollQty(delta) {
-  const input = document.getElementById('roll-qty');
-  if (!input) return;
-  input.value = Math.max(1, Math.min(20, getRollQuantity() + delta));
-  showActionLog(`DICE COUNT SET TO ${input.value}`);
+  if (delta > 0) queueRollDie(10);
+  else if (delta < 0) removeQueuedRollDie(manualRollDicePool.length - 1);
 }
 
 function renderRollLab() {
   const modList = document.getElementById('modifier-list');
   const displayModifiers = getDisplayRollModifiers();
-  const modTotal = currentRoll.sides ? (currentRoll.modifiers ?? getModifierTotal()) : getModifierTotal();
-  const qty = currentRoll.qty || getRollQuantity();
-  const hasRoll = !!currentRoll.sides;
+  const modTotal = hasCurrentRoll() ? (currentRoll.modifiers ?? getModifierTotal()) : getModifierTotal();
+  const hasRoll = hasCurrentRoll();
+  const diceLabel = getCurrentRollLabel();
+  const activePoolLabel = manualRollDicePool.length ? describeDicePool(manualRollDicePool) : diceLabel;
+  const rawText = hasRoll && (currentRoll.rawMultiplier || 1) > 1
+    ? `${currentRoll.rawBase || 0} x${currentRoll.rawMultiplier} => ${currentRoll.result}`
+    : `${currentRoll.result}`;
   document.getElementById('modifier-total').textContent = modTotal;
-  document.getElementById('last-die-label').textContent = hasRoll ? `${qty}D${currentRoll.sides}` : 'NONE';
+  document.getElementById('last-die-label').textContent = activePoolLabel || 'NONE';
   const total = hasRoll ? (currentRoll.total ?? ((currentRoll.result || 0) + modTotal)) : modTotal;
   document.getElementById('roll-last-summary').textContent = hasRoll
-    ? `${qty}D${currentRoll.sides} locked ${currentRoll.result}. Final total ${total}.`
+    ? `${diceLabel} locked ${rawText}. Final total ${total}.`
     : `No die rolled yet. Current modifiers total ${modTotal >= 0 ? '+' : ''}${modTotal}.`;
   document.getElementById('roll-last-breakdown').textContent = hasRoll
-    ? `Dice pool: [${currentRoll.rolls.join(', ')}]`
-    : 'Set the dice count, then click any die button to open the roll cinema.';
+    ? `Dice pool: [${currentRoll.rolls.join(', ')}]${(currentRoll.rawMultiplier || 1) > 1 ? ` // RAW x${currentRoll.rawMultiplier}` : ''}`
+    : 'Build the dice pool, then hit ROLL!! to open the roll cinema.';
   document.getElementById('roll-last-total').textContent = total;
+  renderManualDicePool();
   renderAimAction();
   updateSystemStrip();
   syncCurrentPlayerPresence();
@@ -324,6 +406,76 @@ function addRollModifier(source, label, value) {
   rollModifiers.push({ source, label, value: parsed });
   renderRollLab();
   showActionLog(`ADDED ${label.toUpperCase()} TO ROLL`);
+}
+
+function addLuckRollModifier(value) {
+  const combatActive = typeof window.isCombatTurnTrackingActive === 'function'
+    ? window.isCombatTurnTrackingActive()
+    : false;
+  const playerTurn = typeof window.isPlayerCombatTurn === 'function'
+    ? window.isPlayerCombatTurn()
+    : false;
+  if (combatActive && !playerTurn) {
+    showError('LUCK CAN ONLY BE USED ON YOUR COMBAT TURN.');
+    return;
+  }
+  const available = typeof window.getCombatAvailableLuck === 'function'
+    ? Number(window.getCombatAvailableLuck())
+    : value;
+  const parsed = parseRollableValue(available);
+  if (parsed === null) return;
+  if (parsed <= 0) {
+    showError('NO LUCK LEFT TO SPEND.');
+    return;
+  }
+  rollModifiers = rollModifiers.filter((mod) => mod?.effectType !== 'luck');
+  rollModifiers.push({
+    source: 'STAT',
+    label: 'LUCK // RAW x2',
+    value: parsed,
+    effectType: 'luck',
+    rawMultiplier: 2
+  });
+  renderRollLab();
+  showActionLog('LUCK LOCKED: +LUCK AND RAW DICE x2');
+}
+
+function queueRollDie(sides) {
+  const parsed = Number(sides);
+  if (!parsed) return;
+  manualRollDicePool.push(parsed);
+  renderRollLab();
+  showActionLog(`QUEUED D${parsed}`);
+}
+
+function removeQueuedRollDie(idx) {
+  if (idx < 0 || idx >= manualRollDicePool.length) return;
+  const [removed] = manualRollDicePool.splice(idx, 1);
+  renderRollLab();
+  showActionLog(`REMOVED D${removed} FROM QUEUE`);
+}
+
+function clearQueuedDice() {
+  if (!manualRollDicePool.length) return;
+  manualRollDicePool = [];
+  renderRollLab();
+  showActionLog('CLEARED DICE QUEUE');
+}
+
+function resetQueuedDiceSilently() {
+  manualRollDicePool = [];
+  renderManualDicePool();
+}
+
+function rollQueuedDice() {
+  if (!manualRollDicePool.length) {
+    showError('QUEUE AT LEAST ONE DIE BEFORE ROLLING.');
+    return;
+  }
+  beginRollExecution(manualRollDicePool, {
+    diceLabel: describeDicePool(manualRollDicePool),
+    kicker: `${describeDicePool(manualRollDicePool)} EXECUTION`
+  });
 }
 
 function removeRollModifier(idx) {
@@ -365,19 +517,27 @@ function getRollDieShapeClass(sides) {
   return '';
 }
 
-function openRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
+function openRollCinemaAnimation(dicePool, rolls, shakePower = 0, kickerLabel = '') {
   clearRollCinemaTimers();
-  const rawTotal = rolls.reduce((sum, val) => sum + val, 0);
-  const modTotal = getModifierTotal();
+  const normalizedPool = (Array.isArray(dicePool) ? dicePool : [dicePool])
+    .map((side) => Number(side))
+    .filter((side) => side > 0);
+  const qty = normalizedPool.length;
+  const baseRawTotal = rolls.reduce((sum, val) => sum + val, 0);
+  const modifierSnapshot = Array.isArray(currentRoll?.modifierSnapshot) ? currentRoll.modifierSnapshot : getDisplayRollModifiers();
+  const rawMultiplier = getRawRollMultiplier(modifierSnapshot);
+  const rawTotal = baseRawTotal * rawMultiplier;
+  const modTotal = getModifierTotal(modifierSnapshot);
   const finalTotal = rawTotal + modTotal;
   const modal = document.getElementById('roll-cinema-modal');
   const stage = document.getElementById('roll-cinema-stage');
   const diceLayer = document.getElementById('roll-cinema-dice');
-  document.getElementById('roll-cinema-kicker').textContent = `${qty}D${sides} EXECUTION`;
-  document.getElementById('roll-cinema-pool').textContent = `Dice pool: [${rolls.join(', ')}]`;
+  const diceLabel = describeDicePool(normalizedPool);
+  document.getElementById('roll-cinema-kicker').textContent = kickerLabel || `${diceLabel} EXECUTION`;
+  document.getElementById('roll-cinema-pool').textContent = `Dice pool: ${diceLabel} // [${rolls.join(', ')}]${rawMultiplier > 1 ? ` // RAW x${rawMultiplier}` : ''}`;
   document.getElementById('roll-cinema-raw').textContent = '0';
   document.getElementById('roll-cinema-final').textContent = '0';
-  renderRollCinemaModifiers(modTotal);
+  renderRollCinemaModifiers(modTotal, modifierSnapshot);
   setRollCinemaCards(false, false, false);
   document.getElementById('roll-cinema-raw-card').classList.remove('emphasis');
   document.getElementById('roll-cinema-final-card').classList.remove('emphasis');
@@ -389,6 +549,7 @@ function openRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
   const bounds = { w: Math.max(180, stageRect.width - dieSize), h: Math.max(160, stageRect.height - dieSize) };
   const throwBoost = shakePower / 100;
   const diceBodies = rolls.map((value, idx) => {
+    const sides = normalizedPool[idx] || 10;
     const die = document.createElement('div');
     die.className = `roll-cinema-die ${getRollDieShapeClass(sides)}`.trim();
     die.style.width = `${dieSize}px`;
@@ -398,6 +559,7 @@ function openRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
     diceLayer.appendChild(die);
     return {
       el: die,
+      sides,
       value,
       x: 12 + Math.random() * 28,
       y: 12 + idx * 8,
@@ -412,7 +574,7 @@ function openRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
 
   rollCinemaNumberTimer = setInterval(() => {
     diceBodies.forEach((body) => {
-      if (!body.settled) body.el.textContent = Math.max(1, Math.ceil(Math.random() * sides));
+      if (!body.settled) body.el.textContent = Math.max(1, Math.ceil(Math.random() * body.sides));
     });
   }, 58);
 
@@ -572,6 +734,8 @@ function confirmAimHitWeapon() {
 }
 
 function rollDie(sides) {
-  normalizeRollQty();
-  beginRollExecution(sides, getRollQuantity());
+  beginRollExecution([Number(sides)], {
+    diceLabel: `1D${Number(sides)}`,
+    kicker: `1D${Number(sides)} EXECUTION`
+  });
 }

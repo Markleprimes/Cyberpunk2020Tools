@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260423p">
+<link rel="stylesheet" href="DND.css?v=20260424j">
 </head>
 <body>
 <div class="wrapper">
@@ -183,7 +183,7 @@
       <div class="body-stun-row">
         <div class="bs-item">
           <div class="bs-label">BODY LEVEL</div>
-          <div class="bs-value red-glass" id="body-level-val">--</div>
+          <div class="bs-value red-glass pickable" id="body-level-val" title="Add BODY LEVEL to roll" onclick="addEffectiveBodyLevelModifier()">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('bodylevel',1)">+</button>
             <button class="ctrl-btn minus" onclick="changeBS('bodylevel',-1)">-</button>
@@ -210,7 +210,7 @@
     <div class="panel" style="grid-column:4/5;">
       <div class="panel-title">Reputation</div>
       <div class="rep-row">
-        <div class="rep-main" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)">
+        <div class="rep-main" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()">
           <div class="rep-number" id="rep-number">0</div>
           <div class="rep-side">
           <div class="rep-label">STREET CRED</div>
@@ -221,7 +221,7 @@
           </div>
         </div>
       </div>
-      <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addRollModifier('REP','Reputation',repValue)"></div>
+      <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()"></div>
     </div>
     <div class="panel" style="grid-column:5/6;">
       <div class="panel-title">Wallet</div>
@@ -254,6 +254,15 @@
       <div class="add-skill-bar">
         <input class="add-skill-input" id="new-skill-name" type="text" placeholder="Custom skill name..." maxlength="50">
         <button class="add-skill-btn" onclick="addCustomSkill()">ADD</button>
+      </div>
+      <div class="special-skill-shell">
+        <div class="special-skill-head">
+          <div class="panel-title panel-title-sub">Special Skills</div>
+          <button class="add-skill-btn" type="button" onclick="openSpecialSkillEditor()">ADD SPECIAL</button>
+        </div>
+        <div class="special-skill-list" id="special-skill-list">
+          <div class="inventory-empty">NO SPECIAL SKILLS LOADED</div>
+        </div>
       </div>
     </div>
     <div class="panel">
@@ -292,7 +301,7 @@
         <div class="roll-status-strip">
           <div class="roll-status-copy">
             <div class="roll-label">Last Result</div>
-            <div class="roll-equation" id="roll-last-summary">Pick a die and the roll modal will handle the animation.</div>
+            <div class="roll-equation" id="roll-last-summary">Build a dice pool, then hit ROLL!! to launch the modal.</div>
             <div class="roll-breakdown" id="roll-last-breakdown">Modifiers stay locked here. Roll drama moves to the popup.</div>
           </div>
           <div class="roll-status-total" id="roll-last-total">0</div>
@@ -305,20 +314,24 @@
         </div>
         <div class="modifier-list" id="modifier-list"></div>
         <div class="roll-control-bar">
-          <div class="roll-qty-wrap">
-            <span class="roll-qty-label">Dice Count</span>
-            <button class="ctrl-btn minus" type="button" onclick="changeRollQty(-1)">-</button>
-            <input class="roll-qty-input" id="roll-qty" type="number" min="1" max="20" step="1" value="1" onchange="normalizeRollQty()" />
-            <button class="ctrl-btn" type="button" onclick="changeRollQty(1)">+</button>
+          <div class="roll-pool-wrap">
+            <span class="roll-pool-label">Queued Dice</span>
+            <div class="roll-pool-summary" id="manual-dice-summary">NONE</div>
           </div>
+          <button class="roll-launch-btn" id="manual-roll-btn" type="button" onclick="rollQueuedDice()" disabled>ROLL!!</button>
         </div>
+        <div class="dice-pool-list" id="manual-dice-list">
+          <div class="inventory-empty">NO DICE QUEUED</div>
+        </div>
+        <div class="roll-box-note">Click dice to add them to the queue. Click a queued die to remove it. Presets still auto-roll.</div>
         <div class="dice-bank">
-          <button class="dice-btn" type="button" onclick="rollDie(4)">D4</button>
-          <button class="dice-btn" type="button" onclick="rollDie(6)">D6</button>
-          <button class="dice-btn" type="button" onclick="rollDie(8)">D8</button>
-          <button class="dice-btn" type="button" onclick="rollDie(10)">D10</button>
-          <button class="dice-btn" type="button" onclick="rollDie(12)">D12</button>
-          <button class="dice-btn" type="button" onclick="rollDie(20)">D20</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(4)">D4</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(6)">D6</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(8)">D8</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(10)">D10</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(12)">D12</button>
+          <button class="dice-btn" type="button" onclick="queueRollDie(20)">D20</button>
+          <button class="dice-btn dice-btn-clear" type="button" onclick="clearQueuedDice()">CLEAR QUEUE</button>
         </div>
       </div>
       <div class="roll-side-panel">
@@ -327,7 +340,7 @@
           <div class="roll-box-value" id="modifier-total">0</div>
         </div>
         <div class="roll-box">
-          <div class="roll-box-title">Last Die</div>
+          <div class="roll-box-title">Dice Pool</div>
           <div class="roll-box-value" id="last-die-label">NONE</div>
         </div>
         <div class="roll-box">
@@ -534,6 +547,36 @@
   </div>
 </div>
 
+<!-- SPECIAL SKILL EDITOR MODAL -->
+<div class="modal-overlay" id="special-skill-editor-modal">
+  <div class="modal-box create-modal-box">
+    <h3 id="special-skill-editor-title">SPECIAL SKILL</h3>
+    <div class="create-form">
+      <label>
+        <div class="create-field-label">Name</div>
+        <input class="create-field-input" id="special-skill-name" type="text" maxlength="80" placeholder="Throw Redirect" />
+      </label>
+      <label>
+        <div class="create-field-label">Tied Career Skill</div>
+        <input class="create-field-input" id="special-skill-tied" type="text" maxlength="80" list="special-skill-tied-options" placeholder="Martial Art (Aikido)" />
+        <datalist id="special-skill-tied-options"></datalist>
+      </label>
+      <label>
+        <div class="create-field-label">Value</div>
+        <input class="create-field-input" id="special-skill-value" type="number" min="0" step="1" value="0" />
+      </label>
+      <label>
+        <div class="create-field-label">Description</div>
+        <textarea class="inventory-textarea" id="special-skill-description" placeholder="What it does"></textarea>
+      </label>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeSpecialSkillEditor()">CANCEL</button>
+      <button class="action-btn red" type="button" onclick="saveSpecialSkill()">SAVE</button>
+    </div>
+  </div>
+</div>
+
 <!-- PLAYER CHOICE MODAL -->
 <div class="modal-overlay" id="player-choice-modal">
   <div class="modal-box">
@@ -597,12 +640,12 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260423b"></script>
-<script src="functions/DND.js?v=20260423p"></script>
-<script src="functions/createNewCharacter.js?v=20260423a"></script>
-<script src="functions/dossierSheet.js?v=20260423e"></script>
-<script src="functions/inventory.js?v=20260415e"></script>
-<script src="functions/rollLab.js?v=20260422a"></script>
-<script src="functions/upload-download.js?v=20260415f"></script>
+<script src="functions/DND.js?v=20260424m"></script>
+<script src="functions/createNewCharacter.js?v=20260424g"></script>
+<script src="functions/dossierSheet.js?v=20260424k"></script>
+<script src="functions/inventory.js?v=20260424m"></script>
+<script src="functions/rollLab.js?v=20260424j"></script>
+<script src="functions/upload-download.js?v=20260424h"></script>
 <script src="functions/netrunner.js?v=20260423a"></script>
 <script src="functions/remote-breach.js?v=20260423a"></script>
 </body>

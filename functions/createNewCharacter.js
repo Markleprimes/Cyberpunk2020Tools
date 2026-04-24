@@ -54,6 +54,7 @@ function buildBlankSheetData(name = '--', aliases = [], career = 'UNKNOWN') {
     stats,
     career: [career],
     careerSkill: { point: 0 },
+    specialSkills: [],
     reputation: { rep: 0 },
     wallet: { eddies: 0 },
     physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0 },

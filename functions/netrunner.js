@@ -13,10 +13,10 @@ const NR_TIER_CONFIGS = {
   4: { size: 12, extraOpenings: 10, timeLimit: 10, minPath: 20, maxOpen: 92, attempts: 14 },
   5: { size: 12, extraOpenings: 8, timeLimit: 10, minPath: 26, maxOpen: 86, attempts: 18 },
   6: { size: 12, extraOpenings: 6, timeLimit: 10, stairPatterns: 1, minPath: 32, maxOpen: 80, attempts: 22 },
-  7: { size: 16, extraOpenings: 5, timeLimit: 10, stairPatterns: 2, minPath: 38, maxOpen: 132, attempts: 22 },
-  8: { size: 16, extraOpenings: 4, timeLimit: 10, stairPatterns: 3, minPath: 44, maxOpen: 126, attempts: 24 },
-  9: { size: 16, extraOpenings: 3, timeLimit: 10, stairPatterns: 4, minPath: 50, maxOpen: 120, attempts: 28 },
-  10: { size: 16, extraOpenings: 2, timeLimit: 10, stairPatterns: 5, minPath: 56, maxOpen: 114, attempts: 32 }
+  7: { size: 16, extraOpenings: 6, timeLimit: 10, stairPatterns: 1, minPath: 36, maxOpen: 136, attempts: 24 },
+  8: { size: 16, extraOpenings: 5, timeLimit: 10, stairPatterns: 2, minPath: 40, maxOpen: 130, attempts: 28 },
+  9: { size: 16, extraOpenings: 4, timeLimit: 10, stairPatterns: 3, minPath: 46, maxOpen: 124, attempts: 32 },
+  10: { size: 16, extraOpenings: 3, timeLimit: 10, stairPatterns: 4, minPath: 52, maxOpen: 118, attempts: 36 }
 };
 
 const NR_COLORS = {

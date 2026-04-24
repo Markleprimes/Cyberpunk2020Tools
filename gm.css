@@ -110,6 +110,13 @@ body::before{
 .gm-effect-chip-note{margin-top:6px;font-size:.82rem;line-height:1.35;color:var(--text)}
 .gm-effect-chip-actions{display:flex;justify-content:flex-end;margin-top:8px}
 .gm-effect-chip-actions .gm-btn{padding:6px 10px;font-size:.58rem}
+.gm-special-skill-list{display:flex;flex-direction:column;gap:8px}
+.gm-special-skill-item{padding:10px 12px;border:1px solid rgba(255,177,74,.16);background:linear-gradient(135deg,rgba(255,177,74,.06),rgba(255,77,109,.04))}
+.gm-special-skill-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.gm-special-skill-name{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:.1em;color:var(--accent-y)}
+.gm-special-skill-value{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;line-height:1;color:#fff}
+.gm-special-skill-meta{margin-top:5px;font-family:'Share Tech Mono',monospace;font-size:.56rem;color:var(--accent-r);letter-spacing:.12em;text-transform:uppercase}
+.gm-special-skill-desc{margin-top:7px;font-size:.86rem;line-height:1.4;color:var(--text)}
 .gm-remote-input{width:94px;justify-self:end}
 .gm-remote-inventory-list{display:flex;flex-direction:column;gap:8px}
 .gm-remote-item{padding:8px 10px;border:1px solid rgba(255,77,109,.14);background:rgba(255,77,109,.04)}

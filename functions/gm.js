@@ -44,12 +44,18 @@
   let gmAimHitWeapons = [];
   let gmEffectTargetClientId = '';
   let gmInventoryTargetClientId = '';
+  let gmInventoryTargetMode = 'remote';
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
   let gmRemotePlayerData = {};
   let gmRemotePlayerEffects = {};
   const GM_LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
+  const GM_NPC_DOSSIER_SYNC_PREFIX = 'cp2020_npc_dossier_';
+
+  function getGMNpcSyncKey(npcId) {
+    return `${GM_NPC_DOSSIER_SYNC_PREFIX}${String(npcId || '').trim()}`;
+  }
 
   function setGMStatusVisual(status) {
     const chip = document.getElementById('gm-status-chip');
@@ -252,6 +258,7 @@
       stats: {},
       career: [],
       careerSkill: {},
+      specialSkills: [],
       reputation: {},
       wallet: {},
       physicalBody: {},
@@ -269,6 +276,7 @@
       else if (lower === 'stats') data.stats = parseKVBlock(body);
       else if (lower === 'career') data.career = parseNameBlock(body);
       else if (lower === 'careerskill') data.careerSkill = parseKVBlock(body);
+      else if (lower === 'specialskill' || lower === 'specialskills') data.specialSkills = parseGMSpecialSkillBlock(body);
       else if (lower === 'reputation') data.reputation = parseKVBlock(body);
       else if (lower === 'wallet') data.wallet = parseKVBlock(body);
       else if (lower === 'physicalbody') data.physicalBody = parseKVBlock(body);
@@ -280,6 +288,95 @@
     });
 
     return data;
+  }
+
+  function parseGMSpecialSkillEntry(block, idx) {
+    const skill = {
+      id: block.key || `specialskill${idx + 1}`,
+      name: block.key || `Special Skill ${idx + 1}`,
+      tiedSkill: '',
+      value: 0,
+      description: ''
+    };
+    splitTopLevelTokens(block.body).forEach((token) => {
+      const infoMatch = token.match(/^info\s*:\s*\{([\s\S]*)\}$/i);
+      if (infoMatch) {
+        skill.description = parseNameBlock(infoMatch[1]).join(' | ');
+        return;
+      }
+      const descriptionMatch = token.match(/^description\s*:\s*\{([\s\S]*)\}$/i);
+      if (descriptionMatch) {
+        skill.description = parseNameBlock(descriptionMatch[1]).join(' | ');
+        return;
+      }
+      const match = token.match(/^"?([^"=]+)"?\s*=\s*(.+)$/);
+      if (!match) return;
+      const fieldKey = String(match[1] || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const rawValue = cleanValue(match[2]);
+      if (fieldKey === 'name') skill.name = rawValue || skill.name;
+      else if (fieldKey === 'tiedskill' || fieldKey === 'tied' || fieldKey === 'careerskill' || fieldKey === 'skill') skill.tiedSkill = rawValue;
+      else if (fieldKey === 'value' || fieldKey === 'rank' || fieldKey === 'modifier') skill.value = parseGMNumericValue(rawValue) ?? 0;
+      else if (fieldKey === 'description' || fieldKey === 'effect' || fieldKey === 'whatitdoes') skill.description = rawValue;
+    });
+    return skill;
+  }
+
+  function looksLikeFlatGMSpecialSkillBlocks(blocks) {
+    const fieldKeys = new Set([
+      'name',
+      'tiedskill',
+      'tied',
+      'careerskill',
+      'skill',
+      'value',
+      'rank',
+      'modifier',
+      'description',
+      'effect',
+      'whatitdoes',
+      'info'
+    ]);
+    return Array.isArray(blocks)
+      && !!blocks.length
+      && blocks.every((block) => fieldKeys.has(String(block?.key || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')));
+  }
+
+  function parseGMFlatSpecialSkillFile(blocks, defaultId = 'specialskill1') {
+    const skill = {
+      id: defaultId,
+      name: 'Special Skill',
+      tiedSkill: '',
+      value: 0,
+      description: ''
+    };
+    blocks.forEach((block) => {
+      const fieldKey = String(block?.key || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const body = String(block?.body || '').trim();
+      const bodyValue = parseNameBlock(body).join(' | ') || cleanValue(body);
+      if (fieldKey === 'name') skill.name = bodyValue || skill.name;
+      else if (fieldKey === 'tiedskill' || fieldKey === 'tied' || fieldKey === 'careerskill' || fieldKey === 'skill') skill.tiedSkill = bodyValue;
+      else if (fieldKey === 'value' || fieldKey === 'rank' || fieldKey === 'modifier') skill.value = parseGMNumericValue(bodyValue) ?? 0;
+      else if (fieldKey === 'description' || fieldKey === 'effect' || fieldKey === 'whatitdoes' || fieldKey === 'info') skill.description = bodyValue;
+    });
+    return skill.name ? [skill] : [];
+  }
+
+  function parseGMSpecialSkillBlock(body) {
+    const blocks = extractTopLevelBlocks(body);
+    if (looksLikeFlatGMSpecialSkillBlocks(blocks)) return parseGMFlatSpecialSkillFile(blocks);
+    return blocks.map((block, idx) => parseGMSpecialSkillEntry(block, idx));
+  }
+
+  function parseGMSpecialSkillFile(raw) {
+    const text = stripCommentLines(raw);
+    const blocks = extractTopLevelBlocks(text);
+    if (blocks.length === 1 && ['specialskill', 'specialskills'].includes(blocks[0].key.trim().toLowerCase())) {
+      return parseGMSpecialSkillBlock(blocks[0].body);
+    }
+    if (looksLikeFlatGMSpecialSkillBlocks(blocks)) {
+      return parseGMFlatSpecialSkillFile(blocks);
+    }
+    return blocks.map((block, idx) => parseGMSpecialSkillEntry(block, idx));
   }
 
   async function readGMTextFile(file) {
@@ -312,9 +409,16 @@
     const characterEntry = textEntries.find((entry) => /^(character|dossier|sheet)\.txt$/i.test(entry.name))
       || textEntries.find((entry) => looksLikeCharacterText(entry.text))
       || null;
+    const specialSkillEntries = textEntries.filter((entry) =>
+      entry !== characterEntry && (
+        /^(specialskills|specialskill|special-skills|special-skill)\.txt$/i.test(entry.name)
+        || String(entry.text || '').toLowerCase().includes('tiedskill')
+      )
+    );
     return {
       characterText: characterEntry?.text || '',
-      itemTexts: textEntries.filter((entry) => entry !== characterEntry).map((entry) => entry.text)
+      itemTexts: textEntries.filter((entry) => entry !== characterEntry && !specialSkillEntries.includes(entry)).map((entry) => entry.text),
+      specialSkillTexts: specialSkillEntries.map((entry) => entry.text)
     };
   }
 
@@ -353,6 +457,13 @@
       skills: Object.entries(parsedData.careerSkill || {})
         .filter(([label]) => label.toLowerCase() !== 'point')
         .map(([label, value]) => ({ label, value: parseGMNumericValue(value) ?? value })),
+      specialSkills: Array.isArray(parsedData.specialSkills) ? parsedData.specialSkills.map((skill, idx) => ({
+        id: String(skill?.id || `specialskill${idx + 1}`).trim() || `specialskill${idx + 1}`,
+        name: String(skill?.name || `Special Skill ${idx + 1}`).trim() || `Special Skill ${idx + 1}`,
+        tiedSkill: String(skill?.tiedSkill || '').trim(),
+        value: parseGMNumericValue(skill?.value) ?? 0,
+        description: String(skill?.description || '').trim()
+      })) : [],
       reputation: parseGMNumericValue(parsedData.reputation?.rep) ?? 0,
       wallet: parseGMNumericValue(parsedData.wallet?.eddies) ?? 0,
       physical: {
@@ -362,11 +473,124 @@
       },
       inventoryMap: JSON.parse(JSON.stringify(parsedData.inventory || {})),
       inventory: flattenGMInventory(parsedData.inventory || {}),
+      inventoryDetailed: Object.entries(parsedData.inventory || {}).flatMap(([category, items]) =>
+        (items || []).map((item) => ({
+          category,
+          id: item.id || buildGMInventoryId(category),
+          name: item.name || humanizeLabel(item.id || category),
+          fields: Object.entries(item.fields || {}).map(([label, value]) => ({ label, value })),
+          info: [...(item.info || [])]
+        }))
+      ),
       armor: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.armor?.[limb]) ?? 0 })),
       damage: GM_LIMBS.map((limb) => ({ label: limb, value: parseGMNumericValue(parsedData.damage?.[limb]) ?? 0 })),
       lastRollVisible: null,
       lastRollPending: false
     };
+  }
+
+  function buildDossierDataFromGMNpc(entry) {
+    const stats = {};
+    (entry?.stats || []).forEach((row) => {
+      const label = String(row?.label || '').trim();
+      if (!label) return;
+      stats[label] = parseGMNumericValue(row?.value) ?? 0;
+    });
+    const careerSkill = { point: 0 };
+    (entry?.skills || []).forEach((row) => {
+      const label = String(row?.label || '').trim();
+      if (!label) return;
+      careerSkill[label] = parseGMNumericValue(row?.value) ?? 0;
+    });
+    const armor = {};
+    (entry?.armor || []).forEach((row) => {
+      const label = String(row?.label || '').trim();
+      if (!label) return;
+      armor[label] = parseGMNumericValue(row?.value) ?? 0;
+    });
+    const damage = {};
+    (entry?.damage || []).forEach((row) => {
+      const label = String(row?.label || '').trim();
+      if (!label) return;
+      damage[label] = parseGMNumericValue(row?.value) ?? 0;
+    });
+    return {
+      name: [entry?.name || 'Unknown NPC'],
+      stats,
+      career: [entry?.career || 'NPC'],
+      careerSkill,
+      specialSkills: Array.isArray(entry?.specialSkills) ? entry.specialSkills.map((skill, idx) => ({
+        id: String(skill?.id || `specialskill${idx + 1}`).trim() || `specialskill${idx + 1}`,
+        name: String(skill?.name || `Special Skill ${idx + 1}`).trim() || `Special Skill ${idx + 1}`,
+        tiedSkill: String(skill?.tiedSkill || '').trim(),
+        value: parseGMNumericValue(skill?.value) ?? 0,
+        description: String(skill?.description || '').trim()
+      })) : [],
+      reputation: { rep: parseGMNumericValue(entry?.reputation) ?? 0 },
+      wallet: { eddies: parseGMNumericValue(entry?.wallet) ?? 0 },
+      physicalBody: {
+        bodylevel: parseGMNumericValue(entry?.physical?.bodyLevel) ?? 0,
+        weight: parseGMNumericValue(entry?.physical?.weight) ?? 0,
+        stunpoint: parseGMNumericValue(entry?.physical?.stun) ?? 0
+      },
+      body: {},
+      stunpoint: {},
+      armor,
+      damage,
+      inventory: JSON.parse(JSON.stringify(entry?.inventoryMap || {}))
+    };
+  }
+
+  function persistGMNpcDossierSync(npcId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) return;
+    try {
+      window.localStorage?.setItem(getGMNpcSyncKey(npcId), JSON.stringify({
+        npcId,
+        updatedAt: Date.now(),
+        source: 'gm',
+        data: buildDossierDataFromGMNpc(npc)
+      }));
+    } catch (error) {
+      console.warn('Failed to persist NPC dossier sync payload.', error);
+    }
+  }
+
+  function applyDossierDataToLocalNpc(npcId, data, sourceLabel = 'NPC') {
+    const index = gmLocalNpcs.findIndex((entry) => entry.id === npcId);
+    if (index === -1 || !data) return;
+    const existing = gmLocalNpcs[index];
+    const rebuilt = buildGMNpcEntry(data, sourceLabel);
+    rebuilt.id = existing.id;
+    rebuilt.role = existing.role;
+    rebuilt.lastRollVisible = existing.lastRollVisible || null;
+    rebuilt.lastRollPending = existing.lastRollPending || false;
+    gmLocalNpcs[index] = rebuilt;
+    renderGMNpcList();
+  }
+
+  function openGMNpcDossier(npcId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) {
+      setGMStatus('Selected NPC is no longer available.');
+      return;
+    }
+    persistGMNpcDossierSync(npcId);
+    const params = new URLSearchParams({
+      npcSyncId: String(npcId || '').trim(),
+      role: 'npc',
+      autoConnect: activeRoomId ? '1' : '0'
+    });
+    if (activeRoomId) params.set('roomId', activeRoomId);
+    const targetUrl = `DND.html?${params.toString()}`;
+    try {
+      window.open(targetUrl, '_blank', 'noopener');
+      setGMStatus(`Opened dossier for ${npc.name || 'NPC'}.`);
+      setGMStatusVisual(activeRef ? 'connected' : 'pending');
+    } catch (error) {
+      setGMStatus(`NPC dossier launch error: ${error.message}`);
+      setGMStatusVisual('disconnected');
+    }
   }
 
   function getGMBlockValue(block, label) {
@@ -467,6 +691,21 @@
     `).join('');
   }
 
+  function renderGMLocalEditableNumberLines(block, options = {}) {
+    const entries = Array.isArray(block)
+      ? block.map((entry) => ({ label: entry?.label, value: parseGMNumericValue(entry?.rawValue ?? entry?.value) ?? 0, commandField: entry?.label }))
+      : Object.entries(block || {}).map(([label, value]) => ({ label, value: parseGMNumericValue(value) ?? 0, commandField: label }));
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map((entry) => `
+      <div class="gm-sheet-line">
+        <span class="gm-sheet-key">${escapeGMValue(entry.label)}:</span>
+        <input class="gm-ad-input gm-remote-input" type="number" min="0" value="${escapeGMValue(entry.value)}" data-gm-local-edit="${escapeGMValue(options.commandType || 'setValue')}" data-gm-npc-id="${escapeGMValue(options.npcId || '')}" data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">
+      </div>
+    `).join('');
+  }
+
   function renderGMArmorDamageTable(armor, damage, options = {}) {
     const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
     const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
@@ -525,8 +764,89 @@
     if (!row) return;
     row.value = Math.max(0, parseGMNumericValue(value) ?? 0);
     renderGMNpcList();
+    persistGMNpcDossierSync(npcId);
     setGMStatus(`${npc.name || 'NPC'} ${field.toUpperCase()} ${limb} set to ${row.value}.`);
     setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
+  }
+
+  function updateLocalNpcValue(npcId, type, label, value) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) return;
+    const nextValue = Math.max(0, parseGMNumericValue(value) ?? 0);
+    if (type === 'setStat') {
+      const target = (npc.stats || []).find((entry) => String(entry?.label || '').trim() === String(label || '').trim());
+      if (target) target.value = nextValue;
+    } else if (type === 'setSkill') {
+      const target = (npc.skills || []).find((entry) => String(entry?.label || '').trim() === String(label || '').trim());
+      if (target) target.value = nextValue;
+      else npc.skills = [...(npc.skills || []), { label, value: nextValue }];
+    } else if (type === 'setReputation') {
+      npc.reputation = nextValue;
+    } else if (type === 'setWallet') {
+      npc.wallet = nextValue;
+    } else if (type === 'setPhysical') {
+      if (!npc.physical) npc.physical = { bodyLevel: 0, weight: 0, stun: 0 };
+      npc.physical[label] = nextValue;
+    } else {
+      return;
+    }
+    renderGMNpcList();
+    persistGMNpcDossierSync(npcId);
+    setGMStatus(`${npc.name || 'NPC'} ${String(label || type).toUpperCase()} set to ${nextValue}.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
+  function upsertLocalNpcInventoryItem(npcId, itemPayload) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) return;
+    const category = sanitizeGMCategory(itemPayload?.category);
+    if (!category) return;
+    if (!npc.inventoryMap) npc.inventoryMap = {};
+    if (!npc.inventoryMap[category]) npc.inventoryMap[category] = [];
+    const item = {
+      id: String(itemPayload?.id || buildGMInventoryId(category)).trim() || buildGMInventoryId(category),
+      name: String(itemPayload?.name || 'Item').trim() || 'Item',
+      fields: Object.fromEntries((itemPayload?.fields || []).map((field) => [field.label, field.value])),
+      info: Array.isArray(itemPayload?.info) ? itemPayload.info.map((line) => String(line || '').trim()).filter(Boolean) : []
+    };
+    const existingIndex = npc.inventoryMap[category].findIndex((entry) => entry.id === item.id);
+    if (existingIndex > -1) npc.inventoryMap[category][existingIndex] = item;
+    else npc.inventoryMap[category].push(item);
+    npc.inventory = flattenGMInventory(npc.inventoryMap);
+    npc.inventoryDetailed = Object.entries(npc.inventoryMap || {}).flatMap(([entryCategory, items]) =>
+      (items || []).map((entryItem) => ({
+        category: entryCategory,
+        id: entryItem.id || '',
+        name: entryItem.name || 'Item',
+        fields: Object.entries(entryItem.fields || {}).map(([label, value]) => ({ label, value })),
+        info: [...(entryItem.info || [])]
+      }))
+    );
+    renderGMNpcList();
+    persistGMNpcDossierSync(npcId);
+    setGMStatus(`${npc.name || 'NPC'} inventory updated.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
+  function deleteLocalNpcInventoryItem(npcId, category, itemId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc?.inventoryMap?.[category]) return;
+    npc.inventoryMap[category] = npc.inventoryMap[category].filter((item) => item.id !== itemId);
+    if (!npc.inventoryMap[category].length) delete npc.inventoryMap[category];
+    npc.inventory = flattenGMInventory(npc.inventoryMap);
+    npc.inventoryDetailed = Object.entries(npc.inventoryMap || {}).flatMap(([entryCategory, items]) =>
+      (items || []).map((entryItem) => ({
+        category: entryCategory,
+        id: entryItem.id || '',
+        name: entryItem.name || 'Item',
+        fields: Object.entries(entryItem.fields || {}).map(([label, value]) => ({ label, value })),
+        info: [...(entryItem.info || [])]
+      }))
+    );
+    renderGMNpcList();
+    persistGMNpcDossierSync(npcId);
+    setGMStatus(`${npc.name || 'NPC'} inventory item deleted.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
   }
 
   function updateRemotePlayerArmorDamage(clientId, field, limb, value) {
@@ -555,6 +875,30 @@
         </div>
       `;
     }).join('');
+  }
+
+  function renderGMSpecialSkillSection(specialSkills = []) {
+    const skills = Array.isArray(specialSkills) ? specialSkills.filter(Boolean) : [];
+    if (!skills.length) return '';
+    return `
+      <div class="gm-sheet-columns gm-sheet-columns-wide">
+        <div class="gm-sheet-col">
+          <div class="gm-sheet-title">Special Skills</div>
+          <div class="gm-special-skill-list">
+            ${skills.map((skill) => `
+              <div class="gm-special-skill-item">
+                <div class="gm-special-skill-head">
+                  <span class="gm-special-skill-name">${escapeGMValue(skill.name || 'Special Skill')}</span>
+                  <span class="gm-special-skill-value">+${escapeGMValue(parseGMNumericValue(skill.value) ?? 0)}</span>
+                </div>
+                <div class="gm-special-skill-meta">${escapeGMValue(skill.tiedSkill || 'UNLINKED')}</div>
+                <div class="gm-special-skill-desc">${escapeGMValue(skill.description || 'No description.')}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   function renderGMRemoteInventory(entry, clientId) {
@@ -586,6 +930,48 @@
       </div>
       <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
         <button type="button" class="gm-btn" data-gm-add-item="${escapeGMValue(clientId)}">ADD ITEM</button>
+      </div>
+    `;
+  }
+
+  function renderGMLocalInventory(entry, npcId) {
+    const items = Array.isArray(entry?.inventoryDetailed)
+      ? entry.inventoryDetailed
+      : Object.entries(entry?.inventoryMap || {}).flatMap(([category, categoryItems]) =>
+        (categoryItems || []).map((item) => ({
+          category,
+          id: item.id || '',
+          name: item.name || 'Item',
+          info: [...(item.info || [])]
+        }))
+      );
+    if (!items.length) {
+      return `
+        <div class="gm-empty">No inventory items.</div>
+        <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
+          <button type="button" class="gm-btn" data-gm-add-local-item="${escapeGMValue(npcId)}">ADD ITEM</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="gm-remote-inventory-list">
+        ${items.map((item) => `
+          <div class="gm-remote-item">
+            <div class="gm-remote-item-head">
+              <div>
+                <div class="gm-remote-item-name">${escapeGMValue(item.name || 'Item')}</div>
+                <div class="gm-remote-item-type">${escapeGMValue(humanizeLabel(item.category || 'miscellaneous'))}</div>
+              </div>
+            </div>
+            ${(item.info || []).length ? `<div class="gm-remote-item-note">${escapeGMValue(item.info.join(' | '))}</div>` : ''}
+            <div class="gm-remote-item-actions">
+              <button type="button" class="gm-btn gm-btn-muted" data-gm-delete-local-item="${escapeGMValue(npcId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">DELETE</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
+        <button type="button" class="gm-btn" data-gm-add-local-item="${escapeGMValue(npcId)}">ADD ITEM</button>
       </div>
     `;
   }
@@ -695,18 +1081,23 @@
         <div class="gm-player-sheet">
           ${options.removable ? `
             <div class="gm-card-actions">
+              <button type="button" class="gm-btn" data-gm-open-npc-dossier="${escapeGMValue(clientId)}">OPEN DOSSIER</button>
               <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-npc="${escapeGMValue(clientId)}">REMOVE NPC</button>
             </div>` : ''}
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Stats</div>
-              ${options.remoteEditable
+              ${options.localEditable
+                ? renderGMLocalEditableNumberLines(editableStats, { commandType: 'setStat', npcId: clientId })
+                : options.remoteEditable
                 ? renderGMEditableNumberLines(editableStats, { commandType: 'setStat', clientId })
                 : renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Skill</div>
-              ${options.remoteEditable
+              ${options.localEditable
+                ? renderGMLocalEditableNumberLines(entry.skills, { commandType: 'setSkill', npcId: clientId })
+                : options.remoteEditable
                 ? renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })
                 : renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` })}
             </div>
@@ -714,7 +1105,10 @@
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Dossier</div>
-              ${options.remoteEditable
+              ${options.localEditable
+                ? `${renderGMLocalEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', npcId: clientId })}
+                   ${renderGMLocalEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', npcId: clientId })}`
+                : options.remoteEditable
                 ? `${renderGMEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', clientId })}
                    ${renderGMEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', clientId })}`
                 : renderGMKeyValueLines({
@@ -724,7 +1118,13 @@
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Physical</div>
-              ${options.remoteEditable
+              ${options.localEditable
+                ? renderGMLocalEditableNumberLines([
+                  { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
+                  { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
+                  { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+                ], { commandType: 'setPhysical', npcId: clientId })
+                : options.remoteEditable
                 ? renderGMEditableNumberLines([
                   { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
                   { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
@@ -737,6 +1137,7 @@
                 })}
             </div>
           </div>
+          ${renderGMSpecialSkillSection(entry.specialSkills)}
           ${renderGMEffectsSection(clientId, effects, !!options.effectEditable)}
           <div class="gm-sheet-columns gm-sheet-columns-wide">
             <div class="gm-sheet-col">
@@ -745,7 +1146,11 @@
             </div>
             <div class="gm-sheet-col">
               <div class="gm-sheet-title">Inventory</div>
-              ${options.remoteEditable ? renderGMRemoteInventory(entry, clientId) : renderGMItemList(entry.inventory)}
+              ${options.localEditable
+                ? renderGMLocalInventory(entry, clientId)
+                : options.remoteEditable
+                  ? renderGMRemoteInventory(entry, clientId)
+                  : renderGMItemList(entry.inventory)}
             </div>
           </div>
           <div class="gm-sheet-columns gm-sheet-columns-wide">
@@ -753,7 +1158,7 @@
               <div class="gm-sheet-title">Armor & Damage</div>
               ${renderGMArmorDamageTable(entry.armor, entry.damage, options.remoteEditable
                 ? { editable: true, targetType: 'player', targetId: clientId }
-                : { editable: !!options.removable, targetType: 'npc', targetId: clientId })}
+                : { editable: !!(options.removable || options.localEditable), targetType: 'npc', targetId: clientId })}
               ${options.removable ? `<div class="gm-npc-wound">Wound Status: ${escapeGMValue(wound || 'CLEAR')}</div>` : ''}
             </div>
           </div>
@@ -847,7 +1252,7 @@
       publishGMMonitorState();
       return;
     }
-    npcNode.innerHTML = gmLocalNpcs.map((npc) => renderGMEntry(npc.id, npc, { removable: true, pickable: true })).join('');
+    npcNode.innerHTML = gmLocalNpcs.map((npc) => renderGMEntry(npc.id, npc, { removable: true, pickable: true, localEditable: true })).join('');
     publishGMMonitorState();
   }
 
@@ -1086,6 +1491,7 @@
 
   function closeGMInventoryModal() {
     gmInventoryTargetClientId = '';
+    gmInventoryTargetMode = 'remote';
     document.getElementById('gm-item-name').value = '';
     document.getElementById('gm-item-type').value = 'weapon';
     document.getElementById('gm-item-custom-type').value = '';
@@ -1106,9 +1512,23 @@
       setGMStatus('Connect to a room before editing player inventory.');
       return;
     }
+    gmInventoryTargetMode = 'remote';
     gmInventoryTargetClientId = clientId;
     closeGMInventoryModal();
+    gmInventoryTargetMode = 'remote';
     gmInventoryTargetClientId = clientId;
+    document.getElementById('gm-inventory-modal')?.classList.add('show');
+  }
+
+  function openGMLocalNpcInventoryModal(npcId) {
+    gmInventoryTargetMode = 'local';
+    gmInventoryTargetClientId = npcId;
+    document.getElementById('gm-item-name').value = '';
+    document.getElementById('gm-item-type').value = 'weapon';
+    document.getElementById('gm-item-custom-type').value = '';
+    document.getElementById('gm-item-stats').value = '';
+    document.getElementById('gm-item-info').value = '';
+    document.getElementById('gm-item-custom-type-wrap').style.display = 'none';
     document.getElementById('gm-inventory-modal')?.classList.add('show');
   }
 
@@ -1130,17 +1550,22 @@
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
-    await sendGMRemotePlayerCommand(gmInventoryTargetClientId, {
-      type: 'inventoryUpsert',
-      label: `inventory ${name}`,
-      item: {
-        category,
-        id: buildGMInventoryId(category),
-        name,
-        fields,
-        info
-      }
-    });
+    const item = {
+      category,
+      id: buildGMInventoryId(category),
+      name,
+      fields,
+      info
+    };
+    if (gmInventoryTargetMode === 'local') {
+      upsertLocalNpcInventoryItem(gmInventoryTargetClientId, item);
+    } else {
+      await sendGMRemotePlayerCommand(gmInventoryTargetClientId, {
+        type: 'inventoryUpsert',
+        label: `inventory ${name}`,
+        item
+      });
+    }
     closeGMInventoryModal();
   }
 
@@ -1153,6 +1578,10 @@
         id: itemId
       }
     });
+  }
+
+  function deleteGMLocalInventoryItem(npcId, category, itemId) {
+    deleteLocalNpcInventoryItem(npcId, category, itemId);
   }
 
   function getGMRollModifierTotal() {
@@ -1876,6 +2305,11 @@
 
   function removeLocalNpc(npcId) {
     gmLocalNpcs = gmLocalNpcs.filter((npc) => npc.id !== npcId);
+    try {
+      window.localStorage?.removeItem(getGMNpcSyncKey(npcId));
+    } catch (error) {
+      console.warn('Failed to clear NPC sync payload.', error);
+    }
     renderGMNpcList();
   }
 
@@ -1887,6 +2321,7 @@
         const bundle = await extractGMZipBundle(file);
         if (!bundle.characterText) throw new Error('CHARACTER.TXT NOT FOUND IN NPC ZIP.');
         parsed = parseGMCharacterText(bundle.characterText);
+        if (bundle.specialSkillTexts?.length) parsed.specialSkills = bundle.specialSkillTexts.flatMap((text) => parseGMSpecialSkillFile(text));
         bundle.itemTexts.forEach((text) => {
           const itemData = parseGMCharacterText(text);
           mergeGMInventory(parsed.inventory, itemData.inventory);
@@ -1898,6 +2333,7 @@
       }
 
       gmLocalNpcs.push(buildGMNpcEntry(parsed, file?.name || 'NPC'));
+      persistGMNpcDossierSync(gmLocalNpcs[gmLocalNpcs.length - 1].id);
       renderGMNpcList();
       setGMStatus(`Local NPC loaded: ${gmLocalNpcs[gmLocalNpcs.length - 1].name}`);
       setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
@@ -2005,6 +2441,12 @@
         return;
       }
 
+      const openNpcDossierButton = event.target.closest('[data-gm-open-npc-dossier]');
+      if (openNpcDossierButton) {
+        openGMNpcDossier(openNpcDossierButton.getAttribute('data-gm-open-npc-dossier'));
+        return;
+      }
+
       const addEffectButton = event.target.closest('[data-gm-add-effect]');
       if (addEffectButton) {
         openGMEffectModal(addEffectButton.getAttribute('data-gm-add-effect'));
@@ -2026,12 +2468,28 @@
         return;
       }
 
+      const addLocalItemButton = event.target.closest('[data-gm-add-local-item]');
+      if (addLocalItemButton) {
+        openGMLocalNpcInventoryModal(addLocalItemButton.getAttribute('data-gm-add-local-item'));
+        return;
+      }
+
       const deleteItemButton = event.target.closest('[data-gm-delete-item]');
       if (deleteItemButton) {
         deleteGMRemoteInventoryItem(
           deleteItemButton.getAttribute('data-gm-delete-item'),
           deleteItemButton.getAttribute('data-gm-item-category'),
           deleteItemButton.getAttribute('data-gm-item-id')
+        );
+        return;
+      }
+
+      const deleteLocalItemButton = event.target.closest('[data-gm-delete-local-item]');
+      if (deleteLocalItemButton) {
+        deleteGMLocalInventoryItem(
+          deleteLocalItemButton.getAttribute('data-gm-delete-local-item'),
+          deleteLocalItemButton.getAttribute('data-gm-item-category'),
+          deleteLocalItemButton.getAttribute('data-gm-item-id')
         );
         return;
       }
@@ -2043,6 +2501,16 @@
     });
 
     document.addEventListener('change', (event) => {
+      const localEdit = event.target.closest('[data-gm-local-edit]');
+      if (localEdit) {
+        const type = localEdit.getAttribute('data-gm-local-edit');
+        const npcId = localEdit.getAttribute('data-gm-npc-id');
+        const label = localEdit.getAttribute('data-gm-label');
+        const value = Math.max(0, parseGMNumericValue(localEdit.value) ?? 0);
+        updateLocalNpcValue(npcId, type, label, value);
+        return;
+      }
+
       const remoteEdit = event.target.closest('[data-gm-remote-edit]');
       if (remoteEdit) {
         const type = remoteEdit.getAttribute('data-gm-remote-edit');
@@ -2090,6 +2558,19 @@
           input.getAttribute('data-gm-limb'),
           input.value
         );
+      }
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (!event.key || !event.key.startsWith(GM_NPC_DOSSIER_SYNC_PREFIX) || !event.newValue) return;
+      try {
+        const payload = JSON.parse(event.newValue);
+        if (!payload?.npcId || payload.source === 'gm' || !payload.data) return;
+        applyDossierDataToLocalNpc(payload.npcId, payload.data, payload.data?.name?.[0] || 'NPC');
+        setGMStatus(`NPC dossier sync received for ${payload.data?.name?.[0] || 'NPC'}.`);
+        setGMStatusVisual(activeRef ? 'connected' : 'pending');
+      } catch (error) {
+        console.warn('Failed to apply NPC dossier sync update.', error);
       }
     });
 
