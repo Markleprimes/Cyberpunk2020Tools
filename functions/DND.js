@@ -51,6 +51,9 @@ let combatLuckSpent = 0;
 let activeNpcSyncId = '';
 let npcSyncWriteSuppressed = false;
 let activeInventoryFieldToggles = {};
+const DOSSIER_LAUNCH_PARAMS = new URLSearchParams(window.location.search);
+const IS_GM_NPC_LITE_MODE = DOSSIER_LAUNCH_PARAMS.get('gmNpcLite') === '1'
+  || (DOSSIER_LAUNCH_PARAMS.get('embedded') === '1' && String(DOSSIER_LAUNCH_PARAMS.get('role') || '').trim().toLowerCase() === 'npc');
 
 const LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
 let limbSP = { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 };
@@ -99,6 +102,38 @@ const INVENTORY_PHYSICAL_ALIASES = {
 function getNpcDossierSyncKey(npcId) {
   return `${NPC_DOSSIER_SYNC_PREFIX}${String(npcId || '').trim()}`;
 }
+
+function isGMNpcLiteMode() {
+  return IS_GM_NPC_LITE_MODE;
+}
+
+function renderEmbeddedNpcLiteHeader() {
+  if (!isGMNpcLiteMode()) return;
+  const nameNode = getById('npc-lite-name');
+  const metaNode = getById('npc-lite-meta');
+  const mainName = String(getById('char-name')?.textContent || 'NPC').trim() || 'NPC';
+  const aliasParts = Array.from(document.querySelectorAll('.alias-tag'))
+    .map((node) => String(node.textContent || '').trim())
+    .filter(Boolean);
+  const careerLabel = String(getById('char-career')?.dataset?.career || getById('char-career')?.textContent || 'UNKNOWN').trim() || 'UNKNOWN';
+  if (nameNode) nameNode.textContent = mainName;
+  if (metaNode) {
+    metaNode.textContent = aliasParts.length
+      ? `${careerLabel.toUpperCase()} // ${aliasParts.join(' // ')}`
+      : `${careerLabel.toUpperCase()} // LOCAL NPC DOSSIER`;
+  }
+}
+
+function applyEmbeddedDossierMode() {
+  const liteMode = isGMNpcLiteMode();
+  document.body.classList.toggle('gm-npc-lite', liteMode);
+  const specialSkillPanel = getById('special-skill-panel');
+  if (specialSkillPanel) specialSkillPanel.hidden = liteMode;
+}
+
+window.renderEmbeddedNpcLiteHeader = renderEmbeddedNpcLiteHeader;
+
+applyEmbeddedDossierMode();
 
 // DOM helpers and shared event wiring
 function getById(id) {
@@ -280,6 +315,7 @@ bindBackdropClose('inventory-editor-modal', () => closeInventoryEditor());
 bindBackdropClose('special-skill-editor-modal', () => closeSpecialSkillEditor());
 bindBackdropClose('aim-hit-modal', () => closeAimHitModal());
 bindBackdropClose('new-char-modal', () => closeNewCharacterModal());
+bindBackdropClose('identity-modal', () => closeIdentityEditor());
 bindBackdropClose('roll-execute-modal', () => cancelRollExecution());
 bindBackdropClose('roll-cinema-modal', () => closeRollCinemaModal());
 bindBackdropClose('player-choice-modal', () => closePlayerChoiceModal());
@@ -368,6 +404,15 @@ function getCurrentCharacterProfile() {
   });
   const modifierTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const lastRollLabel = String(currentRoll?.diceLabel || (currentRoll?.sides ? `${currentRoll.qty}D${currentRoll.sides}` : '')).trim();
+  const modifierDetails = Array.isArray(currentRoll?.modifierSnapshot)
+    ? currentRoll.modifierSnapshot
+      .filter((mod) => Number.isFinite(Number(mod?.value)))
+      .map((mod) => ({
+        source: String(mod?.source || '').trim(),
+        label: String(mod?.label || 'Modifier').trim() || 'Modifier',
+        value: Number(mod?.value || 0)
+      }))
+    : [];
   const lastRoll = lastRollLabel
       ? {
         dice: lastRollLabel,
@@ -375,6 +420,7 @@ function getCurrentCharacterProfile() {
         raw: currentRoll.result || 0,
         modifiers: currentRoll.modifiers ?? modifierTotal,
         total: currentRoll.total ?? ((currentRoll.result || 0) + modifierTotal),
+        modifierDetails,
         rolledAt: currentRoll.rolledAt || 0
       }
     : null;
@@ -1028,6 +1074,11 @@ function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellane
 
 function applyRemoteInventoryUpsert(payload) {
   const { category, item } = rebuildInventoryItemFromPayload(payload, payload?.category);
+  Object.keys(inventory || {}).forEach((existingCategory) => {
+    if (existingCategory === category || !Array.isArray(inventory[existingCategory])) return;
+    inventory[existingCategory] = inventory[existingCategory].filter((entry) => entry.id !== item.id);
+    if (!inventory[existingCategory].length) delete inventory[existingCategory];
+  });
   if (!inventory[category]) inventory[category] = [];
   const existingIndex = inventory[category].findIndex((entry) => entry.id === item.id);
   if (existingIndex > -1) inventory[category][existingIndex] = item;

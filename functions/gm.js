@@ -27,6 +27,7 @@
   let gmHoverAudio = null;
   let gmHoveredControl = null;
   let gmRollModifiers = [];
+  let gmManualDicePool = [];
   let gmCurrentRoll = null;
   let gmPendingRollRequest = null;
   let gmSelectedRollSubjectKey = '';
@@ -42,9 +43,12 @@
   let gmRollBounceAudios = [];
   let gmAimStackPoints = 0;
   let gmAimHitWeapons = [];
+  let activeGMRollDrawer = '';
   let gmEffectTargetClientId = '';
   let gmInventoryTargetClientId = '';
   let gmInventoryTargetMode = 'remote';
+  let gmInventoryEditItemId = '';
+  let gmInventoryEditOriginalCategory = '';
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
@@ -52,6 +56,8 @@
   let gmRemotePlayerEffects = {};
   const GM_LIMBS = ['Head', 'Torso', 'R.Arm', 'L.Arm', 'R.Leg', 'L.Leg'];
   const GM_NPC_DOSSIER_SYNC_PREFIX = 'cp2020_npc_dossier_';
+  const GM_DEFAULT_STATS = ['INT', 'REF', 'COOL', 'TECH', 'ATTR', 'LUCK', 'MA', 'BODY', 'EMP'];
+  const GM_DEFAULT_NPC_SKILLS = ['Awareness', 'Athletics', 'Stealth', 'Handgun', 'Brawling', 'Melee'];
 
   function getGMNpcSyncKey(npcId) {
     return `${GM_NPC_DOSSIER_SYNC_PREFIX}${String(npcId || '').trim()}`;
@@ -105,6 +111,29 @@
     const str = String(value ?? '').trim();
     if (/^[-+]?\d+$/.test(str)) return parseInt(str, 10);
     return null;
+  }
+
+  function describeGMDicePool(dicePool = []) {
+    const counts = new Map();
+    dicePool.forEach((side) => {
+      const sides = Number(side);
+      if (!sides) return;
+      counts.set(sides, (counts.get(sides) || 0) + 1);
+    });
+    return [...counts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([sides, qty]) => `${qty}D${sides}`)
+      .join(' + ') || 'NONE';
+  }
+
+  function getGMDicePoolCounts(dicePool = []) {
+    const counts = new Map();
+    dicePool.forEach((side) => {
+      const sides = Number(side);
+      if (!sides) return;
+      counts.set(sides, (counts.get(sides) || 0) + 1);
+    });
+    return counts;
   }
 
   function parseGMEditorFields(text) {
@@ -489,6 +518,36 @@
     };
   }
 
+  function buildGMBlankNpcEntry() {
+    const baseName = `NEW NPC ${gmLocalNpcSeed + 1}`;
+    return buildGMNpcEntry({
+      name: [baseName],
+      career: ['NPC'],
+      stats: Object.fromEntries(GM_DEFAULT_STATS.map((label) => [label, 0])),
+      careerSkill: Object.fromEntries(GM_DEFAULT_NPC_SKILLS.map((label) => [label, 0])),
+      specialSkills: [],
+      reputation: { rep: 0 },
+      wallet: { eddies: 0 },
+      physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0 },
+      armor: Object.fromEntries(GM_LIMBS.map((label) => [label, 0])),
+      damage: Object.fromEntries(GM_LIMBS.map((label) => [label, 0])),
+      inventory: {}
+    }, baseName);
+  }
+
+  function getGMTabIdForNpc(npcId) {
+    return `npc-${String(npcId || '').trim()}`;
+  }
+
+  function getActiveGMTabName() {
+    return document.querySelector('.gm-tab-btn.active')?.getAttribute('data-gm-tab') || 'monitor';
+  }
+
+  function truncateGMTabLabel(value, max = 18) {
+    const text = String(value || '').trim() || 'NPC';
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  }
+
   function buildDossierDataFromGMNpc(entry) {
     const stats = {};
     (entry?.stats || []).forEach((row) => {
@@ -537,7 +596,8 @@
       stunpoint: {},
       armor,
       damage,
-      inventory: JSON.parse(JSON.stringify(entry?.inventoryMap || {}))
+      inventory: JSON.parse(JSON.stringify(entry?.inventoryMap || {})),
+      lastRoll: entry?.lastRollVisible ? JSON.parse(JSON.stringify(entry.lastRollVisible)) : null
     };
   }
 
@@ -563,7 +623,7 @@
     const rebuilt = buildGMNpcEntry(data, sourceLabel);
     rebuilt.id = existing.id;
     rebuilt.role = existing.role;
-    rebuilt.lastRollVisible = existing.lastRollVisible || null;
+    rebuilt.lastRollVisible = data?.lastRoll ? JSON.parse(JSON.stringify(data.lastRoll)) : (existing.lastRollVisible || null);
     rebuilt.lastRollPending = existing.lastRollPending || false;
     gmLocalNpcs[index] = rebuilt;
     renderGMNpcList();
@@ -706,6 +766,21 @@
     `).join('');
   }
 
+  function renderGMLocalEditableTextLines(block, options = {}) {
+    const entries = Array.isArray(block)
+      ? block.map((entry) => ({ label: entry?.label, value: String(entry?.value ?? '').trim(), commandField: entry?.commandField || entry?.label }))
+      : Object.entries(block || {}).map(([label, value]) => ({ label, value: String(value ?? '').trim(), commandField: label }));
+    if (!entries.length) {
+      return '<div class="gm-sheet-line"><span class="gm-sheet-key">--</span><span class="gm-sheet-val">--</span></div>';
+    }
+    return entries.map((entry) => `
+      <div class="gm-sheet-line">
+        <span class="gm-sheet-key">${escapeGMValue(entry.label)}:</span>
+        <input class="gm-ad-input" type="text" value="${escapeGMValue(entry.value)}" data-gm-local-text-edit="${escapeGMValue(options.commandType || 'setText')}" data-gm-npc-id="${escapeGMValue(options.npcId || '')}" data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">
+      </div>
+    `).join('');
+  }
+
   function renderGMArmorDamageTable(armor, damage, options = {}) {
     const armorMap = new Map((Array.isArray(armor) ? armor : []).map((entry) => [entry?.label, entry?.value]));
     const damageMap = new Map((Array.isArray(damage) ? damage : []).map((entry) => [entry?.label, entry?.value]));
@@ -796,6 +871,23 @@
     setGMStatusVisual(activeRef ? 'connected' : 'pending');
   }
 
+  function updateLocalNpcText(npcId, type, label, value) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) return;
+    const nextValue = String(value || '').trim();
+    if (type === 'setIdentity') {
+      if (label === 'name') npc.name = nextValue || 'NPC';
+      else if (label === 'career') npc.career = nextValue || 'NPC';
+      else return;
+    } else {
+      return;
+    }
+    renderGMNpcList(getGMTabIdForNpc(npcId));
+    persistGMNpcDossierSync(npcId);
+    setGMStatus(`${npc.name || 'NPC'} ${String(label || type).toUpperCase()} updated.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
   function upsertLocalNpcInventoryItem(npcId, itemPayload) {
     const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
     if (!npc) return;
@@ -847,6 +939,91 @@
     persistGMNpcDossierSync(npcId);
     setGMStatus(`${npc.name || 'NPC'} inventory item deleted.`);
     setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
+  function buildGMInventoryStatsText(fields) {
+    return (fields || [])
+      .map((field) => {
+        const label = String(field?.label || '').trim();
+        if (!label) return '';
+        return `${label}=${String(field?.value || '').trim()}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  function formatGMInventoryFieldSummary(item) {
+    const fields = Array.isArray(item?.fields)
+      ? item.fields
+      : Object.entries(item?.fields || {}).map(([label, value]) => ({ label, value }));
+    if (!fields.length) return '';
+    return fields
+      .map((field) => {
+        const label = String(field?.label || '').trim();
+        const value = String(field?.value || '').trim();
+        if (!label || !value) return '';
+        return `${label}: ${value}`;
+      })
+      .filter(Boolean)
+      .join(' // ');
+  }
+
+  function setGMInventoryModalState(mode) {
+    const isEdit = mode === 'edit';
+    const title = document.getElementById('gm-item-modal-title');
+    const copy = document.getElementById('gm-item-modal-copy');
+    const saveBtn = document.getElementById('gm-item-save');
+    if (title) title.textContent = isEdit ? 'EDIT INVENTORY ITEM' : 'ADD INVENTORY ITEM';
+    if (copy) {
+      copy.textContent = isEdit
+        ? 'Update fields, notes, or category. Typed values like 250eb, 50m, +1, and 4d6+10 still carry through to the dossier.'
+        : 'One line per field. Examples: Cost=250eb, Range=50m, Accuracy=+1, Damage=4d6+10, REF=+2.';
+    }
+    if (saveBtn) saveBtn.textContent = isEdit ? 'SAVE ITEM' : 'ADD ITEM';
+  }
+
+  function resetGMInventoryModalFields() {
+    document.getElementById('gm-item-name').value = '';
+    document.getElementById('gm-item-type').value = 'weapon';
+    document.getElementById('gm-item-custom-type').value = '';
+    document.getElementById('gm-item-stats').value = '';
+    document.getElementById('gm-item-info').value = '';
+    document.getElementById('gm-item-custom-type-wrap').style.display = 'none';
+    setGMInventoryModalState('add');
+  }
+
+  function resolveGMInventoryTypeValue(category) {
+    const normalized = sanitizeGMCategory(category);
+    return ['weapon', 'cyberware', 'miscellaneous', 'buff'].includes(normalized) ? normalized : 'custom';
+  }
+
+  function prefillGMInventoryModal(item) {
+    const normalizedCategory = sanitizeGMCategory(item?.category);
+    const typeValue = resolveGMInventoryTypeValue(normalizedCategory);
+    document.getElementById('gm-item-name').value = String(item?.name || '').trim();
+    document.getElementById('gm-item-type').value = typeValue;
+    document.getElementById('gm-item-custom-type').value = typeValue === 'custom' ? normalizedCategory : '';
+    document.getElementById('gm-item-stats').value = buildGMInventoryStatsText(item?.fields);
+    document.getElementById('gm-item-info').value = Array.isArray(item?.info) ? item.info.join('\n') : '';
+    toggleGMCustomItemType();
+  }
+
+  function getGMRemoteInventoryItem(clientId, category, itemId) {
+    const player = gmRemotePlayers.find((entry) => entry.id === clientId);
+    if (!player) return null;
+    return (player.inventoryDetailed || []).find((item) =>
+      sanitizeGMCategory(item?.category) === sanitizeGMCategory(category)
+      && String(item?.id || '').trim() === String(itemId || '').trim()
+    ) || null;
+  }
+
+  function getGMLocalInventoryItem(npcId, category, itemId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) return null;
+    return (npc.inventoryDetailed || []).find((item) =>
+      sanitizeGMCategory(item?.category) === sanitizeGMCategory(category)
+      && String(item?.id || '').trim() === String(itemId || '').trim()
+    ) || null;
   }
 
   function updateRemotePlayerArmorDamage(clientId, field, limb, value) {
@@ -921,8 +1098,10 @@
                 <div class="gm-remote-item-type">${escapeGMValue(humanizeLabel(item.category || 'miscellaneous'))}</div>
               </div>
             </div>
+            ${formatGMInventoryFieldSummary(item) ? `<div class="gm-remote-item-fields">${escapeGMValue(formatGMInventoryFieldSummary(item))}</div>` : ''}
             ${(item.info || []).length ? `<div class="gm-remote-item-note">${escapeGMValue(item.info.join(' | '))}</div>` : ''}
             <div class="gm-remote-item-actions">
+              <button type="button" class="gm-btn" data-gm-edit-item="${escapeGMValue(clientId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">EDIT</button>
               <button type="button" class="gm-btn gm-btn-muted" data-gm-delete-item="${escapeGMValue(clientId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">DELETE</button>
             </div>
           </div>
@@ -963,8 +1142,10 @@
                 <div class="gm-remote-item-type">${escapeGMValue(humanizeLabel(item.category || 'miscellaneous'))}</div>
               </div>
             </div>
+            ${formatGMInventoryFieldSummary(item) ? `<div class="gm-remote-item-fields">${escapeGMValue(formatGMInventoryFieldSummary(item))}</div>` : ''}
             ${(item.info || []).length ? `<div class="gm-remote-item-note">${escapeGMValue(item.info.join(' | '))}</div>` : ''}
             <div class="gm-remote-item-actions">
+              <button type="button" class="gm-btn" data-gm-edit-local-item="${escapeGMValue(npcId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">EDIT</button>
               <button type="button" class="gm-btn gm-btn-muted" data-gm-delete-local-item="${escapeGMValue(npcId)}" data-gm-item-category="${escapeGMValue(item.category || 'miscellaneous')}" data-gm-item-id="${escapeGMValue(item.id || '')}">DELETE</button>
             </div>
           </div>
@@ -1033,11 +1214,218 @@
     `;
   }
 
-  function renderGMRollPanel(clientId, lastRoll, isPending = false) {
+  function renderGMMonitorBlock(title, content, options = {}) {
+    if (!content || (typeof content === 'string' && !content.trim())) return '';
+    return `
+      <section class="gm-monitor-block${options.wide ? ' gm-monitor-block-wide' : ''}">
+        <div class="gm-monitor-block-title">${escapeGMValue(title || 'Section')}</div>
+        <div class="gm-monitor-block-body">
+          ${content}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderGMDossierStatGrid(block, options = {}) {
+    const entries = Array.isArray(block)
+      ? block.map((entry) => ({
+          label: entry?.label,
+          value: parseGMNumericValue(entry?.rawValue ?? entry?.value) ?? entry?.value ?? 0,
+          commandField: entry?.commandField || entry?.label
+        }))
+      : Object.entries(block || {}).map(([label, value]) => ({
+          label,
+          value: parseGMNumericValue(value) ?? value ?? 0,
+          commandField: label
+        }));
+    if (!entries.length) return '<div class="gm-empty">No core statistics.</div>';
+    return `
+      <div class="gm-dossier-stats-grid">
+        ${entries.map((entry) => `
+          <div class="gm-dossier-stat-item">
+            <div class="gm-dossier-stat-label">${escapeGMValue(entry.label)}</div>
+            ${options.localEditable ? `
+              <input class="gm-dossier-stat-input" type="number" min="0" value="${escapeGMValue(entry.value)}"
+                data-gm-local-edit="${escapeGMValue(options.commandType || 'setStat')}"
+                data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
+                data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">`
+            : options.remoteEditable ? `
+              <input class="gm-dossier-stat-input" type="number" min="0" value="${escapeGMValue(entry.value)}"
+                data-gm-remote-edit="${escapeGMValue(options.commandType || 'setStat')}"
+                data-gm-client-id="${escapeGMValue(options.clientId || '')}"
+                data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">`
+            : `<div class="gm-dossier-stat-value">${escapeGMValue(entry.value)}</div>`}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderGMDossierPhysicalPanel(entry, options = {}) {
+    const fields = [
+      { label: 'BODY LEVEL', value: entry?.physical?.bodyLevel ?? 0, commandField: 'bodyLevel' },
+      { label: 'BODY WEIGHT', value: entry?.physical?.weight ?? 0, commandField: 'weight' },
+      { label: 'STUN POINTS', value: entry?.physical?.stun ?? 0, commandField: 'stun' }
+    ];
+    return `
+      <div class="gm-dossier-body-row">
+        ${fields.map((field) => `
+          <div class="gm-dossier-bs-item">
+            <div class="gm-dossier-bs-label">${escapeGMValue(field.label)}</div>
+            ${options.localEditable ? `
+              <input class="gm-dossier-bs-input" type="number" min="0" value="${escapeGMValue(field.value)}"
+                data-gm-local-edit="${escapeGMValue(options.commandType || 'setPhysical')}"
+                data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
+                data-gm-label="${escapeGMValue(field.commandField)}">`
+            : options.remoteEditable ? `
+              <input class="gm-dossier-bs-input" type="number" min="0" value="${escapeGMValue(field.value)}"
+                data-gm-remote-edit="${escapeGMValue(options.commandType || 'setPhysical')}"
+                data-gm-client-id="${escapeGMValue(options.clientId || '')}"
+                data-gm-label="${escapeGMValue(field.commandField)}">`
+            : `<div class="gm-dossier-bs-value">${escapeGMValue(field.value)}</div>`}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderGMDossierReputationPanel(entry, options = {}) {
+    const value = entry?.reputation ?? 0;
+    return `
+      <div class="gm-dossier-rep-main">
+        ${options.localEditable ? `
+          <input class="gm-dossier-rep-input" type="number" min="0" value="${escapeGMValue(value)}"
+            data-gm-local-edit="${escapeGMValue(options.commandType || 'setReputation')}"
+            data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
+            data-gm-label="reputation">`
+        : options.remoteEditable ? `
+          <input class="gm-dossier-rep-input" type="number" min="0" value="${escapeGMValue(value)}"
+            data-gm-remote-edit="${escapeGMValue(options.commandType || 'setReputation')}"
+            data-gm-client-id="${escapeGMValue(options.clientId || '')}"
+            data-gm-label="reputation">`
+        : `<div class="gm-dossier-rep-number">${escapeGMValue(value)}</div>`}
+        <div class="gm-dossier-rep-side">
+          <div class="gm-dossier-rep-label">STREET CRED</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMDossierWalletPanel(entry, options = {}) {
+    const value = entry?.wallet ?? 0;
+    return `
+      <div class="gm-dossier-wallet-row">
+        ${options.localEditable ? `
+          <input class="gm-dossier-wallet-input" type="number" min="0" value="${escapeGMValue(value)}"
+            data-gm-local-edit="${escapeGMValue(options.commandType || 'setWallet')}"
+            data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
+            data-gm-label="wallet">`
+        : options.remoteEditable ? `
+          <input class="gm-dossier-wallet-input" type="number" min="0" value="${escapeGMValue(value)}"
+            data-gm-remote-edit="${escapeGMValue(options.commandType || 'setWallet')}"
+            data-gm-client-id="${escapeGMValue(options.clientId || '')}"
+            data-gm-label="wallet">`
+        : `<div class="gm-dossier-wallet-value">${escapeGMValue(value)}</div>`}
+        <div class="gm-dossier-wallet-side">
+          <div class="gm-dossier-wallet-label">EDDIES</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMRemotePlayerDossier(clientId, entry) {
+    const identityMeta = `${escapeGMValue(entry.career || 'UNKNOWN')} // ${escapeGMValue((entry.role || 'player').toUpperCase())}`;
+    return `
+      <section class="gm-panel gm-panel-dossier gm-player-dossier-host" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-role="${escapeGMValue(entry.role || 'player')}" data-gm-player-name="${escapeGMValue(entry.name || 'Unknown')}">
+        <div class="gm-npc-tab-toolbar">
+          <div>
+            <div class="gm-panel-title" style="margin-bottom:6px;">${escapeGMValue(String(entry.name || 'Player').toUpperCase())} // DOSSIER TAB</div>
+            <div class="gm-npc-sheet-kicker">Remote player dossier mirror // same section rhythm as the dossier sheet, tuned for GM editing.</div>
+          </div>
+          <div class="gm-card-actions" style="margin-bottom:0;">
+            <button type="button" class="gm-btn gm-btn-muted gm-tab-toolbar-badge" disabled>REMOTE PLAYER</button>
+          </div>
+        </div>
+        <div class="gm-dossier-frame-shell">
+          <div class="gm-dossier-frame-body gm-dossier-frame-body-player">
+            <div class="gm-player-card gm-player-detail gm-player-dossier-view">
+              <div class="gm-dossier-name-banner">
+                <div>
+                  <div class="gm-dossier-name-main">${escapeGMValue(entry.name || 'Unknown')}</div>
+                  <div class="gm-dossier-name-meta">${identityMeta}</div>
+                </div>
+              </div>
+              <div class="gm-dossier-section">
+                <div class="gm-dossier-panel" style="margin-bottom:18px;">
+                  <div class="gm-dossier-panel-title">Core Statistics</div>
+                  ${renderGMDossierStatGrid(Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats, {
+                    remoteEditable: true,
+                    commandType: 'setStat',
+                    clientId
+                  })}
+                </div>
+
+                <div class="gm-dossier-band" style="margin-bottom:18px;">
+                  <div class="gm-dossier-panel gm-dossier-panel-physical">
+                    <div class="gm-dossier-panel-title">Physical</div>
+                    ${renderGMDossierPhysicalPanel(entry, {
+                      remoteEditable: true,
+                      commandType: 'setPhysical',
+                      clientId
+                    })}
+                  </div>
+                  <div class="gm-dossier-panel gm-dossier-panel-reputation">
+                    <div class="gm-dossier-panel-title">Reputation</div>
+                    ${renderGMDossierReputationPanel(entry, {
+                      remoteEditable: true,
+                      commandType: 'setReputation',
+                      clientId
+                    })}
+                  </div>
+                  <div class="gm-dossier-panel gm-dossier-panel-wallet">
+                    <div class="gm-dossier-panel-title">Wallet</div>
+                    ${renderGMDossierWalletPanel(entry, {
+                      remoteEditable: true,
+                      commandType: 'setWallet',
+                      clientId
+                    })}
+                  </div>
+                </div>
+
+                <div class="gm-dossier-two-col" style="margin-bottom:18px;">
+                  <div class="gm-dossier-panel">
+                    <div class="gm-dossier-panel-title">Career Skills</div>
+                    ${renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })}
+                  </div>
+                  <div class="gm-dossier-panel">
+                    <div class="gm-dossier-panel-title">Inventory</div>
+                    ${renderGMRemoteInventory(entry, clientId)}
+                  </div>
+                </div>
+
+                <div class="gm-dossier-panel" style="margin-bottom:18px;">
+                  <div class="gm-dossier-panel-title">Damage &amp; Armor</div>
+                  ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: true, targetType: 'player', targetId: clientId })}
+                </div>
+
+                <div class="gm-dossier-panel">
+                  <div class="gm-dossier-panel-title">Last Roll</div>
+                  ${renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending, { showTitle: false })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderGMRollPanel(clientId, lastRoll, isPending = false, options = {}) {
+    const showTitle = options?.showTitle !== false;
     if (!lastRoll || !lastRoll.dice) {
       return `
         <div class="gm-roll-panel">
-          <div class="gm-sheet-title">Last Roll</div>
+          ${showTitle ? '<div class="gm-sheet-title">Last Roll</div>' : ''}
           <div class="gm-roll-empty">${isPending ? 'Roll incoming...' : 'No roll yet.'}</div>
         </div>
       `;
@@ -1045,10 +1433,20 @@
     const pool = Array.isArray(lastRoll.pool) ? `[${lastRoll.pool.join(', ')}]` : '[]';
     const modifiers = Number(lastRoll.modifiers || 0);
     const modifierText = `${modifiers >= 0 ? '+' : ''}${modifiers}`;
+    const modifierDetails = Array.isArray(lastRoll.modifierDetails)
+      ? lastRoll.modifierDetails
+          .filter((mod) => Number.isFinite(Number(mod?.value)))
+          .map((mod) => {
+            const label = String(mod?.label || mod?.source || 'Modifier').trim() || 'Modifier';
+            const value = Number(mod?.value || 0);
+            return `${label} ${value >= 0 ? '+' : ''}${value}`;
+          })
+      : [];
+    const modifierCopy = modifierDetails.join(' // ');
     return `
       <div class="gm-roll-panel">
         <div class="gm-roll-head">
-          <span class="gm-sheet-title">Last Roll</span>
+          ${showTitle ? '<span class="gm-sheet-title">Last Roll</span>' : ''}
           <span class="gm-roll-dice">${escapeGMValue(lastRoll.dice)}</span>
         </div>
         <div class="gm-roll-total" id="gm-roll-total-${escapeGMValue(clientId)}">${escapeGMValue(lastRoll.raw ?? lastRoll.total ?? '--')}</div>
@@ -1057,21 +1455,97 @@
           <span>MOD ${escapeGMValue(modifierText)}</span>
           <span>RAW ${escapeGMValue(lastRoll.raw ?? '--')}</span>
         </div>
+        ${modifierCopy ? `<div class="gm-roll-modifier-copy">${escapeGMValue(modifierCopy)}</div>` : ''}
       </div>
     `;
+  }
+
+  function renderGMNpcMonitorList() {
+    const node = document.getElementById('gm-npc-monitor-list');
+    if (!node) return;
+    if (!gmLocalNpcs.length) {
+      node.innerHTML = '<div class="gm-empty">No local NPC dossier loaded yet.</div>';
+      return;
+    }
+    node.innerHTML = gmLocalNpcs.map((npc) => renderGMEntry(npc.id, npc, {
+      removable: true,
+      localEditable: true
+    })).join('');
+    animateGMRollPanels(gmLocalNpcs);
   }
 
   function renderGMEntry(clientId, entry, options = {}) {
     const pickSource = entry.name || 'NPC';
     const displayStats = options.pickable ? getGMDisplayStats(entry) : entry.stats;
     const wound = options.pickable ? getGMWorstWound(entry) : null;
-    const effects = Array.isArray(options.effects) ? options.effects : [];
     const editableStats = Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats;
     const editablePhysical = {
       bodyLevel: entry.physical?.bodyLevel ?? 0,
       weight: entry.physical?.weight ?? 0,
       stun: entry.physical?.stun ?? 0
     };
+    const identityContent = options.localEditable
+      ? `${renderGMLocalEditableTextLines([
+          { label: 'Name', value: entry.name || '', commandField: 'name' },
+          { label: 'Career', value: entry.career || 'NPC', commandField: 'career' }
+        ], { commandType: 'setIdentity', npcId: clientId })}
+        ${renderGMKeyValueLines({
+          Role: entry.role || 'npc-local',
+          Room: activeRoomId || 'LOCAL ONLY'
+        })}`
+      : renderGMKeyValueLines({
+          Name: entry.name || 'Unknown',
+          Career: entry.career || 'Player',
+          Role: entry.role || 'player',
+          Room: activeRoomId || 'OFFLINE'
+        });
+    const coreStatsContent = options.localEditable
+      ? renderGMLocalEditableNumberLines(editableStats, { commandType: 'setStat', npcId: clientId })
+      : options.remoteEditable
+      ? renderGMEditableNumberLines(editableStats, { commandType: 'setStat', clientId })
+      : renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` });
+    const physicalContent = options.localEditable
+      ? renderGMLocalEditableNumberLines([
+          { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
+          { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
+          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+        ], { commandType: 'setPhysical', npcId: clientId })
+      : options.remoteEditable
+      ? renderGMEditableNumberLines([
+          { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
+          { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
+          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+        ], { commandType: 'setPhysical', clientId })
+      : renderGMKeyValueLines({
+          BodyLevel: entry.physical?.bodyLevel ?? 0,
+          Weight: entry.physical?.weight ?? 0,
+          Stun: entry.physical?.stun ?? 0
+        });
+    const reputationContent = options.localEditable
+      ? renderGMLocalEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', npcId: clientId })
+      : options.remoteEditable
+      ? renderGMEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', clientId })
+      : renderGMKeyValueLines({ Reputation: entry.reputation ?? 0 });
+    const walletContent = options.localEditable
+      ? renderGMLocalEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', npcId: clientId })
+      : options.remoteEditable
+      ? renderGMEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', clientId })
+      : renderGMKeyValueLines({ Wallet: entry.wallet ?? 0 });
+    const careerSkillContent = options.localEditable
+      ? renderGMLocalEditableNumberLines(entry.skills, { commandType: 'setSkill', npcId: clientId })
+      : options.remoteEditable
+      ? renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })
+      : renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` });
+    const inventoryContent = options.localEditable
+      ? renderGMLocalInventory(entry, clientId)
+      : options.remoteEditable
+        ? renderGMRemoteInventory(entry, clientId)
+        : renderGMItemList(entry.inventory);
+    const armorDamageContent = `${renderGMArmorDamageTable(entry.armor, entry.damage, options.remoteEditable
+      ? { editable: true, targetType: 'player', targetId: clientId }
+      : { editable: !!(options.removable || options.localEditable), targetType: 'npc', targetId: clientId })}
+      ${options.removable ? `<div class="gm-npc-wound">Wound Status: ${escapeGMValue(wound || 'CLEAR')}</div>` : ''}`;
+    const lastRollContent = renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending, { showTitle: false });
     return `
       <div class="gm-player-card gm-player-detail" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-role="${escapeGMValue(entry.role || 'player')}" data-gm-player-name="${escapeGMValue(entry.name || 'Unknown')}">
         <div class="gm-player-summary">
@@ -1084,85 +1558,17 @@
               <button type="button" class="gm-btn" data-gm-open-npc-dossier="${escapeGMValue(clientId)}">OPEN DOSSIER</button>
               <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-npc="${escapeGMValue(clientId)}">REMOVE NPC</button>
             </div>` : ''}
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Stats</div>
-              ${options.localEditable
-                ? renderGMLocalEditableNumberLines(editableStats, { commandType: 'setStat', npcId: clientId })
-                : options.remoteEditable
-                ? renderGMEditableNumberLines(editableStats, { commandType: 'setStat', clientId })
-                : renderGMKeyValueLines(displayStats, { pickable: !!options.pickable, source: `${pickSource} Stat` })}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Skill</div>
-              ${options.localEditable
-                ? renderGMLocalEditableNumberLines(entry.skills, { commandType: 'setSkill', npcId: clientId })
-                : options.remoteEditable
-                ? renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })
-                : renderGMKeyValueLines(entry.skills, { pickable: !!options.pickable, source: `${pickSource} Skill` })}
-            </div>
+          <div class="gm-monitor-grid">
+            ${renderGMMonitorBlock('Identity', identityContent, { wide: true })}
+            ${renderGMMonitorBlock('Core Statistics', coreStatsContent, { wide: true })}
+            ${renderGMMonitorBlock('Physical', physicalContent, { wide: true })}
+            ${renderGMMonitorBlock('Reputation', reputationContent)}
+            ${renderGMMonitorBlock('Wallet', walletContent)}
+            ${renderGMMonitorBlock('Career Skills', careerSkillContent)}
+            ${renderGMMonitorBlock('Inventory', inventoryContent)}
+            ${renderGMMonitorBlock('Damage & Armor', armorDamageContent, { wide: true })}
+            ${renderGMMonitorBlock('Last Roll', lastRollContent, { wide: true })}
           </div>
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Dossier</div>
-              ${options.localEditable
-                ? `${renderGMLocalEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', npcId: clientId })}
-                   ${renderGMLocalEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', npcId: clientId })}`
-                : options.remoteEditable
-                ? `${renderGMEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', clientId })}
-                   ${renderGMEditableNumberLines([{ label: 'Wallet', value: entry.wallet ?? 0, commandField: 'wallet' }], { commandType: 'setWallet', clientId })}`
-                : renderGMKeyValueLines({
-                  Reputation: entry.reputation ?? 0,
-                  Wallet: entry.wallet ?? 0
-                })}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Physical</div>
-              ${options.localEditable
-                ? renderGMLocalEditableNumberLines([
-                  { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
-                  { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
-                  { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
-                ], { commandType: 'setPhysical', npcId: clientId })
-                : options.remoteEditable
-                ? renderGMEditableNumberLines([
-                  { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
-                  { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
-                  { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
-                ], { commandType: 'setPhysical', clientId })
-                : renderGMKeyValueLines({
-                  BodyLevel: entry.physical?.bodyLevel ?? 0,
-                  Weight: entry.physical?.weight ?? 0,
-                  Stun: entry.physical?.stun ?? 0
-                })}
-            </div>
-          </div>
-          ${renderGMSpecialSkillSection(entry.specialSkills)}
-          ${renderGMEffectsSection(clientId, effects, !!options.effectEditable)}
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Weapons</div>
-              ${options.remoteEditable ? renderGMRemoteWeapons(entry) : renderGMWeaponList(entry)}
-            </div>
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Inventory</div>
-              ${options.localEditable
-                ? renderGMLocalInventory(entry, clientId)
-                : options.remoteEditable
-                  ? renderGMRemoteInventory(entry, clientId)
-                  : renderGMItemList(entry.inventory)}
-            </div>
-          </div>
-          <div class="gm-sheet-columns gm-sheet-columns-wide">
-            <div class="gm-sheet-col">
-              <div class="gm-sheet-title">Armor & Damage</div>
-              ${renderGMArmorDamageTable(entry.armor, entry.damage, options.remoteEditable
-                ? { editable: true, targetType: 'player', targetId: clientId }
-                : { editable: !!(options.removable || options.localEditable), targetType: 'npc', targetId: clientId })}
-              ${options.removable ? `<div class="gm-npc-wound">Wound Status: ${escapeGMValue(wound || 'CLEAR')}</div>` : ''}
-            </div>
-          </div>
-          ${renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending)}
         </div>
       </div>
     `;
@@ -1225,35 +1631,30 @@
 
   function renderGMRemotePlayers(data) {
     const playerNode = document.getElementById('gm-player-list');
-    if (!playerNode) return;
     const entries = Object.entries(data || {}).map(([id, entry]) => ({ id, ...(entry || {}) }));
     const players = entries.filter((entry) => (entry.role || 'player') !== 'npc');
     gmRemotePlayers = players.map((entry) => JSON.parse(JSON.stringify(entry)));
 
-    if (!players.length) {
-      playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
-    } else {
-      playerNode.innerHTML = players.map((player) => renderGMEntry(player.id, player, {
-        effects: player.effects || [],
-        effectEditable: true,
-        remoteEditable: true
-      })).join('');
+    if (playerNode) {
+      if (!players.length) {
+        playerNode.innerHTML = '<div class="gm-empty">No players linked yet.</div>';
+      } else {
+        playerNode.innerHTML = players.map((player) => renderGMRemotePlayerDossier(player.id, player)).join('');
+      }
     }
 
     animateGMRollPanels(players);
     publishGMMonitorState();
+    if (typeof window.renderGMCharacterTabs === 'function') window.renderGMCharacterTabs();
   }
 
-  function renderGMNpcList() {
-    const npcNode = document.getElementById('gm-npc-list');
-    if (!npcNode) return;
-    if (!gmLocalNpcs.length) {
-      npcNode.innerHTML = '<div class="gm-empty">No local NPC dossier loaded yet.</div>';
-      publishGMMonitorState();
-      return;
+  function renderGMNpcList(preferredTab) {
+    if (typeof window.renderGMNpcTabs === 'function') {
+      window.renderGMNpcTabs(preferredTab);
     }
-    npcNode.innerHTML = gmLocalNpcs.map((npc) => renderGMEntry(npc.id, npc, { removable: true, pickable: true, localEditable: true })).join('');
+    renderGMNpcMonitorList();
     publishGMMonitorState();
+    if (typeof window.renderGMCharacterTabs === 'function') window.renderGMCharacterTabs(preferredTab);
   }
 
   function publishGMMonitorState() {
@@ -1279,6 +1680,7 @@
     activeRoomId = '';
     gmRemotePlayerData = {};
     gmRemotePlayerEffects = {};
+    renderGMNpcList();
     if (previousRoomId && typeof clearCombatSummary === 'function') {
       clearCombatSummary(previousRoomId).catch((error) => {
         console.warn('Failed to clear combat summary on disconnect.', error);
@@ -1386,6 +1788,7 @@
     setGMStatus(`Listening to room "${roomId}"...`);
     setGMStatusVisual('pending');
     renderGMRemotePlayers(null);
+    renderGMNpcList(getActiveGMTabName());
     setGMLastUpdated(null);
 
     activeRef = roomRef.child('players');
@@ -1492,12 +1895,9 @@
   function closeGMInventoryModal() {
     gmInventoryTargetClientId = '';
     gmInventoryTargetMode = 'remote';
-    document.getElementById('gm-item-name').value = '';
-    document.getElementById('gm-item-type').value = 'weapon';
-    document.getElementById('gm-item-custom-type').value = '';
-    document.getElementById('gm-item-stats').value = '';
-    document.getElementById('gm-item-info').value = '';
-    document.getElementById('gm-item-custom-type-wrap').style.display = 'none';
+    gmInventoryEditItemId = '';
+    gmInventoryEditOriginalCategory = '';
+    resetGMInventoryModalFields();
     document.getElementById('gm-inventory-modal')?.classList.remove('show');
   }
 
@@ -1512,23 +1912,54 @@
       setGMStatus('Connect to a room before editing player inventory.');
       return;
     }
-    gmInventoryTargetMode = 'remote';
-    gmInventoryTargetClientId = clientId;
     closeGMInventoryModal();
     gmInventoryTargetMode = 'remote';
     gmInventoryTargetClientId = clientId;
+    setGMInventoryModalState('add');
     document.getElementById('gm-inventory-modal')?.classList.add('show');
   }
 
   function openGMLocalNpcInventoryModal(npcId) {
+    closeGMInventoryModal();
     gmInventoryTargetMode = 'local';
     gmInventoryTargetClientId = npcId;
-    document.getElementById('gm-item-name').value = '';
-    document.getElementById('gm-item-type').value = 'weapon';
-    document.getElementById('gm-item-custom-type').value = '';
-    document.getElementById('gm-item-stats').value = '';
-    document.getElementById('gm-item-info').value = '';
-    document.getElementById('gm-item-custom-type-wrap').style.display = 'none';
+    setGMInventoryModalState('add');
+    document.getElementById('gm-inventory-modal')?.classList.add('show');
+  }
+
+  function openGMInventoryEditModal(clientId, category, itemId) {
+    if (!activeRoomId) {
+      setGMStatus('Connect to a room before editing player inventory.');
+      return;
+    }
+    const item = getGMRemoteInventoryItem(clientId, category, itemId);
+    if (!item) {
+      setGMStatus('Inventory item no longer exists.');
+      return;
+    }
+    closeGMInventoryModal();
+    gmInventoryTargetMode = 'remote';
+    gmInventoryTargetClientId = clientId;
+    gmInventoryEditItemId = String(item.id || '').trim();
+    gmInventoryEditOriginalCategory = sanitizeGMCategory(item.category);
+    prefillGMInventoryModal(item);
+    setGMInventoryModalState('edit');
+    document.getElementById('gm-inventory-modal')?.classList.add('show');
+  }
+
+  function openGMLocalNpcInventoryEditModal(npcId, category, itemId) {
+    const item = getGMLocalInventoryItem(npcId, category, itemId);
+    if (!item) {
+      setGMStatus('Inventory item no longer exists.');
+      return;
+    }
+    closeGMInventoryModal();
+    gmInventoryTargetMode = 'local';
+    gmInventoryTargetClientId = npcId;
+    gmInventoryEditItemId = String(item.id || '').trim();
+    gmInventoryEditOriginalCategory = sanitizeGMCategory(item.category);
+    prefillGMInventoryModal(item);
+    setGMInventoryModalState('edit');
     document.getElementById('gm-inventory-modal')?.classList.add('show');
   }
 
@@ -1550,16 +1981,23 @@
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
+    const itemId = gmInventoryEditItemId || buildGMInventoryId(category);
     const item = {
       category,
-      id: buildGMInventoryId(category),
+      id: itemId,
       name,
       fields,
       info
     };
     if (gmInventoryTargetMode === 'local') {
+      if (gmInventoryEditOriginalCategory && gmInventoryEditOriginalCategory !== category) {
+        deleteLocalNpcInventoryItem(gmInventoryTargetClientId, gmInventoryEditOriginalCategory, itemId);
+      }
       upsertLocalNpcInventoryItem(gmInventoryTargetClientId, item);
     } else {
+      if (gmInventoryEditOriginalCategory && gmInventoryEditOriginalCategory !== category) {
+        await deleteGMRemoteInventoryItem(gmInventoryTargetClientId, gmInventoryEditOriginalCategory, itemId);
+      }
       await sendGMRemotePlayerCommand(gmInventoryTargetClientId, {
         type: 'inventoryUpsert',
         label: `inventory ${name}`,
@@ -1595,12 +2033,14 @@
 
   function renderGMRollModifierList() {
     const node = document.getElementById('gm-roll-mod-list');
+    const totalNode = document.getElementById('gm-roll-mod-total-display');
     if (!node) return;
     const selectedKey = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
     const combatPenalty = typeof window.getGMCombatPenalty === 'function'
       ? Number(window.getGMCombatPenalty(selectedKey) || 0)
       : 0;
     const hasVisiblePenalty = combatPenalty !== 0;
+    if (totalNode) totalNode.textContent = String(getGMRollModifierTotal());
     if (!gmRollModifiers.length && !hasVisiblePenalty) {
       node.innerHTML = '<div class="gm-empty">No modifiers locked in.</div>';
       return;
@@ -1619,6 +2059,49 @@
       `);
     }
     node.innerHTML = items.join('');
+  }
+
+  function renderGMManualDicePool() {
+    const summary = document.getElementById('gm-roll-pool-summary');
+    const launchBtn = document.getElementById('gm-roll-queue-btn');
+    const counts = getGMDicePoolCounts(gmManualDicePool);
+    if (summary) summary.textContent = describeGMDicePool(gmManualDicePool);
+    if (launchBtn) {
+      launchBtn.disabled = gmManualDicePool.length <= 0;
+      launchBtn.classList.toggle('ready', gmManualDicePool.length > 0);
+    }
+    [4, 6, 8, 10, 12, 20].forEach((side) => {
+      const countNode = document.getElementById(`gm-hud-die-count-${side}`);
+      const button = document.querySelector(`.gm-hud-dice-btn[data-gm-die="${side}"]`);
+      const count = counts.get(side) || 0;
+      if (countNode) {
+        countNode.textContent = String(count);
+        countNode.classList.toggle('has-count', count > 0);
+      }
+      if (button) button.classList.toggle('active', count > 0);
+    });
+  }
+
+  function closeGMRollDrawers() {
+    activeGMRollDrawer = '';
+    document.getElementById('gm-roll-mod-drawer')?.setAttribute('hidden', '');
+    document.getElementById('gm-roll-preset-drawer')?.setAttribute('hidden', '');
+    document.getElementById('gm-roll-mod-toggle')?.classList.remove('active');
+    document.getElementById('gm-roll-preset-toggle')?.classList.remove('active');
+  }
+
+  function toggleGMRollDrawer(name) {
+    const next = activeGMRollDrawer === name ? '' : name;
+    closeGMRollDrawers();
+    if (!next) return;
+    activeGMRollDrawer = next;
+    if (next === 'mod') {
+      document.getElementById('gm-roll-mod-drawer')?.removeAttribute('hidden');
+      document.getElementById('gm-roll-mod-toggle')?.classList.add('active');
+    } else if (next === 'preset') {
+      document.getElementById('gm-roll-preset-drawer')?.removeAttribute('hidden');
+      document.getElementById('gm-roll-preset-toggle')?.classList.add('active');
+    }
   }
 
   function clearGMRollCinemaTimers() {
@@ -1694,14 +2177,29 @@
     document.getElementById('gm-roll-cinema-modal')?.classList.remove('show');
   }
 
-  function beginGMRollExecution(sides, qty) {
-    gmPendingRollRequest = { sides, qty };
+  function normalizeGMDicePool(dicePoolOrSides, qty = 1) {
+    if (Array.isArray(dicePoolOrSides)) {
+      return dicePoolOrSides.map((side) => Number(side)).filter((side) => side > 0);
+    }
+    const sides = Number(dicePoolOrSides);
+    if (!(sides > 0)) return [];
+    return Array.from({ length: Math.max(1, Number(qty) || 1) }, () => sides);
+  }
+
+  function beginGMRollExecution(dicePoolOrSides, qty = 1, options = {}) {
+    const dicePool = normalizeGMDicePool(dicePoolOrSides, qty);
+    if (!dicePool.length) return;
+    gmPendingRollRequest = {
+      dicePool,
+      diceLabel: String(options.diceLabel || describeGMDicePool(dicePool)).trim() || describeGMDicePool(dicePool),
+      kicker: String(options.kicker || '').trim()
+    };
     gmRollShakePower = 0;
     gmRollShakeActive = false;
     gmRollShakePointerId = null;
     gmRollShakeLastPoint = null;
     const label = document.getElementById('gm-roll-shake-label');
-    if (label) label.textContent = `${qty}D${sides}`;
+    if (label) label.textContent = gmPendingRollRequest.diceLabel;
     document.getElementById('gm-roll-shake-box')?.classList.remove('shaking');
     const core = document.getElementById('gm-roll-shake-core');
     if (core) core.style.transform = 'translate(0,0) rotate(0deg)';
@@ -1764,8 +2262,14 @@
     return '';
   }
 
-  function openGMRollCinemaAnimation(sides, qty, rolls, shakePower = 0) {
+  function openGMRollCinemaAnimation(dicePoolOrSides, qtyOrRolls, rollsOrShakePower = [], maybeShakePower = 0, maybeKicker = '') {
     clearGMRollCinemaTimers();
+    const normalizedPool = Array.isArray(dicePoolOrSides)
+      ? normalizeGMDicePool(dicePoolOrSides)
+      : normalizeGMDicePool(dicePoolOrSides, qtyOrRolls);
+    const rolls = Array.isArray(qtyOrRolls) ? qtyOrRolls : rollsOrShakePower;
+    const shakePower = Array.isArray(qtyOrRolls) ? rollsOrShakePower : maybeShakePower;
+    const kickerLabel = Array.isArray(qtyOrRolls) ? maybeKicker : '';
     const rawTotal = rolls.reduce((sum, value) => sum + value, 0);
     const modTotal = getGMRollModifierTotal();
     const finalTotal = rawTotal + modTotal;
@@ -1774,8 +2278,9 @@
     const diceLayer = document.getElementById('gm-roll-cinema-dice');
     if (!modal || !stage || !diceLayer) return;
 
-    document.getElementById('gm-roll-cinema-kicker').textContent = `${qty}D${sides} EXECUTION`;
-    document.getElementById('gm-roll-cinema-pool').textContent = `Dice pool: [${rolls.join(', ')}]`;
+    const diceLabel = describeGMDicePool(normalizedPool);
+    document.getElementById('gm-roll-cinema-kicker').textContent = kickerLabel || `${diceLabel} EXECUTION`;
+    document.getElementById('gm-roll-cinema-pool').textContent = `Dice pool: ${diceLabel} // [${rolls.join(', ')}]`;
     document.getElementById('gm-roll-cinema-raw').textContent = '0';
     document.getElementById('gm-roll-cinema-final').textContent = '0';
     renderGMRollCinemaModifiers(modTotal);
@@ -1786,10 +2291,12 @@
     diceLayer.innerHTML = '';
 
     const stageRect = stage.getBoundingClientRect();
+    const qty = normalizedPool.length;
     const dieSize = qty <= 2 ? 76 : qty <= 4 ? 64 : 52;
     const bounds = { w: Math.max(180, stageRect.width - dieSize), h: Math.max(160, stageRect.height - dieSize) };
     const throwBoost = shakePower / 100;
     const diceBodies = rolls.map((value, idx) => {
+      const sides = normalizedPool[idx] || 10;
       const die = document.createElement('div');
       die.className = `gm-roll-cinema-die ${getGMRollDieShapeClass(sides)}`.trim();
       die.style.width = `${dieSize}px`;
@@ -1812,9 +2319,9 @@
     });
 
     gmRollCinemaNumberTimer = setInterval(() => {
-      diceBodies.forEach((body) => {
+      diceBodies.forEach((body, idx) => {
         if (body.settled) return;
-        body.el.textContent = Math.max(1, Math.ceil(Math.random() * sides));
+        body.el.textContent = Math.max(1, Math.ceil(Math.random() * (normalizedPool[idx] || 10)));
       });
     }, 70);
 
@@ -1914,17 +2421,18 @@
 
   function executeGMPendingRoll() {
     if (!gmPendingRollRequest) return;
-    const { sides, qty } = gmPendingRollRequest;
+    const { dicePool, diceLabel, kicker } = gmPendingRollRequest;
     const shakePowerSnapshot = gmRollShakePower;
     document.getElementById('gm-roll-execute-modal')?.classList.remove('show');
     gmPendingRollRequest = null;
     gmRollShakePower = 0;
     updateGMRollExecuteMeter();
-    const rolls = Array.from({ length: qty }, () => Math.floor(Math.random() * sides) + 1);
+    const rolls = dicePool.map((side) => Math.floor(Math.random() * side) + 1);
     const raw = rolls.reduce((sum, roll) => sum + roll, 0);
     const modifiers = getGMRollModifierTotal();
     gmCurrentRoll = {
-      dice: `${qty}D${sides}`,
+      dice: diceLabel,
+      diceTypes: [...dicePool],
       pool: rolls,
       raw,
       modifiers,
@@ -1941,7 +2449,7 @@
       ].join(' // ')
     };
     renderGMRollDisplay();
-    openGMRollCinemaAnimation(sides, qty, rolls, shakePowerSnapshot);
+    openGMRollCinemaAnimation(dicePool, rolls, shakePowerSnapshot, kicker || `${diceLabel} EXECUTION`);
   }
 
   function handleGMRollShakeStart(event) {
@@ -2271,9 +2779,56 @@
     if (valueInput) valueInput.value = '0';
   }
 
+  function queueGMRollDie(sides) {
+    const parsed = Number(sides);
+    if (!(parsed > 0)) return;
+    gmManualDicePool.push(parsed);
+    renderGMManualDicePool();
+    setGMStatus(`Queued D${parsed}.`);
+  }
+
+  function removeQueuedGMRollDieBySides(sides) {
+    const parsed = Number(sides);
+    const idx = gmManualDicePool.lastIndexOf(parsed);
+    if (idx < 0) return;
+    gmManualDicePool.splice(idx, 1);
+    renderGMManualDicePool();
+    setGMStatus(`Removed D${parsed} from queue.`);
+  }
+
+  function clearGMQueuedDice() {
+    if (!gmManualDicePool.length) return;
+    gmManualDicePool = [];
+    renderGMManualDicePool();
+    setGMStatus('Cleared GM dice queue.');
+  }
+
+  function rollGMQueuedDice() {
+    if (!gmManualDicePool.length) {
+      setGMStatus('Queue at least one die before rolling.');
+      return;
+    }
+    closeGMRollDrawers();
+    beginGMRollExecution(gmManualDicePool, 1, {
+      diceLabel: describeGMDicePool(gmManualDicePool),
+      kicker: `${describeGMDicePool(gmManualDicePool)} EXECUTION`
+    });
+  }
+
+  function handleGMRollDieContext(event, sides) {
+    event.preventDefault();
+    removeQueuedGMRollDieBySides(sides);
+    return false;
+  }
+
   function rollGMDice(sides) {
-    const qty = Math.max(1, Math.min(20, parseGMNumericValue(document.getElementById('gm-roll-qty')?.value) ?? 1));
-    beginGMRollExecution(sides, qty);
+    const parsed = Number(sides);
+    if (!(parsed > 0)) return;
+    closeGMRollDrawers();
+    beginGMRollExecution([parsed], 1, {
+      diceLabel: `1D${parsed}`,
+      kicker: `1D${parsed} EXECUTION`
+    });
   }
 
   function sendRollToSelectedNpc() {
@@ -2313,6 +2868,17 @@
     renderGMNpcList();
   }
 
+  function addGMLocalNpcEntry(npcEntry, options = {}) {
+    if (!npcEntry) return;
+    gmLocalNpcs.push(npcEntry);
+    persistGMNpcDossierSync(npcEntry.id);
+    renderGMNpcList(options.activateTab || getGMTabIdForNpc(npcEntry.id));
+    if (options.statusMessage) {
+      setGMStatus(options.statusMessage);
+      setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
+    }
+  }
+
   async function loadGmNpcFile(file) {
     try {
       const lowerName = String(file?.name || '').toLowerCase();
@@ -2332,46 +2898,66 @@
         throw new Error('Only .txt or .zip files are supported.');
       }
 
-      gmLocalNpcs.push(buildGMNpcEntry(parsed, file?.name || 'NPC'));
-      persistGMNpcDossierSync(gmLocalNpcs[gmLocalNpcs.length - 1].id);
-      renderGMNpcList();
-      setGMStatus(`Local NPC loaded: ${gmLocalNpcs[gmLocalNpcs.length - 1].name}`);
-      setGMStatusVisual(activeRef ? 'connected' : 'disconnected');
+      const npcEntry = buildGMNpcEntry(parsed, file?.name || 'NPC');
+      addGMLocalNpcEntry(npcEntry, {
+        activateTab: getGMTabIdForNpc(npcEntry.id),
+        statusMessage: `Local NPC loaded: ${npcEntry.name}`
+      });
     } catch (error) {
       setGMStatus(`NPC load error: ${error.message}`);
       setGMStatusVisual('disconnected');
     }
   }
 
+  function createGMNpcTab() {
+    const npcEntry = buildGMBlankNpcEntry();
+    addGMLocalNpcEntry(npcEntry, {
+      activateTab: getGMTabIdForNpc(npcEntry.id),
+      statusMessage: `${npcEntry.name} tab created.`
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initFirebaseRealtime();
     window.getGMRemotePlayers = () => gmRemotePlayers.map((entry) => JSON.parse(JSON.stringify(entry)));
     window.getGMLocalNpcs = () => gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
+    window.renderGMRemotePlayerDossierHtml = (clientId, entry) => renderGMRemotePlayerDossier(clientId, entry);
     window.addGMRollModifier = addGMRollModifier;
     window.getGMCurrentRoll = () => gmCurrentRoll ? JSON.parse(JSON.stringify(gmCurrentRoll)) : null;
     window.getGMActiveRoomId = () => activeRoomId;
+    window.getGMNpcTabName = getGMTabIdForNpc;
+    window.createGMNpcTab = createGMNpcTab;
+    window.handleGMRollDieContext = handleGMRollDieContext;
+    window.loadGMNpcFileFromPicker = loadGmNpcFile;
+    window.openGMNpcFilePicker = () => {
+      const input = document.getElementById('gm-npc-file-input');
+      if (!input) return;
+      input.value = '';
+      input.click();
+    };
+    window.truncateGMNpcTabLabel = truncateGMTabLabel;
 
     document.getElementById('gm-connect-btn')?.addEventListener('click', connectGMRoom);
     document.getElementById('gm-room-id')?.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') connectGMRoom();
     });
 
-    document.getElementById('gm-add-npc-btn')?.addEventListener('click', () => {
-      const input = document.getElementById('gm-npc-file-input');
-      if (!input) return;
-      input.value = '';
-      input.click();
-    });
-
-    document.getElementById('gm-npc-file-input')?.addEventListener('change', async (event) => {
-      const file = event.target.files?.[0];
-      if (file) await loadGmNpcFile(file);
-      event.target.value = '';
-    });
-
     document.getElementById('gm-roll-add-mod-btn')?.addEventListener('click', addCustomGMRollModifier);
     document.getElementById('gm-roll-clear-mods-btn')?.addEventListener('click', clearGMRollModifiers);
     document.getElementById('gm-roll-send-active-btn')?.addEventListener('click', sendRollToSelectedNpc);
+    document.getElementById('gm-roll-queue-btn')?.addEventListener('click', rollGMQueuedDice);
+    document.getElementById('gm-roll-clear-queue-btn')?.addEventListener('click', clearGMQueuedDice);
+    document.getElementById('gm-roll-mod-toggle')?.addEventListener('click', () => toggleGMRollDrawer('mod'));
+    document.getElementById('gm-roll-preset-toggle')?.addEventListener('click', () => toggleGMRollDrawer('preset'));
+    document.getElementById('gm-roll-drawer-close')?.addEventListener('click', closeGMRollDrawers);
+    document.getElementById('gm-roll-preset-close')?.addEventListener('click', closeGMRollDrawers);
+    document.getElementById('gm-roll-mod-tail-close')?.addEventListener('click', closeGMRollDrawers);
+    document.getElementById('gm-roll-preset-tail-close')?.addEventListener('click', closeGMRollDrawers);
+    document.querySelector('.gm-menu-anchor-mod')?.appendChild(document.getElementById('gm-roll-mod-drawer'));
+    document.querySelector('.gm-menu-anchor-preset')?.appendChild(document.getElementById('gm-roll-preset-drawer'));
+    document.getElementById('gm-roll-drawers')?.remove();
+    const gmPresetArrow = document.querySelector('#gm-roll-preset-toggle .gm-hud-state-value');
+    if (gmPresetArrow) gmPresetArrow.textContent = '\u25B2';
     document.getElementById('gm-roll-ambush-btn')?.addEventListener('click', rollGMAmbushPreset);
     document.getElementById('gm-roll-ambush-counter-btn')?.addEventListener('click', rollGMAmbushCounterPreset);
     document.getElementById('gm-roll-suppressive-btn')?.addEventListener('click', rollGMSuppressivePreset);
@@ -2385,12 +2971,13 @@
     });
     document.getElementById('gm-roll-subject-select')?.addEventListener('change', (event) => {
       gmSelectedRollSubjectKey = String(event.target.value || '');
+      renderGMRollModifierList();
     });
 
     document.querySelectorAll('.gm-die-btn').forEach((button) => {
       button.addEventListener('click', () => {
         const sides = parseGMNumericValue(button.getAttribute('data-gm-die'));
-        if (sides) rollGMDice(sides);
+        if (sides) queueGMRollDie(sides);
       });
     });
 
@@ -2426,6 +3013,11 @@
     }
 
     document.addEventListener('click', (event) => {
+      const rollHud = document.getElementById('gm-action-hud');
+      if (rollHud && !rollHud.contains(event.target)) {
+        closeGMRollDrawers();
+      }
+
       const pickable = event.target.closest('.gm-sheet-line.pickable');
       if (pickable) {
         const source = pickable.getAttribute('data-gm-roll-source') || 'NPC';
@@ -2468,9 +3060,29 @@
         return;
       }
 
+      const editItemButton = event.target.closest('[data-gm-edit-item]');
+      if (editItemButton) {
+        openGMInventoryEditModal(
+          editItemButton.getAttribute('data-gm-edit-item'),
+          editItemButton.getAttribute('data-gm-item-category'),
+          editItemButton.getAttribute('data-gm-item-id')
+        );
+        return;
+      }
+
       const addLocalItemButton = event.target.closest('[data-gm-add-local-item]');
       if (addLocalItemButton) {
         openGMLocalNpcInventoryModal(addLocalItemButton.getAttribute('data-gm-add-local-item'));
+        return;
+      }
+
+      const editLocalItemButton = event.target.closest('[data-gm-edit-local-item]');
+      if (editLocalItemButton) {
+        openGMLocalNpcInventoryEditModal(
+          editLocalItemButton.getAttribute('data-gm-edit-local-item'),
+          editLocalItemButton.getAttribute('data-gm-item-category'),
+          editLocalItemButton.getAttribute('data-gm-item-id')
+        );
         return;
       }
 
@@ -2501,6 +3113,15 @@
     });
 
     document.addEventListener('change', (event) => {
+      const localTextEdit = event.target.closest('[data-gm-local-text-edit]');
+      if (localTextEdit) {
+        const type = localTextEdit.getAttribute('data-gm-local-text-edit');
+        const npcId = localTextEdit.getAttribute('data-gm-npc-id');
+        const label = localTextEdit.getAttribute('data-gm-label');
+        updateLocalNpcText(npcId, type, label, localTextEdit.value);
+        return;
+      }
+
       const localEdit = event.target.closest('[data-gm-local-edit]');
       if (localEdit) {
         const type = localEdit.getAttribute('data-gm-local-edit');
@@ -2576,12 +3197,19 @@
 
     renderGMRemotePlayers(null);
     renderGMNpcList();
+    renderGMManualDicePool();
     renderGMRollModifierList();
     renderGMRollDisplay();
     renderGMAimAction();
     renderGMRollSubjectSelect();
-    window.addEventListener('gm-action-updated', renderGMRollSubjectSelect);
-    window.addEventListener('gm-monitor-updated', renderGMRollSubjectSelect);
+    window.addEventListener('gm-action-updated', () => {
+      renderGMRollSubjectSelect();
+      renderGMRollModifierList();
+    });
+    window.addEventListener('gm-monitor-updated', () => {
+      renderGMRollSubjectSelect();
+      renderGMRollModifierList();
+    });
     setGMStatusVisual('disconnected');
 
     document.addEventListener('mouseover', (event) => {

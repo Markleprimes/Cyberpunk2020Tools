@@ -1,4 +1,15 @@
 let manualRollDicePool = [];
+let activeRollHudDrawer = '';
+
+function getDicePoolCounts(dicePool = []) {
+  const counts = new Map();
+  dicePool.forEach((side) => {
+    const sides = Number(side);
+    if (!sides) return;
+    counts.set(sides, (counts.get(sides) || 0) + 1);
+  });
+  return counts;
+}
 
 function describeDicePool(dicePool = []) {
   const counts = new Map();
@@ -28,8 +39,22 @@ function renderManualDicePool() {
   const summary = document.getElementById('manual-dice-summary');
   const launchBtn = document.getElementById('manual-roll-btn');
   const label = describeDicePool(manualRollDicePool);
+  const counts = getDicePoolCounts(manualRollDicePool);
   if (summary) summary.textContent = label;
-  if (launchBtn) launchBtn.disabled = manualRollDicePool.length <= 0;
+  if (launchBtn) {
+    launchBtn.disabled = manualRollDicePool.length <= 0;
+    launchBtn.classList.toggle('ready', manualRollDicePool.length > 0);
+  }
+  [4, 6, 8, 10, 12, 20].forEach((side) => {
+    const countNode = document.getElementById(`hud-die-count-${side}`);
+    const button = document.querySelector(`.hud-dice-btn[data-die-side="${side}"]`);
+    const count = counts.get(side) || 0;
+    if (countNode) {
+      countNode.textContent = String(count);
+      countNode.classList.toggle('has-count', count > 0);
+    }
+    if (button) button.classList.toggle('active', count > 0);
+  });
   if (!list) return;
   if (!manualRollDicePool.length) {
     list.innerHTML = '<div class="inventory-empty">NO DICE QUEUED</div>';
@@ -277,6 +302,7 @@ function renderAimAction() {
   pips.innerHTML = Array.from({ length: 3 }, (_, idx) => `<span class="aim-stack-pip${idx < aimStackPoints ? ' active' : ''}"></span>`).join('');
   keepBtn.textContent = aimStackPoints > 0 ? 'Keep Aim' : 'Aim';
   keepBtn.classList.toggle('disabled', aimStackPoints >= 3);
+  keepBtn.disabled = aimStackPoints >= 3;
 }
 
 function resetAimAction() {
@@ -381,7 +407,7 @@ function renderRollLab() {
     : `No die rolled yet. Current modifiers total ${modTotal >= 0 ? '+' : ''}${modTotal}.`;
   document.getElementById('roll-last-breakdown').textContent = hasRoll
     ? `Dice pool: [${currentRoll.rolls.join(', ')}]${(currentRoll.rawMultiplier || 1) > 1 ? ` // RAW x${currentRoll.rawMultiplier}` : ''}`
-    : 'Build the dice pool, then hit ROLL!! to open the roll cinema.';
+    : 'Left click adds dice. Right click removes one. Fire the center roll core to launch the cinema.';
   document.getElementById('roll-last-total').textContent = total;
   renderManualDicePool();
   renderAimAction();
@@ -455,6 +481,15 @@ function removeQueuedRollDie(idx) {
   showActionLog(`REMOVED D${removed} FROM QUEUE`);
 }
 
+function removeQueuedRollDieBySides(sides) {
+  const parsed = Number(sides);
+  const idx = manualRollDicePool.lastIndexOf(parsed);
+  if (idx < 0) return;
+  manualRollDicePool.splice(idx, 1);
+  renderRollLab();
+  showActionLog(`REMOVED D${parsed} FROM QUEUE`);
+}
+
 function clearQueuedDice() {
   if (!manualRollDicePool.length) return;
   manualRollDicePool = [];
@@ -472,6 +507,7 @@ function rollQueuedDice() {
     showError('QUEUE AT LEAST ONE DIE BEFORE ROLLING.');
     return;
   }
+  closeRollHudDrawers();
   beginRollExecution(manualRollDicePool, {
     diceLabel: describeDicePool(manualRollDicePool),
     kicker: `${describeDicePool(manualRollDicePool)} EXECUTION`
@@ -507,6 +543,40 @@ function addCustomRollModifier() {
   renderRollLab();
   showActionLog(`ADDED CUSTOM MODIFIER ${label.toUpperCase()}`);
 }
+
+function handleRollDieContext(event, sides) {
+  event.preventDefault();
+  removeQueuedRollDieBySides(sides);
+  return false;
+}
+
+function closeRollHudDrawers() {
+  activeRollHudDrawer = '';
+  document.getElementById('roll-hud-mod-drawer')?.setAttribute('hidden', '');
+  document.getElementById('roll-hud-preset-drawer')?.setAttribute('hidden', '');
+  document.querySelectorAll('.hud-state-btn').forEach((button) => button.classList.remove('active'));
+}
+
+function toggleRollHudDrawer(name) {
+  const next = activeRollHudDrawer === name ? '' : name;
+  closeRollHudDrawers();
+  if (!next) return;
+  activeRollHudDrawer = next;
+  const drawerId = next === 'mod' ? 'roll-hud-mod-drawer' : 'roll-hud-preset-drawer';
+  document.getElementById(drawerId)?.removeAttribute('hidden');
+  if (next === 'mod') {
+    document.querySelector('.hud-state-btn[onclick*="mod"]')?.classList.add('active');
+  } else if (next === 'preset') {
+    document.querySelector('.hud-state-btn[onclick*="preset"]')?.classList.add('active');
+  }
+}
+
+document.addEventListener('click', (event) => {
+  const rollHud = document.getElementById('roll-lab-panel');
+  if (!rollHud) return;
+  if (rollHud.contains(event.target)) return;
+  closeRollHudDrawers();
+});
 
 function getRollDieShapeClass(sides) {
   if (sides === 4) return 'shape-d4';
@@ -734,6 +804,7 @@ function confirmAimHitWeapon() {
 }
 
 function rollDie(sides) {
+  closeRollHudDrawers();
   beginRollExecution([Number(sides)], {
     diceLabel: `1D${Number(sides)}`,
     kicker: `1D${Number(sides)} EXECUTION`

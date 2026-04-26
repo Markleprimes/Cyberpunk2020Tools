@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260424i">
+<link rel="stylesheet" href="gm.css?v=20260426p">
 </head>
 <body>
   <div class="gm-shell">
@@ -13,14 +13,40 @@
       <div>
         <div class="gm-kicker">REFEREE UPLINK // LIVE TABLE CONTROL</div>
         <h1>CYBERPUNK 2020</h1>
-        <p class="gm-copy">Monitor connected players, keep an eye on the room link, and expand NPC controls later.</p>
+        <p class="gm-copy">Monitor connected players, manage live combat, and build local NPC dossier tabs directly inside the referee console.</p>
       </div>
       <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
     </header>
 
     <div class="gm-tabs">
-      <button type="button" class="gm-tab-btn active" data-gm-tab="monitor">Monitor</button>
-      <button type="button" class="gm-tab-btn" data-gm-tab="action">Action Play</button>
+      <div class="gm-npc-tab-strip" id="gm-character-tab-strip"></div>
+      <button type="button" class="gm-tab-plus" id="gm-create-npc-tab-btn" aria-label="Create or import NPC tab">+</button>
+      <input id="gm-npc-file-input" type="file" accept=".txt,.zip" hidden>
+    </div>
+
+    <div class="gm-tab-session-bar" id="gm-tab-session-bar" hidden>
+      <div class="gm-tab-session-head">
+        <div class="gm-panel-title" id="gm-tab-session-title" style="margin-bottom:0;">FACEDOWN STAGING</div>
+        <div class="gm-tab-session-actions">
+          <button type="button" class="gm-btn" id="gm-tab-session-launch" hidden>LAUNCH</button>
+          <button type="button" class="gm-btn gm-btn-muted" id="gm-tab-session-clear">CLEAR</button>
+        </div>
+      </div>
+      <div class="gm-tab-session-grid">
+        <div class="gm-tab-session-side">
+          <div class="gm-npc-sheet-kicker">LEFT</div>
+          <div class="gm-tab-session-list" id="gm-tab-session-left">
+            <div class="gm-empty">No character selected.</div>
+          </div>
+        </div>
+        <div class="gm-tab-session-vs">VS</div>
+        <div class="gm-tab-session-side">
+          <div class="gm-npc-sheet-kicker">RIGHT</div>
+          <div class="gm-tab-session-list" id="gm-tab-session-right">
+            <div class="gm-empty">No character selected.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="gm-side-drawer-edge" aria-hidden="true">
@@ -45,146 +71,165 @@
     </aside>
 
     <div class="gm-tab-panel active" id="gm-tab-monitor">
-
-    <section class="gm-panel">
-      <div class="gm-panel-title">Players</div>
-      <div class="gm-player-list" id="gm-player-list">
-        <div class="gm-empty">No players linked yet.</div>
-      </div>
-    </section>
-
-    <section class="gm-panel">
-      <div class="gm-panel-title">NPC</div>
-      <div class="gm-room-row">
-        <button type="button" class="gm-btn" id="gm-add-npc-btn">ADD NPC FILE</button>
-        <input id="gm-npc-file-input" type="file" accept=".txt,.zip" hidden>
-      </div>
-      <div class="gm-meta-row">
-        <div><span class="gm-meta-label">Mode</span><span>Local GM dossier import</span></div>
-        <div><span class="gm-meta-label">Use</span><span>Click NPC stats or skills to lock them into GM Roll Lab</span></div>
-      </div>
-      <div class="gm-npc-list" id="gm-npc-list">
-        <div class="gm-empty">No local NPC dossier loaded yet.</div>
-      </div>
-    </section>
-
-    </div>
-
-    <div class="gm-tab-panel" id="gm-tab-action">
-      <button type="button" class="gm-right-drawer-trigger" onclick="toggleGMActionDrawer()" aria-label="Toggle turn action drawer">
-        <span class="gm-right-drawer-label" aria-hidden="true">TURN ACTION</span>
-      </button>
-      <aside class="gm-right-drawer" id="gm-action-drawer">
-        <div class="gm-side-drawer-head">
-          <div class="gm-panel-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Turn Action</div>
-          <button type="button" class="gm-side-drawer-close" onclick="closeGMActionDrawer()">CLOSE</button>
-        </div>
-        <div class="gm-action-checks">
-          <button type="button" class="gm-btn" id="gm-init-check-btn">INITIATION CHECK</button>
-          <button type="button" class="gm-btn" id="gm-facedown-btn" disabled>FACEDOWN</button>
-        </div>
-        <div class="gm-action-controls">
-          <button type="button" class="gm-btn" id="gm-next-turn-btn">NEXT TURN</button>
-          <button type="button" class="gm-btn" id="gm-prev-turn-btn">PREVIOUS TURN</button>
-          <button type="button" class="gm-btn gm-btn-muted" id="gm-end-combat-btn">END COMBAT</button>
-        </div>
-        <div class="gm-turn-note" id="gm-turn-note">Set up both sides, then run initiative.</div>
-        <div class="gm-turn-order" id="gm-turn-order">
-          <div class="gm-empty">No active combat order yet.</div>
-        </div>
-      </aside>
       <section class="gm-panel">
-        <div class="gm-panel-title">Character Pool</div>
-        <div class="gm-action-pool" id="gm-action-pool">
-          <div class="gm-empty">No characters available yet.</div>
-        </div>
-      </section>
-
-      <div class="gm-action-layout">
-        <section class="gm-panel">
-          <div class="gm-panel-title">Combat Setup</div>
-          <div class="gm-action-controls" style="margin-bottom:12px;">
-            <button type="button" class="gm-btn gm-btn-muted" id="gm-clear-action-btn">CLEAR CHARACTERS</button>
-          </div>
-          <div class="gm-action-zones">
-            <div class="gm-drop-zone" id="gm-drop-ally" data-gm-side="ally">
-              <div class="gm-drop-title" id="gm-drop-ally-title">Protagonist</div>
-              <div class="gm-drop-list" id="gm-ally-list">
-                <div class="gm-empty">Drag characters here.</div>
-              </div>
-            </div>
-            <div class="gm-drop-zone" id="gm-drop-enemy" data-gm-side="enemy">
-              <div class="gm-drop-title" id="gm-drop-enemy-title">Antagonist</div>
-              <div class="gm-drop-list" id="gm-enemy-list">
-                <div class="gm-empty">Drag characters here.</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-      </div>
-
-      <section class="gm-panel">
-        <div class="gm-panel-title">Roll Lab</div>
-        <div class="gm-roll-lab-grid">
-          <div class="gm-roll-config">
-            <div class="gm-room-row">
-              <label class="gm-field">
-                <span>Roll Subject</span>
-                <select id="gm-roll-subject-select"></select>
-              </label>
-              <label class="gm-field gm-field-small">
-                <span>Dice Count</span>
-                <input id="gm-roll-qty" type="number" min="1" max="20" value="1">
-              </label>
-              <label class="gm-field">
-                <span>Custom Label</span>
-                <input id="gm-roll-custom-label" type="text" placeholder="Aim, Cover, Range...">
-              </label>
-              <label class="gm-field gm-field-small">
-                <span>Value</span>
-                <input id="gm-roll-custom-value" type="number" value="0">
-              </label>
-              <button type="button" class="gm-btn" id="gm-roll-add-mod-btn">ADD MODIFIER</button>
-              <button type="button" class="gm-btn gm-btn-muted" id="gm-roll-clear-mods-btn">CLEAR MODS</button>
-              <button type="button" class="gm-btn gm-btn-muted" id="gm-roll-send-active-btn">SEND TO SELECTED NPC</button>
-            </div>
-            <div class="gm-mod-list" id="gm-roll-mod-list">
-              <div class="gm-empty">No modifiers locked in.</div>
-            </div>
-            <div class="gm-roll-presets">
-              <button type="button" class="gm-btn" id="gm-roll-ambush-btn">AMBUSH</button>
-              <button type="button" class="gm-btn" id="gm-roll-ambush-counter-btn">AMBUSH COUNTER</button>
-              <button type="button" class="gm-btn" id="gm-roll-suppressive-btn">SUPPRESSIVE FIRE SAVE</button>
-            </div>
-            <div class="gm-aim-box">
-              <div class="gm-sheet-title">Aim Action</div>
-              <div class="gm-aim-row">
-                <div class="gm-aim-pips" id="gm-aim-pips"></div>
-                <div class="gm-aim-actions">
-                  <button type="button" class="gm-btn" id="gm-aim-btn">AIM</button>
-                  <button type="button" class="gm-btn" id="gm-attack-btn">ATTACK</button>
-                  <button type="button" class="gm-btn gm-btn-muted" id="gm-clear-aim-btn">CLEAR AIM</button>
-                </div>
-              </div>
-              <div class="gm-roll-source">Presets and Aim use the selected roll subject.</div>
-            </div>
-            <div class="gm-dice-bank">
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="4">D4</button>
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="6">D6</button>
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="8">D8</button>
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="10">D10</button>
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="12">D12</button>
-              <button type="button" class="gm-btn gm-die-btn" data-gm-die="20">D20</button>
-            </div>
-          </div>
-          <div class="gm-roll-display" id="gm-roll-display">
-            <div class="gm-sheet-title">GM Result</div>
-            <div class="gm-roll-empty">No GM roll yet.</div>
-          </div>
-        </div>
+        <div class="gm-panel-title">Character Tabs</div>
+        <div class="gm-empty" id="gm-character-tabs-empty">No character tabs yet. Connect a player room or use `+` to create/import an NPC tab.</div>
+        <div class="gm-player-list" id="gm-player-list" hidden></div>
+        <div class="gm-player-list" id="gm-npc-monitor-list" hidden></div>
       </section>
     </div>
+
+    <div id="gm-character-tab-panels"></div>
+  </div>
+
+  <div class="gm-tab-context-menu" id="gm-tab-context-menu" hidden></div>
+
+  <div class="gm-modal-overlay" id="gm-npc-create-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>NPC TAB</h3>
+      <div class="gm-roll-execute-copy">Create a blank NPC dossier tab or import an NPC file into a new tab.</div>
+      <div class="gm-action-controls">
+        <button class="gm-btn" type="button" id="gm-npc-create-new-btn">NEW NPC</button>
+        <button class="gm-btn" type="button" id="gm-npc-create-import-btn">IMPORT NPC</button>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-npc-create-cancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gm-action-hud" id="gm-action-hud">
+    <div class="gm-action-hud-result">
+      <div id="gm-roll-display">
+        <div class="gm-sheet-title">GM Result</div>
+        <div class="gm-roll-empty">No GM roll yet.</div>
+      </div>
+    </div>
+
+    <div class="gm-action-hud-bar">
+      <div class="gm-action-hud-left">
+        <div class="gm-action-hud-label">Dice</div>
+        <div class="gm-action-dice-bank">
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="4" oncontextmenu="return handleGMRollDieContext(event,4)">
+            <span class="gm-hud-dice-text">D4</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-4">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="6" oncontextmenu="return handleGMRollDieContext(event,6)">
+            <span class="gm-hud-dice-text">D6</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-6">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="8" oncontextmenu="return handleGMRollDieContext(event,8)">
+            <span class="gm-hud-dice-text">D8</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-8">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="10" oncontextmenu="return handleGMRollDieContext(event,10)">
+            <span class="gm-hud-dice-text">D10</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-10">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="12" oncontextmenu="return handleGMRollDieContext(event,12)">
+            <span class="gm-hud-dice-text">D12</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-12">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-die-btn" type="button" data-gm-die="20" oncontextmenu="return handleGMRollDieContext(event,20)">
+            <span class="gm-hud-dice-text">D20</span>
+            <span class="gm-hud-dice-count" id="gm-hud-die-count-20">0</span>
+          </button>
+          <button class="gm-hud-dice-btn gm-hud-dice-btn-clear" type="button" id="gm-roll-clear-queue-btn">CLR</button>
+        </div>
+        <div class="gm-action-hud-note" id="gm-roll-pool-summary">NONE</div>
+      </div>
+
+      <div class="gm-action-hud-core">
+        <button class="gm-roll-core-btn" id="gm-roll-queue-btn" type="button" title="Roll queued dice">
+          <span class="gm-roll-core-text">ROLL</span>
+        </button>
+      </div>
+
+      <div class="gm-action-hud-right">
+        <label class="gm-action-subject">
+          <span class="gm-action-hud-label">Actor</span>
+          <select id="gm-roll-subject-select"></select>
+        </label>
+
+        <div class="gm-menu-anchor gm-menu-anchor-mod">
+          <button class="gm-hud-state-btn" type="button" id="gm-roll-mod-toggle">
+            <span class="gm-hud-state-label">MOD</span>
+            <span class="gm-hud-state-value" id="gm-roll-mod-total-display">0</span>
+          </button>
+        </div>
+
+        <div class="gm-hud-aim-module">
+          <div class="gm-hud-state-label">AIM</div>
+          <div class="gm-aim-pips" id="gm-aim-pips"></div>
+          <div class="gm-hud-aim-actions">
+            <button class="gm-btn" type="button" id="gm-aim-btn">AIM</button>
+            <button class="gm-btn" type="button" id="gm-attack-btn">ATTACK</button>
+            <button class="gm-btn gm-btn-muted" type="button" id="gm-clear-aim-btn">CLEAR</button>
+          </div>
+        </div>
+
+        <div class="gm-menu-anchor gm-menu-anchor-preset">
+          <button class="gm-hud-state-btn" type="button" id="gm-roll-preset-toggle">
+            <span class="gm-hud-state-label">PRESETS</span>
+            <span class="gm-hud-state-value">▴</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gm-action-hud-drawers" id="gm-roll-drawers">
+      <div class="gm-action-hud-drawer" id="gm-roll-mod-drawer" hidden>
+        <div class="gm-action-hud-drawer-head">
+          <div class="gm-action-hud-label">Modifier Pool</div>
+          <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-drawer-close">CLOSE</button>
+        </div>
+        <div class="gm-mod-list" id="gm-roll-mod-list"></div>
+        <div class="gm-room-row">
+          <label class="gm-field">
+            <span>Custom Label</span>
+            <input id="gm-roll-custom-label" type="text" maxlength="40" placeholder="Custom">
+          </label>
+          <label class="gm-field gm-field-small">
+            <span>Value</span>
+            <input id="gm-roll-custom-value" type="number" step="1" value="0">
+          </label>
+          <button class="gm-btn" type="button" id="gm-roll-add-mod-btn">ADD</button>
+          <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-clear-mods-btn">CLEAR</button>
+          <button class="gm-btn" type="button" id="gm-roll-send-active-btn">SEND TO NPC</button>
+        </div>
+        <button class="gm-drawer-tail gm-drawer-tail-mod" type="button" id="gm-roll-mod-tail-close" aria-label="Close modifier tray"></button>
+      </div>
+
+      <div class="gm-action-hud-drawer" id="gm-roll-preset-drawer" hidden>
+        <div class="gm-action-hud-drawer-head">
+          <div class="gm-action-hud-label">Preset Console</div>
+          <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-preset-close">CLOSE</button>
+        </div>
+        <div class="gm-roll-presets">
+          <div class="gm-preset-hover-item">
+            <button class="gm-btn" type="button" id="gm-roll-ambush-btn">AMBUSH</button>
+            <div class="gm-preset-item-hover-panel">
+              <div class="gm-hud-hover-line">Stealth + INT + 1D10</div>
+            </div>
+          </div>
+          <div class="gm-preset-hover-item">
+            <button class="gm-btn" type="button" id="gm-roll-ambush-counter-btn">AMBUSH COUNTER</button>
+            <div class="gm-preset-item-hover-panel">
+              <div class="gm-hud-hover-line">Awareness + 1D10</div>
+            </div>
+          </div>
+          <div class="gm-preset-hover-item">
+            <button class="gm-btn" type="button" id="gm-roll-suppressive-btn">SUPPRESSIVE FIRE SAVE</button>
+            <div class="gm-preset-item-hover-panel">
+              <div class="gm-hud-hover-line">Athletics + REF + 1D10</div>
+            </div>
+          </div>
+        </div>
+        <button class="gm-drawer-tail gm-drawer-tail-preset" type="button" id="gm-roll-preset-tail-close" aria-label="Close preset tray"></button>
+      </div>
+    </div>
+
+    <input id="gm-roll-qty" type="hidden" value="1">
   </div>
 
   <div class="gm-modal-overlay" id="gm-initiative-modal">
@@ -265,7 +310,8 @@
 
   <div class="gm-modal-overlay" id="gm-inventory-modal">
     <div class="gm-modal-box gm-action-confirm-box">
-      <h3>ADD INVENTORY ITEM</h3>
+      <h3 id="gm-item-modal-title">ADD INVENTORY ITEM</h3>
+      <div class="gm-roll-execute-copy" id="gm-item-modal-copy">One line per field. Examples: Cost=250eb, Range=50m, Accuracy=+1, Damage=4d6+10, REF=+2.</div>
       <div class="gm-effect-form">
         <label class="gm-field">
           <span>Item Name</span>
@@ -287,7 +333,7 @@
         </label>
         <label class="gm-field">
           <span>Stats</span>
-          <textarea id="gm-item-stats" rows="6" placeholder="Accuracy=1&#10;Damage/Ammo=4D6"></textarea>
+          <textarea id="gm-item-stats" rows="6" placeholder="Accuracy=+1&#10;Damage=4d6+10&#10;Ammo=12&#10;Range=50m"></textarea>
         </label>
         <label class="gm-field">
           <span>Description</span>
@@ -397,9 +443,10 @@
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
   <script src="functions/firebase-sync.js?v=20260423b"></script>
-  <script src="functions/gm.js?v=20260424i"></script>
+<script src="functions/gm.js?v=20260426g"></script>
   <script src="functions/gm-breach.js?v=20260423a"></script>
-<script src="functions/gm-action-play.js?v=20260423b"></script>
+<script src="functions/gm-action-play.js?v=20260426b"></script>
+  <script src="functions/gm-npc-tabs.js?v=20260426b"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>
 </html>

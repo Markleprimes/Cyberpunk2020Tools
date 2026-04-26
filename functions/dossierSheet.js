@@ -67,6 +67,7 @@ function renderSheet(data) {
   document.getElementById('char-name').textContent = data.name[0] || 'Unknown';
   document.getElementById('char-aliases').innerHTML = data.name.slice(1).map((a) => `<span class="alias-tag">${a}</span>`).join('');
   renderCareerBadge(data.career[0] || '???');
+  if (typeof renderEmbeddedNpcLiteHeader === 'function') renderEmbeddedNpcLiteHeader();
   renderBannerImage();
   syncCurrentPlayerPresence();
 

@@ -728,8 +728,10 @@
     };
   }
 
-  function openInitiativeModal() {
-    const combatants = getAssignedCombatants();
+  function openInitiativeModal(sourceCombatants) {
+    const combatants = Array.isArray(sourceCombatants) && sourceCombatants.length
+      ? sourceCombatants.map((combatant) => ({ ...clone(combatant) }))
+      : getAssignedCombatants();
     if (!combatants.length) {
       const note = document.getElementById('gm-turn-note');
       if (note) note.textContent = 'Add combatants to Combat Setup first.';
@@ -852,8 +854,14 @@
         resolveFacedownBackoff(loser.combatKey);
       } else if (prompt.response.choice === 'stay') {
         actionState.facedownPenaltyByKey[loser.combatKey] = Number(prompt.penalty || -3);
+        const followupCombatants = Array.isArray(actionState.facedownModal?.combatants)
+          ? actionState.facedownModal.combatants.map((combatant, index) => ({
+              ...clone(combatant),
+              assignedSide: combatant.assignedSide || (index === 0 ? 'left' : 'right')
+            }))
+          : [];
         closeFacedownModal();
-        openInitiativeModal();
+        openInitiativeModal(followupCombatants);
       }
     }, clientId);
     try {
@@ -875,8 +883,10 @@
     }
   }
 
-  function openFacedownModal() {
-    const combatants = getFacedownCombatants();
+  function openFacedownModal(sourceCombatants) {
+    const combatants = Array.isArray(sourceCombatants) && sourceCombatants.length
+      ? sourceCombatants.slice(0, 2).map((combatant) => ({ ...clone(combatant) }))
+      : getFacedownCombatants();
     if (combatants.length !== 2) return;
     const baselineSnapshots = {};
     const results = {};
@@ -1096,7 +1106,7 @@
       return {
         key: combatant.combatKey,
         name: combatant.name || 'Unknown',
-        side: getAssignedSide(combatant.combatKey) || 'ally',
+        side: combatant.assignedSide || getAssignedSide(combatant.combatKey) || 'ally',
         total: result.total,
         breakdown: result.breakdown
       };
@@ -1166,6 +1176,12 @@
 
   function resolveFacedownStayStrong() {
     const modal = actionState.facedownModal;
+    const followupCombatants = Array.isArray(modal?.combatants)
+      ? modal.combatants.map((combatant, index) => ({
+          ...clone(combatant),
+          assignedSide: combatant.assignedSide || (index === 0 ? 'left' : 'right')
+        }))
+      : [];
     if (modal?.combatants?.length === 2) {
       const [a, b] = modal.combatants;
       const resultA = modal.results?.[a.combatKey];
@@ -1178,7 +1194,7 @@
       }
     }
     closeFacedownModal();
-    openInitiativeModal();
+    openInitiativeModal(followupCombatants);
   }
 
   function endCombat() {
@@ -1281,10 +1297,9 @@
     window.resolveGMFacedownBackoff = resolveFacedownBackoff;
     window.resolveGMFacedownStayStrong = resolveFacedownStayStrong;
     window.openGMInitiativeModal = openInitiativeModal;
-
-    document.querySelectorAll('.gm-tab-btn').forEach((button) => {
-      button.addEventListener('click', () => switchGMTab(button.getAttribute('data-gm-tab')));
-    });
+    window.openGMInitiativeModalForCombatants = (combatants) => openInitiativeModal(combatants);
+    window.openGMFacedownModalForCombatants = (combatants) => openFacedownModal(combatants);
+    window.switchGMTab = switchGMTab;
 
     wireDropZone(document.getElementById('gm-drop-ally'));
     wireDropZone(document.getElementById('gm-drop-enemy'));
@@ -1299,6 +1314,12 @@
     document.addEventListener('dragend', () => {
       actionState.draggedKey = '';
       document.querySelectorAll('.gm-drop-zone').forEach((node) => node.classList.remove('drag-over'));
+    });
+
+    document.addEventListener('click', (event) => {
+      const tabButton = event.target.closest('.gm-tab-btn[data-gm-tab]');
+      if (!tabButton) return;
+      switchGMTab(tabButton.getAttribute('data-gm-tab'));
     });
 
     document.getElementById('gm-init-check-btn')?.addEventListener('click', openInitiativeModal);

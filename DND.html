@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260424j">
+<link rel="stylesheet" href="DND.css?v=20260426k">
 </head>
 <body>
 <div class="wrapper">
 
-<header>
+<header id="app-header">
   <div class="logo-block">
     <h1>CYBERPUNK 2020</h1>
     <div class="edition">// CHARACTER DOSSIER // NIGHT CITY //</div>
@@ -44,10 +44,21 @@
 <!-- SHEET -->
 <div id="sheet">
 
-  <div class="name-banner">
+  <div class="npc-lite-header-panel" id="npc-lite-header-panel">
+    <div class="npc-lite-head">
+      <div>
+        <div class="npc-lite-name" id="npc-lite-name">NPC //</div>
+        <div class="npc-lite-meta" id="npc-lite-meta">CAREER // --</div>
+      </div>
+      <button class="name-edit-btn" type="button" onclick="openIdentityEditor()">EDIT</button>
+    </div>
+  </div>
+
+  <div class="name-banner" id="name-banner">
     <div>
       <div class="name-heading">
         <div class="name-main" id="char-name">--</div>
+        <button class="name-edit-btn" type="button" onclick="openIdentityEditor()">EDIT</button>
         <button class="name-image-btn" type="button" onclick="document.getElementById('banner-image-input').click()">IMG</button>
         <input type="file" id="banner-image-input" accept="image/*" style="display:none">
       </div>
@@ -171,14 +182,14 @@
 </div>
 
   <!-- STATS -->
-  <div class="panel" style="margin-bottom:18px;">
+  <div class="panel" id="core-stats-panel" style="margin-bottom:18px;">
     <div class="panel-title">Core Statistics</div>
     <div class="stats-grid" id="stats-grid"></div>
   </div>
 
   <!-- BODY + STUN (full width) -->
   <div class="sheet-grid" style="grid-template-columns:1.35fr 1.35fr 1.35fr 1fr 1fr;margin-bottom:18px;" id="body-stun-panel">
-    <div class="panel" style="grid-column:1/4;">
+    <div class="panel" id="physical-panel" style="grid-column:1/4;">
       <div class="panel-title">Physical</div>
       <div class="body-stun-row">
         <div class="bs-item">
@@ -207,7 +218,7 @@
         </div>
       </div>
     </div>
-    <div class="panel" style="grid-column:4/5;">
+    <div class="panel" id="reputation-panel" style="grid-column:4/5;">
       <div class="panel-title">Reputation</div>
       <div class="rep-row">
         <div class="rep-main" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()">
@@ -223,7 +234,7 @@
       </div>
       <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()"></div>
     </div>
-    <div class="panel" style="grid-column:5/6;">
+    <div class="panel" id="wallet-panel" style="grid-column:5/6;">
       <div class="panel-title">Wallet</div>
       <div class="wallet-row">
         <input class="wallet-number" id="wallet-val" type="number" min="0" step="1" value="0" onchange="setWallet(this.value)" />
@@ -240,7 +251,7 @@
 
   <!-- SKILLS + CYBER -->
   <div class="sheet-grid" style="margin-bottom:18px;">
-    <div class="panel">
+    <div class="panel" id="career-skills-panel">
       <div class="panel-title">Career Skills</div>
       <div class="sp-tracker">
         <span class="sp-label">UPGRADE POINTS</span>
@@ -255,7 +266,7 @@
         <input class="add-skill-input" id="new-skill-name" type="text" placeholder="Custom skill name..." maxlength="50">
         <button class="add-skill-btn" onclick="addCustomSkill()">ADD</button>
       </div>
-      <div class="special-skill-shell">
+      <div class="special-skill-shell" id="special-skill-panel">
         <div class="special-skill-head">
           <div class="panel-title panel-title-sub">Special Skills</div>
           <button class="add-skill-btn" type="button" onclick="openSpecialSkillEditor()">ADD SPECIAL</button>
@@ -265,7 +276,7 @@
         </div>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" id="inventory-panel">
       <div class="panel-title">Inventory</div>
       <div id="inventory-list" class="inventory-list"></div>
       <div class="inventory-actions">
@@ -278,7 +289,7 @@
   </div>
 
   <!-- DAMAGE & ARMOR -->
-  <div class="panel" style="margin-bottom:18px;">
+  <div class="panel" id="damage-armor-panel" style="margin-bottom:18px;">
     <div class="panel-title">Damage &amp; Armor</div>
     <div class="limb-grid" id="limb-grid"></div>
     <div class="wound-status-panel" id="wound-panel">
@@ -294,83 +305,137 @@
     </div>
   </div>
 
-  <div class="panel" style="margin-bottom:18px;">
-    <div class="panel-title">Roll Lab</div>
-    <div class="roll-lab">
-      <div>
-        <div class="roll-status-strip">
-          <div class="roll-status-copy">
-            <div class="roll-label">Last Result</div>
-            <div class="roll-equation" id="roll-last-summary">Build a dice pool, then hit ROLL!! to launch the modal.</div>
-            <div class="roll-breakdown" id="roll-last-breakdown">Modifiers stay locked here. Roll drama moves to the popup.</div>
-          </div>
-          <div class="roll-status-total" id="roll-last-total">0</div>
-        </div>
-        <div class="modifier-bar">
-          <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
-          <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
-          <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD MODIFIER</button>
-          <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR MODIFIERS</button>
-        </div>
-        <div class="modifier-list" id="modifier-list"></div>
-        <div class="roll-control-bar">
-          <div class="roll-pool-wrap">
-            <span class="roll-pool-label">Queued Dice</span>
-            <div class="roll-pool-summary" id="manual-dice-summary">NONE</div>
-          </div>
-          <button class="roll-launch-btn" id="manual-roll-btn" type="button" onclick="rollQueuedDice()" disabled>ROLL!!</button>
-        </div>
-        <div class="dice-pool-list" id="manual-dice-list">
-          <div class="inventory-empty">NO DICE QUEUED</div>
-        </div>
-        <div class="roll-box-note">Click dice to add them to the queue. Click a queued die to remove it. Presets still auto-roll.</div>
-        <div class="dice-bank">
-          <button class="dice-btn" type="button" onclick="queueRollDie(4)">D4</button>
-          <button class="dice-btn" type="button" onclick="queueRollDie(6)">D6</button>
-          <button class="dice-btn" type="button" onclick="queueRollDie(8)">D8</button>
-          <button class="dice-btn" type="button" onclick="queueRollDie(10)">D10</button>
-          <button class="dice-btn" type="button" onclick="queueRollDie(12)">D12</button>
-          <button class="dice-btn" type="button" onclick="queueRollDie(20)">D20</button>
-          <button class="dice-btn dice-btn-clear" type="button" onclick="clearQueuedDice()">CLEAR QUEUE</button>
-        </div>
+  <div class="panel action-hud-shell" id="roll-lab-panel">
+    <div class="action-hud-result-strip">
+      <div class="action-hud-result-copy">
+        <div class="roll-label">Last Result</div>
+        <div class="roll-equation" id="roll-last-summary">Build a dice pool, then fire the roll core.</div>
+        <div class="roll-breakdown" id="roll-last-breakdown">Left click adds dice. Right click removes one. Presets still auto-roll.</div>
       </div>
-      <div class="roll-side-panel">
-        <div class="roll-box">
-          <div class="roll-box-title">Modifier Total</div>
-          <div class="roll-box-value" id="modifier-total">0</div>
+      <div class="action-hud-result-total" id="roll-last-total">0</div>
+    </div>
+    <div class="action-hud-bar">
+      <div class="action-hud-left">
+        <div class="action-hud-label">Dice</div>
+        <div class="action-hud-dice-bank">
+          <button class="hud-dice-btn" type="button" data-die-side="4" onclick="queueRollDie(4)" oncontextmenu="return handleRollDieContext(event,4)">
+            <span class="hud-dice-text">D4</span>
+            <span class="hud-dice-count" id="hud-die-count-4">0</span>
+          </button>
+          <button class="hud-dice-btn" type="button" data-die-side="6" onclick="queueRollDie(6)" oncontextmenu="return handleRollDieContext(event,6)">
+            <span class="hud-dice-text">D6</span>
+            <span class="hud-dice-count" id="hud-die-count-6">0</span>
+          </button>
+          <button class="hud-dice-btn" type="button" data-die-side="8" onclick="queueRollDie(8)" oncontextmenu="return handleRollDieContext(event,8)">
+            <span class="hud-dice-text">D8</span>
+            <span class="hud-dice-count" id="hud-die-count-8">0</span>
+          </button>
+          <button class="hud-dice-btn" type="button" data-die-side="10" onclick="queueRollDie(10)" oncontextmenu="return handleRollDieContext(event,10)">
+            <span class="hud-dice-text">D10</span>
+            <span class="hud-dice-count" id="hud-die-count-10">0</span>
+          </button>
+          <button class="hud-dice-btn" type="button" data-die-side="12" onclick="queueRollDie(12)" oncontextmenu="return handleRollDieContext(event,12)">
+            <span class="hud-dice-text">D12</span>
+            <span class="hud-dice-count" id="hud-die-count-12">0</span>
+          </button>
+          <button class="hud-dice-btn" type="button" data-die-side="20" onclick="queueRollDie(20)" oncontextmenu="return handleRollDieContext(event,20)">
+            <span class="hud-dice-text">D20</span>
+            <span class="hud-dice-count" id="hud-die-count-20">0</span>
+          </button>
+          <button class="hud-dice-btn hud-dice-btn-clear" type="button" onclick="clearQueuedDice()">CLR</button>
         </div>
-        <div class="roll-box">
-          <div class="roll-box-title">Dice Pool</div>
-          <div class="roll-box-value" id="last-die-label">NONE</div>
+        <div class="action-hud-note" id="manual-dice-summary">NONE</div>
+      </div>
+
+      <div class="action-hud-core">
+        <button class="roll-core-btn" id="manual-roll-btn" type="button" onclick="rollQueuedDice()" disabled title="Roll queued dice">
+          <span class="roll-core-text">ROLL</span>
+        </button>
+      </div>
+
+      <div class="action-hud-right">
+        <div class="hud-menu-anchor hud-menu-anchor-mod">
+          <button class="hud-state-btn" type="button" onclick="toggleRollHudDrawer('mod')">
+            <span class="hud-state-label">MOD</span>
+            <span class="hud-state-value" id="modifier-total">0</span>
+          </button>
+          <div class="action-hud-drawer" id="roll-hud-mod-drawer" hidden>
+            <div class="action-hud-drawer-head">
+              <div class="action-hud-label">Modifier Pool</div>
+              <button class="hud-close-btn" type="button" onclick="closeRollHudDrawers()">CLOSE</button>
+            </div>
+            <div class="modifier-list action-hud-mod-list" id="modifier-list"></div>
+            <div class="action-hud-custom-row">
+              <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
+              <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
+              <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD</button>
+              <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR</button>
+            </div>
+          </div>
         </div>
-        <div class="roll-box">
-          <div class="roll-box-title">Presets</div>
-          <div class="preset-list">
-            <button class="preset-btn" type="button" onclick="rollFacedown()">Facedown</button>
-            <button class="preset-btn" type="button" onclick="rollInitiationCheck()">Initaition Check</button>
-            <button class="preset-btn" type="button" onclick="rollAmbush()">Ambush</button>
-            <button class="preset-btn" type="button" onclick="rollAmbushCounter()">Ambush Counter</button>
-            <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
+
+        <div class="hud-aim-module">
+          <div class="hud-state-label">AIM</div>
+          <div class="aim-stack-pips action-hud-aim-pips" id="aim-stack-pips"></div>
+          <div class="hud-aim-actions" id="aim-followup-row">
+            <button class="hud-mini-btn" id="aim-keep-btn" type="button" onclick="keepAimAction()">Aim</button>
+            <button class="hud-mini-btn" type="button" onclick="attackAimAction()">Attack</button>
+            <button class="hud-mini-btn hud-mini-btn-muted" type="button" onclick="clearAimAction()">Clear</button>
           </div>
-          <div class="aim-stack-box">
-            <div class="roll-box-title">Aim Action</div>
-            <div class="aim-stack-row">
-              <div class="aim-stack-pips" id="aim-stack-pips"></div>
+        </div>
+
+        <div class="hud-menu-anchor hud-menu-anchor-preset">
+          <button class="hud-state-btn" type="button" onclick="toggleRollHudDrawer('preset')">
+            <span class="hud-state-label">PRESETS</span>
+            <span class="hud-state-value">&#9652;</span>
+          </button>
+          <div class="action-hud-drawer" id="roll-hud-preset-drawer" hidden>
+            <div class="action-hud-drawer-head">
+              <div class="action-hud-label">Preset Console</div>
+              <button class="hud-close-btn" type="button" onclick="closeRollHudDrawers()">CLOSE</button>
             </div>
-            <div class="aim-followup-row" id="aim-followup-row">
-              <button class="preset-btn aim-followup-btn" id="aim-keep-btn" type="button" onclick="keepAimAction()">Aim</button>
-              <button class="preset-btn aim-followup-btn" type="button" onclick="attackAimAction()">Attack</button>
-              <button class="preset-btn aim-followup-btn" type="button" onclick="clearAimAction()">Clear Aim</button>
+            <div class="preset-list action-hud-preset-list">
+              <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollFacedown()">Facedown</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">COOL + Reputation + 1D10</div>
+                </div>
+              </div>
+              <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollInitiationCheck()">Initaition Check</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">REF + 1D10</div>
+                </div>
+              </div>
+              <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollAmbush()">Ambush</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">Stealth + INT + 1D10</div>
+                </div>
+              </div>
+              <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollAmbushCounter()">Ambush Counter</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">Awareness + 1D10</div>
+                </div>
+              </div>
+              <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">Athletics + REF + 1D10</div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="roll-box-note">Each preset replaces the current modifier stack with its own formula, then rolls 1d10.</div>
         </div>
       </div>
     </div>
+
+    <div id="last-die-label" hidden>NONE</div>
   </div>
 
   <!-- NETRUNNER DECK -->
-  <div class="panel section-panel netrunner-shell">
+  <div class="panel section-panel netrunner-shell" id="netrunner-panel">
     <div class="panel-title">Netrunner Deck</div>
     <div class="netrunner-layout">
 
@@ -442,6 +507,30 @@
     </div>
     <div class="modal-btns" style="margin-top:18px;">
       <button class="action-btn" type="button" onclick="cancelRollExecution()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="identity-modal">
+  <div class="modal-box create-modal-box">
+    <h3>EDIT IDENTITY</h3>
+    <div class="create-form">
+      <label>
+        <div class="create-field-label">Name</div>
+        <input class="create-field-input" id="identity-name" type="text" maxlength="80">
+      </label>
+      <label>
+        <div class="create-field-label">Street Name / Alias</div>
+        <input class="create-field-input" id="identity-street" type="text" maxlength="120" placeholder="One alias or comma-separated aliases">
+      </label>
+      <label>
+        <div class="create-field-label">Career</div>
+        <input class="create-field-input" id="identity-career" type="text" maxlength="60" placeholder="Solo, Techie, custom career...">
+      </label>
+    </div>
+    <div class="modal-btns">
+      <button class="action-btn" type="button" onclick="closeIdentityEditor()">CANCEL</button>
+      <button class="action-btn red" type="button" onclick="saveIdentityEditor()">SAVE</button>
     </div>
   </div>
 </div>
@@ -640,11 +729,11 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260423b"></script>
-<script src="functions/DND.js?v=20260424m"></script>
-<script src="functions/createNewCharacter.js?v=20260424g"></script>
-<script src="functions/dossierSheet.js?v=20260424k"></script>
+<script src="functions/DND.js?v=20260425c"></script>
+<script src="functions/createNewCharacter.js?v=20260425a"></script>
+<script src="functions/dossierSheet.js?v=20260425a"></script>
 <script src="functions/inventory.js?v=20260424m"></script>
-<script src="functions/rollLab.js?v=20260424j"></script>
+<script src="functions/rollLab.js?v=20260425e"></script>
 <script src="functions/upload-download.js?v=20260424h"></script>
 <script src="functions/netrunner.js?v=20260423a"></script>
 <script src="functions/remote-breach.js?v=20260423a"></script>
