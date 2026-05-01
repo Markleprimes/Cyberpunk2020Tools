@@ -144,7 +144,9 @@ function submitNewCharacter() {
     return;
   }
   document.getElementById('status-bar').style.display = 'none';
+  if (typeof clearActiveAccountCharacterId === 'function') clearActiveAccountCharacterId();
   renderSheet(buildBlankSheetData(name, street ? [street] : [], career));
+  if (typeof setAccountSaveBaseline === 'function') setAccountSaveBaseline();
   closeNewCharacterModal();
   showActionLog(`NEW DOSSIER OPENED: ${name.toUpperCase()}`);
 }

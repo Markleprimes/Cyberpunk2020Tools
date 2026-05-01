@@ -116,6 +116,34 @@
     return rootRef.child('characters');
   }
 
+  async function listUserCharacters(uid) {
+    const ref = getUserCharactersRef(uid);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const snapshot = await ref.get();
+    return snapshot.val() || {};
+  }
+
+  async function getUserCharacter(uid, characterId) {
+    const ref = getUserCharactersRef(uid);
+    const cleanId = String(characterId || '').trim();
+    if (!ref || !cleanId) throw new Error('Character lookup is unavailable.');
+    const snapshot = await ref.child(cleanId).get();
+    return snapshot.val() || null;
+  }
+
+  async function saveUserCharacter(uid, characterId, entry) {
+    const ref = getUserCharactersRef(uid);
+    if (!ref) throw new Error('Firebase realtime database is unavailable.');
+    const cleanId = String(characterId || '').trim();
+    const targetRef = cleanId ? ref.child(cleanId) : ref.push();
+    const payload = {
+      ...(entry || {}),
+      updatedAt: Date.now()
+    };
+    await targetRef.set(payload);
+    return { id: targetRef.key, data: payload };
+  }
+
   function getPlayerPromptRef(roomId, clientId = getSyncClientId()) {
     const roomRef = getSyncRoomRef(roomId);
     if (!roomRef) return null;
@@ -424,6 +452,9 @@
   window.getSyncRoomRef = getSyncRoomRef;
   window.getUserRootRef = getUserRootRef;
   window.getUserCharactersRef = getUserCharactersRef;
+  window.listUserCharacters = listUserCharacters;
+  window.getUserCharacter = getUserCharacter;
+  window.saveUserCharacter = saveUserCharacter;
   window.getPlayerPromptRef = getPlayerPromptRef;
   window.getPlayerEffectsRef = getPlayerEffectsRef;
   window.getPlayerCommandsRef = getPlayerCommandsRef;

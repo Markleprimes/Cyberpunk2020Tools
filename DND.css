@@ -148,6 +148,17 @@ header{display:flex;align-items:flex-end;gap:20px;margin-bottom:36px;border-bott
 .room-sync-status.connected{border-color:rgba(0,217,139,.26);background:rgba(0,217,139,.08);color:var(--accent-g);}
 @media(max-width:860px){.room-sync-strip{grid-template-columns:1fr;}.room-sync-status{text-align:left;}.side-drawer-edge{top:132px;width:24px;height:112px;}.drawer-tab-lines{width:11px;}.side-drawer{width:min(420px,96vw);transform:translateX(-100%);}.side-drawer-actions{grid-template-columns:1fr;}.combat-drawer-edge{top:132px;width:24px;height:112px;}.combat-drawer-tab-label{font-size:.46rem;letter-spacing:.13em;}.combat-drawer{width:min(360px,94vw);}.combat-drawer-grid{grid-template-columns:1fr;}}
 
+.account-save-browser-box{width:min(920px,96vw);}
+.account-save-browser-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,77,109,.16);}
+.account-save-browser-list{display:grid;gap:12px;max-height:70vh;overflow:auto;padding-right:4px;}
+.account-save-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 16px;border:1px solid rgba(255,77,109,.18);background:rgba(255,77,109,.05);}
+.account-save-card-main{min-width:0;}
+.account-save-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:.1em;color:var(--accent-y);line-height:1;}
+.account-save-card-meta{margin-top:7px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;line-height:1.5;}
+.account-save-card-copy{margin-top:8px;color:var(--text-dim);font-size:.94rem;line-height:1.45;}
+.account-save-card .action-btn{white-space:nowrap;}
+@media(max-width:860px){.account-save-card{grid-template-columns:1fr;}.account-save-card .action-btn{width:100%;}}
+
 body.gm-npc-lite .wrapper{max-width:none;padding:12px 12px 28px;}
 body.gm-npc-lite .wrapper::before,
 body.gm-npc-lite .wrapper::after{display:none;}

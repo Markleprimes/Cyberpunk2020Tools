@@ -51,6 +51,10 @@ let combatLuckSpent = 0;
 let activeNpcSyncId = '';
 let npcSyncWriteSuppressed = false;
 let activeInventoryFieldToggles = {};
+let activeAccountCharacterId = '';
+let accountAutosaveTimer = null;
+let lastSavedAccountHash = '';
+let suppressAccountAutosave = false;
 const DOSSIER_LAUNCH_PARAMS = new URLSearchParams(window.location.search);
 const IS_GM_NPC_LITE_MODE = DOSSIER_LAUNCH_PARAMS.get('gmNpcLite') === '1'
   || (DOSSIER_LAUNCH_PARAMS.get('embedded') === '1' && String(DOSSIER_LAUNCH_PARAMS.get('role') || '').trim().toLowerCase() === 'npc');
@@ -111,6 +115,114 @@ function updateDossierAuthDisplay(user) {
   const node = getById('dossier-auth-tag');
   if (!node) return;
   node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
+}
+
+function buildCurrentAccountCharacterPayload() {
+  const characterData = buildCurrentDossierSheetData();
+  characterData.__bannerData = bannerImageData || '';
+  characterData.__bannerName = bannerImageName || '';
+  characterData.__accountCharacterId = activeAccountCharacterId || '';
+  return characterData;
+}
+
+function getCurrentAccountCharacterHash() {
+  try {
+    return JSON.stringify(buildCurrentAccountCharacterPayload());
+  } catch (error) {
+    console.warn('Failed to serialize current account character payload.', error);
+    return '';
+  }
+}
+
+function setAccountSaveBaseline() {
+  lastSavedAccountHash = getCurrentAccountCharacterHash();
+}
+
+function clearActiveAccountCharacterId() {
+  activeAccountCharacterId = '';
+  setAccountSaveBaseline();
+}
+
+function canSaveCurrentCharacterToAccount() {
+  if (!window.getFirebaseCurrentUser?.()) return false;
+  if (getById('sheet')?.style.display !== 'block') return false;
+  const mainName = String(getById('char-name')?.textContent || '').trim();
+  return Boolean(mainName && mainName !== '--');
+}
+
+async function saveCurrentCharacterToAccount(trigger = 'MANUAL', showLog = true) {
+  const user = window.getFirebaseCurrentUser?.();
+  if (!user?.uid) {
+    if (showLog) showError('LOG IN WITH GOOGLE TO SAVE THIS DOSSIER.');
+    return null;
+  }
+  if (getById('sheet')?.style.display !== 'block') {
+    if (showLog) showError('OPEN A DOSSIER BEFORE SAVING.');
+    return null;
+  }
+  const payload = buildCurrentAccountCharacterPayload();
+  const payloadHash = JSON.stringify(payload);
+  if (trigger !== 'MANUAL' && payloadHash && payloadHash === lastSavedAccountHash) return null;
+
+  const aliases = Array.isArray(payload.name) ? payload.name.slice(1).filter(Boolean) : [];
+  const entry = {
+    meta: {
+      name: String(payload.name?.[0] || 'Unnamed Character').trim() || 'Unnamed Character',
+      career: String(payload.career?.[0] || 'Unknown').trim() || 'Unknown',
+      note: aliases.length ? aliases.join(' // ') : 'Saved from dossier',
+      updatedAt: Date.now()
+    },
+    payload: {
+      characterData: payload
+    }
+  };
+
+  try {
+    const result = await window.saveUserCharacter?.(user.uid, activeAccountCharacterId, entry);
+    if (!result?.id) throw new Error('SAVE ID NOT RETURNED.');
+    activeAccountCharacterId = result.id;
+    payload.__accountCharacterId = activeAccountCharacterId;
+    lastSavedAccountHash = JSON.stringify(payload);
+    if (showLog) showActionLog(trigger === 'AUTO' ? 'ACCOUNT AUTOSAVE COMPLETE' : 'ACCOUNT SAVE COMPLETE');
+    return result;
+  } catch (error) {
+    console.warn('Failed to save character to account.', error);
+    if (showLog) showError(`ACCOUNT SAVE FAILED: ${error.message || 'UNKNOWN ERROR'}`);
+    return null;
+  }
+}
+
+function scheduleAccountAutosave() {
+  if (suppressAccountAutosave) return;
+  if (!canSaveCurrentCharacterToAccount()) return;
+  clearTimeout(accountAutosaveTimer);
+  accountAutosaveTimer = setTimeout(() => {
+    saveCurrentCharacterToAccount('AUTO', false);
+  }, 900);
+}
+
+function loadAccountCharacterEntry(entry, characterId = '') {
+  const characterData = entry?.payload?.characterData || entry?.characterData || null;
+  if (!characterData) {
+    showError('THIS ACCOUNT SAVE DOES NOT HAVE A DOSSIER PAYLOAD.');
+    return false;
+  }
+  const nextData = JSON.parse(JSON.stringify(characterData));
+  activeAccountCharacterId = String(characterId || nextData.__accountCharacterId || '').trim();
+  bannerImageData = String(nextData.__bannerData || '').trim();
+  bannerImageName = String(nextData.__bannerName || '').trim();
+  delete nextData.__bannerData;
+  delete nextData.__bannerName;
+  delete nextData.__accountCharacterId;
+  suppressAccountAutosave = true;
+  try {
+    renderSheet(nextData);
+  } finally {
+    suppressAccountAutosave = false;
+  }
+  setAccountSaveBaseline();
+  showActionLog(`ACCOUNT DOSSIER LOADED: ${fileSafeNameFromData(nextData)}`);
+  return true;
 }
 
 function renderEmbeddedNpcLiteHeader() {
@@ -1530,11 +1642,22 @@ window.getEffectiveWalletValue = getEffectiveWalletValue;
 window.getEffectivePhysicalValues = getEffectivePhysicalValues;
 window.getEffectiveArmorValue = getEffectiveArmorValue;
 window.getEffectiveArmorBonus = getEffectiveArmorBonus;
+window.saveCurrentCharacterToAccount = saveCurrentCharacterToAccount;
+window.loadAccountCharacterEntry = loadAccountCharacterEntry;
+window.clearActiveAccountCharacterId = clearActiveAccountCharacterId;
+window.setAccountSaveBaseline = setAccountSaveBaseline;
 
 renderCombatSummaryDrawer();
 window.initFirebaseRealtime?.();
 updateDossierAuthDisplay(window.getFirebaseCurrentUser?.() || null);
 window.watchFirebaseAuthState?.((user) => updateDossierAuthDisplay(user));
+const dossierSheetNode = getById('sheet');
+if (typeof MutationObserver !== 'undefined' && dossierSheetNode) {
+  const observer = new MutationObserver(() => {
+    scheduleAccountAutosave();
+  });
+  observer.observe(dossierSheetNode, { childList: true, subtree: true, characterData: true });
+}
 
 function resetSheet() {
   showModal('CLEAR DOSSIER?', 'Discard current character and reset the dossier to blank values?', () => {
@@ -1555,7 +1678,9 @@ function resetSheet() {
     stopRemoteBreachWatch();
     persistentRollPenalty = 0;
     clearInterval(_rollTimer);
+    activeAccountCharacterId = '';
     renderSheet(buildBlankSheetData());
+    setAccountSaveBaseline();
     closeModal();
     showActionLog('CLEARED DOSSIER');
   });

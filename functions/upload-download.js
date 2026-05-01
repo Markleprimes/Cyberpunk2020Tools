@@ -199,7 +199,9 @@ function parseCharacter(raw) {
     });
     bannerImageData = '';
     bannerImageName = '';
+    if (typeof clearActiveAccountCharacterId === 'function') clearActiveAccountCharacterId();
     renderSheet(data);
+    if (typeof setAccountSaveBaseline === 'function') setAccountSaveBaseline();
     showActionLog(`LOADED CHARACTER FILE: ${fileSafeNameFromData(data)}`);
   } catch (err) {
     showError(`PARSE ERROR: ${err.message}`);
@@ -513,7 +515,12 @@ function bootDossierFromLauncher() {
     sessionStorage.removeItem(BOOT_DATA_KEY);
     try {
       const data = JSON.parse(pendingData);
-      renderSheet(data);
+      if (typeof loadAccountCharacterEntry === 'function' && (data?.__accountCharacterId || data?.__bannerData || data?.__bannerName)) {
+        loadAccountCharacterEntry({ payload: { characterData: data } }, data.__accountCharacterId || '');
+      } else {
+        renderSheet(data);
+        if (typeof setAccountSaveBaseline === 'function') setAccountSaveBaseline();
+      }
       if (typeof applyLauncherRoomLink === 'function') applyLauncherRoomLink(launchRoomId, launchRole, autoConnect);
       showActionLog(`NEW DOSSIER OPENED: ${fileSafeNameFromData(data)}`);
       return;

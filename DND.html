@@ -100,6 +100,8 @@
       <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
       <button class="action-btn orange" onclick="document.getElementById('file-input2').click()">LOAD FILE</button>
       <input type="file" id="file-input2" accept=".txt,.zip" style="display:none">
+      <button class="action-btn" type="button" onclick="openAccountSaveBrowser()">LOAD FROM SAVE</button>
+      <button class="action-btn green" type="button" onclick="saveCurrentCharacterToAccount('MANUAL', true)">SAVE</button>
       <button class="action-btn red" onclick="resetSheet()">CLEAR DOSSIER</button>
       <button class="action-btn new-btn" onclick="openNewCharacterModal()">NEW</button>
     </div>
@@ -684,6 +686,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="account-save-browser-modal">
+  <div class="modal-box account-save-browser-box">
+    <div class="account-save-browser-head">
+      <div>
+        <div class="create-field-label">ACCOUNT DOSSIERS</div>
+        <h3>SAVED CHARACTERS</h3>
+      </div>
+      <button class="action-btn" type="button" onclick="closeAccountSaveBrowser()">CLOSE</button>
+    </div>
+    <div class="account-save-browser-list" id="account-save-browser-list">
+      <div class="inventory-empty">NO SAVED CHARACTERS.</div>
+    </div>
+  </div>
+</div>
+
 <!-- REMOTE BREACH MODAL -->
 <div class="modal-overlay remote-breach-modal" id="remote-breach-modal">
   <div class="modal-box remote-breach-box">
@@ -732,13 +749,14 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260501b"></script>
-<script src="functions/DND.js?v=20260501b"></script>
-<script src="functions/createNewCharacter.js?v=20260427a"></script>
+<script src="functions/firebase-sync.js?v=20260501d"></script>
+<script src="functions/DND.js?v=20260501d"></script>
+<script src="functions/createNewCharacter.js?v=20260501a"></script>
 <script src="functions/dossierSheet.js?v=20260427b"></script>
 <script src="functions/inventory.js?v=20260424m"></script>
 <script src="functions/rollLab.js?v=20260427b"></script>
-<script src="functions/upload-download.js?v=20260424h"></script>
+<script src="functions/upload-download.js?v=20260501a"></script>
+<script src="functions/account-saves.js?v=20260501b"></script>
 <script src="functions/netrunner.js?v=20260427c"></script>
 <script src="functions/remote-breach.js?v=20260427c"></script>
 </body>
