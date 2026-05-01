@@ -96,6 +96,56 @@
     return getFirebaseAuth()?.currentUser || null;
   }
 
+  const FIREBASE_KEY_ESCAPE_MAP = {
+    '.': '__CP2020_DOT__',
+    '#': '__CP2020_HASH__',
+    '$': '__CP2020_DOLLAR__',
+    '/': '__CP2020_SLASH__',
+    '[': '__CP2020_LBRACKET__',
+    ']': '__CP2020_RBRACKET__'
+  };
+
+  const FIREBASE_KEY_UNESCAPE_MAP = Object.entries(FIREBASE_KEY_ESCAPE_MAP)
+    .reduce((acc, [char, token]) => {
+      acc[token] = char;
+      return acc;
+    }, {});
+
+  function sanitizeFirebaseKey(key) {
+    return String(key || '').replace(/[.#$/\[\]]/g, (char) => FIREBASE_KEY_ESCAPE_MAP[char] || char);
+  }
+
+  function desanitizeFirebaseKey(key) {
+    return String(key || '').replace(
+      /__CP2020_(?:DOT|HASH|DOLLAR|SLASH|LBRACKET|RBRACKET)__/g,
+      (token) => FIREBASE_KEY_UNESCAPE_MAP[token] || token
+    );
+  }
+
+  function sanitizeFirebaseValue(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeFirebaseValue(item));
+    }
+    if (!value || typeof value !== 'object') return value;
+    const next = {};
+    Object.entries(value).forEach(([key, nestedValue]) => {
+      next[sanitizeFirebaseKey(key)] = sanitizeFirebaseValue(nestedValue);
+    });
+    return next;
+  }
+
+  function desanitizeFirebaseValue(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => desanitizeFirebaseValue(item));
+    }
+    if (!value || typeof value !== 'object') return value;
+    const next = {};
+    Object.entries(value).forEach(([key, nestedValue]) => {
+      next[desanitizeFirebaseKey(key)] = desanitizeFirebaseValue(nestedValue);
+    });
+    return next;
+  }
+
   function getSyncRoomRef(roomId = 'default-room') {
     const db = window.cp2020Database || initFirebaseRealtime();
     if (!db) return null;
@@ -449,6 +499,10 @@
   window.signOutFirebaseUser = signOutFirebaseUser;
   window.watchFirebaseAuthState = watchFirebaseAuthState;
   window.getFirebaseCurrentUser = getFirebaseCurrentUser;
+  window.sanitizeFirebaseKey = sanitizeFirebaseKey;
+  window.desanitizeFirebaseKey = desanitizeFirebaseKey;
+  window.sanitizeFirebaseValue = sanitizeFirebaseValue;
+  window.desanitizeFirebaseValue = desanitizeFirebaseValue;
   window.getSyncRoomRef = getSyncRoomRef;
   window.getUserRootRef = getUserRootRef;
   window.getUserCharactersRef = getUserCharactersRef;

@@ -166,16 +166,16 @@ async function saveCurrentCharacterToAccount(trigger = 'MANUAL', showLog = true)
 
   const aliases = Array.isArray(payload.name) ? payload.name.slice(1).filter(Boolean) : [];
   const entry = {
-    meta: {
-      name: String(payload.name?.[0] || 'Unnamed Character').trim() || 'Unnamed Character',
-      career: String(payload.career?.[0] || 'Unknown').trim() || 'Unknown',
-      note: aliases.length ? aliases.join(' // ') : 'Saved from dossier',
-      updatedAt: Date.now()
-    },
-    payload: {
-      characterData: payload
-    }
-  };
+      meta: {
+        name: String(payload.name?.[0] || 'Unnamed Character').trim() || 'Unnamed Character',
+        career: String(payload.career?.[0] || 'Unknown').trim() || 'Unknown',
+        note: aliases.length ? aliases.join(' // ') : 'Saved from dossier',
+        updatedAt: Date.now()
+      },
+      payload: {
+        characterData: window.sanitizeFirebaseValue?.(payload) || payload
+      }
+    };
 
   try {
     const result = await window.saveUserCharacter?.(user.uid, activeAccountCharacterId, entry);
@@ -202,12 +202,12 @@ function scheduleAccountAutosave() {
 }
 
 function loadAccountCharacterEntry(entry, characterId = '') {
-  const characterData = entry?.payload?.characterData || entry?.characterData || null;
-  if (!characterData) {
-    showError('THIS ACCOUNT SAVE DOES NOT HAVE A DOSSIER PAYLOAD.');
-    return false;
-  }
-  const nextData = JSON.parse(JSON.stringify(characterData));
+    const characterData = entry?.payload?.characterData || entry?.characterData || null;
+    if (!characterData) {
+      showError('THIS ACCOUNT SAVE DOES NOT HAVE A DOSSIER PAYLOAD.');
+      return false;
+    }
+    const nextData = JSON.parse(JSON.stringify(window.desanitizeFirebaseValue?.(characterData) || characterData));
   activeAccountCharacterId = String(characterId || nextData.__accountCharacterId || '').trim();
   bannerImageData = String(nextData.__bannerData || '').trim();
   bannerImageName = String(nextData.__bannerName || '').trim();

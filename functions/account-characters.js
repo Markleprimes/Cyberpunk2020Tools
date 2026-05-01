@@ -49,7 +49,9 @@
       return;
     }
     if (entry.characterData) {
-      window.startChippinInTransition({ characterData: entry.characterData });
+      window.startChippinInTransition({
+        characterData: window.desanitizeFirebaseValue?.(entry.characterData) || entry.characterData
+      });
       return;
     }
     if (typeof window.setLauncherStatus === 'function') {
