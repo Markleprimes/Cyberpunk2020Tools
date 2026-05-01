@@ -1,4 +1,6 @@
 (function initGMBreachModule() {
+  const TIME_OPTIONS = [8, 10, 12, 15, 20];
+  const CHECKPOINTS_BY_MODE = { easy: 0, medium: 1, hard: 2 };
   const BOOT_LINES = [
     'CMD.DeckTerminal///REMOTE///>OVERRIDE',
     'CMD.Buffer///Daemon.BreachData///',
@@ -32,8 +34,10 @@
     clientId: '',
     playerName: '',
     difficulty: 'easy',
+    timeLimit: 10,
     sessionId: '',
     status: '',
+    setupOpen: false,
     watchStop: null,
     progressHandle: null,
     terminalHandle: null,
@@ -61,6 +65,24 @@
     ])();
   }
 
+  function sliderIndexForTime(timeValue) {
+    const index = TIME_OPTIONS.indexOf(Number(timeValue));
+    return index >= 0 ? index : 1;
+  }
+
+  function readSelectedTime() {
+    const slider = el('gm-breach-time-slider');
+    const index = Math.max(0, Math.min(TIME_OPTIONS.length - 1, Number(slider?.value || 1)));
+    return TIME_OPTIONS[index];
+  }
+
+  function syncSliderLabel() {
+    const value = readSelectedTime();
+    const label = el('gm-breach-time-value');
+    if (label) label.textContent = `${value}s`;
+    state.timeLimit = value;
+  }
+
   function setGMStatus(message, mode = '') {
     const status = el('gm-status');
     if (status) status.textContent = message;
@@ -76,7 +98,7 @@
     if (!node) return;
     node.textContent = String(status || 'pending').toUpperCase();
     node.className = 'gm-breach-status';
-    if (status === 'running' || status === 'success') node.classList.add('live');
+    if (status === 'running' || status === 'success' || status === 'armed') node.classList.add('live');
     if (status === 'fail' || status === 'cancelled') node.classList.add('fail');
   }
 
@@ -117,6 +139,16 @@
     state.watchStop = null;
   }
 
+  function setSetupVisibility(isSetup) {
+    state.setupOpen = isSetup;
+    el('gm-breach-launch-block')?.toggleAttribute('hidden', !isSetup);
+    el('gm-breach-cancel')?.toggleAttribute('hidden', isSetup);
+    const launch = el('gm-breach-launch');
+    if (launch) launch.hidden = !isSetup;
+    const close = el('gm-breach-close');
+    if (close) close.textContent = isSetup ? 'CLOSE' : 'DONE';
+  }
+
   function closeModal() {
     clearLoopHandles();
     stopWatching();
@@ -124,8 +156,10 @@
     state.clientId = '';
     state.playerName = '';
     state.difficulty = 'easy';
+    state.timeLimit = 10;
     state.sessionId = '';
     state.status = '';
+    state.setupOpen = false;
     state.outcomeLogged = '';
     el('gm-breach-modal')?.classList.remove('show');
   }
@@ -138,11 +172,16 @@
     const fill = el('gm-breach-progress-fill');
     const timer = el('gm-breach-timer');
     if (!fill || !timer) return;
-    const base = Number(session?.startedAt || session?.gmStartedAt || Date.now());
-    const totalMs = Math.max(1000, Number(session?.reactionMs || 3000) + (Number(session?.timeLimit || 10) * 1000));
+    const startedAt = Number(session?.startedAt || 0);
+    const totalMs = Math.max(1000, Number(session?.timeLimit || state.timeLimit || 10) * 1000);
+    if (!startedAt) {
+      fill.style.width = '0%';
+      timer.textContent = `${Number(session?.timeLimit || state.timeLimit || 10)}.0s`;
+      return;
+    }
     const endedAt = Number(session?.endedAt || 0);
     const now = endedAt || Date.now();
-    const elapsed = Math.max(0, now - base);
+    const elapsed = Math.max(0, now - startedAt);
     const remaining = Math.max(0, totalMs - elapsed);
     const pct = Math.max(0, Math.min(100, (elapsed / totalMs) * 100));
     fill.style.width = `${pct}%`;
@@ -153,12 +192,28 @@
     if (!session) return;
     state.sessionId = String(session.sessionId || state.sessionId || '');
     state.status = String(session.status || 'pending').toLowerCase();
+    state.timeLimit = Number(session.timeLimit || state.timeLimit || 10);
     el('gm-breach-copy').textContent = `${state.playerName.toUpperCase()} // LIVE BREACH FEED`;
     el('gm-breach-mode').textContent = String(session.difficulty || state.difficulty || 'easy').toUpperCase();
-    setModalStatus(state.status);
+    setModalStatus(state.status === 'pending' ? 'armed' : state.status);
     updateProgress(session);
 
-    if (['pending', 'running'].includes(state.status)) {
+    const objective = el('gm-breach-objective');
+    const checkpointCount = Number(session?.checkpointCount || 0);
+    if (objective) {
+      objective.textContent = checkpointCount
+        ? `${checkpointCount} CHECKPOINT${checkpointCount > 1 ? 'S' : ''} BEFORE EXIT`
+        : 'DIRECT EXIT ROUTE';
+    }
+
+    if (state.status === 'pending') {
+      clearLoopHandles();
+      if (!state.terminalHandle) startTerminalFeed();
+      appendTerminal('CMD.Breach///AWAIT///>PLAYER-START', 'dim');
+      return;
+    }
+
+    if (state.status === 'running') {
       if (!state.terminalHandle) startTerminalFeed();
       clearInterval(state.progressHandle);
       state.progressHandle = setInterval(() => updateProgress(session), 100);
@@ -190,7 +245,7 @@
     }, clientId);
   }
 
-  async function startBreach(clientId, difficulty) {
+  function openSetup(clientId, difficulty) {
     const roomId = String(window.getGMActiveRoomId?.() || '').trim();
     const players = Array.isArray(window.getGMRemotePlayers?.()) ? window.getGMRemotePlayers() : [];
     const target = players.find((entry) => String(entry?.id || '') === String(clientId || ''));
@@ -203,21 +258,51 @@
       return;
     }
 
+    clearLoopHandles();
+    stopWatching();
     state.roomId = roomId;
     state.clientId = clientId;
     state.playerName = String(target.name || 'Unknown');
     state.difficulty = String(difficulty || 'easy').toLowerCase();
-    state.sessionId = `breach-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    state.sessionId = '';
     state.outcomeLogged = '';
 
     resetTerminal();
     appendTerminal(`CMD.Breach///TARGET///>${state.playerName.toUpperCase()}`);
     appendTerminal(`CMD.Breach///SELECT///>${state.difficulty.toUpperCase()}`);
-    appendTerminal('CMD.Breach///AWAIT///>PLAYER-HANDSHAKE', 'dim');
+    appendTerminal('CMD.Breach///CONFIG///>SET-TIMER', 'dim');
     openModal();
+    setSetupVisibility(true);
     setModalStatus('pending');
     el('gm-breach-mode').textContent = state.difficulty.toUpperCase();
-    el('gm-breach-copy').textContent = `${state.playerName.toUpperCase()} // LIVE BREACH FEED`;
+    el('gm-breach-copy').textContent = `${state.playerName.toUpperCase()} // REMOTE BREACH SETUP`;
+    const fill = el('gm-breach-progress-fill');
+    if (fill) fill.style.width = '0%';
+    const timer = el('gm-breach-timer');
+    if (timer) timer.textContent = `${state.timeLimit.toFixed(1)}s`;
+    const objective = el('gm-breach-objective');
+    if (objective) {
+      objective.textContent = state.difficulty === 'hard'
+        ? '2 CHECKPOINTS BEFORE EXIT'
+        : state.difficulty === 'medium'
+          ? '1 CHECKPOINT BEFORE EXIT'
+          : 'DIRECT EXIT ROUTE';
+    }
+    const slider = el('gm-breach-time-slider');
+    if (slider) slider.value = String(sliderIndexForTime(state.timeLimit));
+    syncSliderLabel();
+  }
+
+  async function launchConfiguredBreach() {
+    if (!state.roomId || !state.clientId || !state.playerName) return;
+    state.sessionId = `breach-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    state.outcomeLogged = '';
+    resetTerminal();
+    appendTerminal(`CMD.Breach///TARGET///>${state.playerName.toUpperCase()}`);
+    appendTerminal(`CMD.Breach///SELECT///>${state.difficulty.toUpperCase()}`);
+    appendTerminal(`CMD.Breach///TIMER///>${state.timeLimit}s`);
+    appendTerminal('CMD.Breach///AWAIT///>PLAYER-START', 'dim');
+    setSetupVisibility(false);
     startTerminalFeed();
 
     const payload = {
@@ -226,15 +311,16 @@
       playerName: state.playerName,
       status: 'pending',
       gmStartedAt: Date.now(),
-      reactionMs: 3000,
-      timeLimit: 10
+      reactionMs: 0,
+      timeLimit: state.timeLimit,
+      checkpointCount: CHECKPOINTS_BY_MODE[state.difficulty] || 0
     };
 
     try {
-      await setRemoteBreachSession(roomId, clientId, payload);
+      await setRemoteBreachSession(state.roomId, state.clientId, payload);
       syncModalFromSession(payload);
-      watchSession(roomId, clientId);
-      setGMStatus(`Remote breach launched for ${state.playerName}.`, 'connected');
+      watchSession(state.roomId, state.clientId);
+      setGMStatus(`Remote breach armed for ${state.playerName}.`, 'connected');
     } catch (error) {
       setGMStatus(`Remote breach error: ${error.message}`, 'disconnected');
       closeModal();
@@ -259,34 +345,20 @@
   }
 
   function injectButtons() {
-    document.querySelectorAll('#gm-player-list .gm-player-card[data-gm-client-id][data-gm-role="player"]').forEach((card) => {
-      if (card.querySelector('.gm-breach-section')) return;
-      const sheet = card.querySelector('.gm-player-sheet');
-      if (!sheet) return;
-      const clientId = card.getAttribute('data-gm-client-id') || '';
-      const wrap = document.createElement('div');
-      wrap.className = 'gm-breach-section';
-      wrap.innerHTML = `
-        <div class="gm-sheet-title">Remote Breach Activation</div>
-        <div class="gm-roll-source">Launch a live breach directly on this character.</div>
-        <div class="gm-breach-btn-row">
-          <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="easy">EASY</button>
-          <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="medium">MEDIUM</button>
-          <button type="button" class="gm-btn" data-gm-breach-start="${clientId}" data-gm-breach-mode="hard">HARD</button>
-        </div>
-      `;
-      sheet.appendChild(wrap);
-    });
+    return;
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     injectButtons();
     window.addEventListener('gm-monitor-updated', injectButtons);
 
+    el('gm-breach-time-slider')?.addEventListener('input', syncSliderLabel);
+    syncSliderLabel();
+
     document.addEventListener('click', (event) => {
       const breachButton = event.target.closest('[data-gm-breach-start]');
       if (breachButton) {
-        startBreach(
+        openSetup(
           breachButton.getAttribute('data-gm-breach-start'),
           breachButton.getAttribute('data-gm-breach-mode')
         );
@@ -294,6 +366,7 @@
       }
     });
 
+    el('gm-breach-launch')?.addEventListener('click', launchConfiguredBreach);
     el('gm-breach-cancel')?.addEventListener('click', cancelBreach);
     el('gm-breach-close')?.addEventListener('click', closeModal);
     el('gm-breach-modal')?.addEventListener('click', (event) => {

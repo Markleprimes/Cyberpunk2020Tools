@@ -29,23 +29,6 @@
     return `player-${String(playerId || '').trim()}`;
   }
 
-  function buildNpcIframeSrc(npc) {
-    const params = new URLSearchParams({
-      npcSyncId: String(npc?.id || '').trim(),
-      role: 'npc',
-      embedded: '1',
-      gmNpcLite: '1'
-    });
-    const roomId = typeof window.getGMActiveRoomId === 'function' ? String(window.getGMActiveRoomId() || '').trim() : '';
-    if (roomId) {
-      params.set('roomId', roomId);
-      params.set('autoConnect', '1');
-    } else {
-      params.set('autoConnect', '0');
-    }
-    return `DND.html?${params.toString()}`;
-  }
-
   function getPanelsRoot() {
     return document.getElementById('gm-character-tab-panels');
   }
@@ -256,32 +239,12 @@
       panel = document.createElement('div');
       panel.className = 'gm-tab-panel gm-npc-tab-panel';
       panel.id = panelId;
-      panel.innerHTML = `
-        <section class="gm-panel gm-panel-dossier">
-          <div class="gm-npc-tab-toolbar">
-            <div>
-              <div class="gm-panel-title" style="margin-bottom:6px;">NPC DOSSIER TAB</div>
-              <div class="gm-npc-sheet-kicker">Embedded dossier stack // this tab runs the same page and JS as the player sheet.</div>
-            </div>
-            <div class="gm-card-actions" style="margin-bottom:0;">
-              <button type="button" class="gm-btn gm-btn-muted gm-tab-toolbar-badge" disabled>LOCAL NPC</button>
-            </div>
-          </div>
-          <div class="gm-dossier-frame-shell">
-            <iframe class="gm-dossier-embed" data-gm-npc-frame="${escapeHtml(npc.id)}" title="${escapeHtml(npc.name || 'NPC dossier')}" loading="lazy"></iframe>
-          </div>
-        </section>
-      `;
       panelsRoot.appendChild(panel);
     }
-    const frame = panel.querySelector('iframe[data-gm-npc-frame]');
-    const nextSrc = buildNpcIframeSrc(npc);
-    if (frame && frame.getAttribute('src') !== nextSrc) {
-      frame.setAttribute('src', nextSrc);
-      frame.setAttribute('title', `${npc.name || 'NPC'} dossier`);
-    }
-    const titleNode = panel.querySelector('.gm-panel-title');
-    if (titleNode) titleNode.textContent = `${String(npc.name || 'NPC').toUpperCase()} // DOSSIER TAB`;
+    const renderHtml = typeof window.renderGMLocalNpcDossierHtml === 'function'
+      ? window.renderGMLocalNpcDossierHtml(npc.id, npc)
+      : `<section class="gm-panel"><div class="gm-empty">NPC dossier renderer unavailable.</div></section>`;
+    panel.innerHTML = renderHtml;
     return panel;
   }
 
@@ -315,6 +278,7 @@
   }
 
   function renderGMCharacterTabs(preferredTab) {
+    const previousActive = document.querySelector('.gm-tab-btn.active')?.getAttribute('data-gm-tab') || '';
     const players = typeof window.getGMRemotePlayers === 'function' ? window.getGMRemotePlayers() : [];
     const npcs = typeof window.getGMLocalNpcs === 'function' ? window.getGMLocalNpcs() : [];
     renderCharacterTabButtons(players, npcs);
@@ -325,7 +289,6 @@
     const emptyNode = document.getElementById('gm-character-tabs-empty');
     if (emptyNode) emptyNode.hidden = !!(players.length || npcs.length);
 
-    const current = document.querySelector('.gm-tab-btn.active')?.getAttribute('data-gm-tab') || '';
     const firstTab = players[0]
       ? getPlayerTabName(players[0].id)
       : npcs[0]
@@ -336,7 +299,8 @@
       ...players.map((player) => getPlayerTabName(player.id)),
       ...npcs.map((npc) => getNpcTabName(npc.id))
     ]);
-    const nextTab = validTabs.has(preferredTab || current) ? (preferredTab || current) : firstTab;
+    const desiredTab = preferredTab || previousActive;
+    const nextTab = validTabs.has(desiredTab) ? desiredTab : firstTab;
     if (typeof window.switchGMTab === 'function') window.switchGMTab(nextTab);
     renderEncounterStrip();
   }

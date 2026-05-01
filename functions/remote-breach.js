@@ -1,21 +1,8 @@
 (function initRemoteBreachModule() {
-  const MODE_TIERS = {
-    easy: [1, 3],
-    medium: [4, 6],
-    hard: [7, 10]
-  };
-
-  const TIER_CONFIGS = {
-    1: { size: 8, extraOpenings: 10, minPath: 14, maxOpen: 48, attempts: 12 },
-    2: { size: 8, extraOpenings: 8, minPath: 16, maxOpen: 46, attempts: 14 },
-    3: { size: 8, extraOpenings: 6, minPath: 18, maxOpen: 44, attempts: 16 },
-    4: { size: 12, extraOpenings: 10, minPath: 20, maxOpen: 92, attempts: 14 },
-    5: { size: 12, extraOpenings: 8, minPath: 26, maxOpen: 86, attempts: 18 },
-    6: { size: 12, extraOpenings: 6, stairPatterns: 1, minPath: 32, maxOpen: 80, attempts: 22 },
-    7: { size: 16, extraOpenings: 6, stairPatterns: 1, minPath: 36, maxOpen: 136, attempts: 24 },
-    8: { size: 16, extraOpenings: 5, stairPatterns: 2, minPath: 40, maxOpen: 130, attempts: 28 },
-    9: { size: 16, extraOpenings: 4, stairPatterns: 3, minPath: 46, maxOpen: 124, attempts: 32 },
-    10: { size: 16, extraOpenings: 3, stairPatterns: 4, minPath: 52, maxOpen: 118, attempts: 36 }
+  const MODE_CONFIGS = {
+    easy: { size: 8, extraOpenings: 8, minPath: 14, maxOpen: 54, attempts: 12, checkpoints: 0, stairPatterns: 0 },
+    medium: { size: 12, extraOpenings: 14, minPath: 24, maxOpen: 104, attempts: 18, checkpoints: 1, stairPatterns: 0 },
+    hard: { size: 16, extraOpenings: 12, minPath: 34, maxOpen: 156, attempts: 24, checkpoints: 2, stairPatterns: 1 }
   };
 
   const COLORS = {
@@ -30,6 +17,8 @@
     playerGlow: 'rgba(0,217,139,0.65)',
     goal: '#ff4d6d',
     goalGlow: 'rgba(255,77,109,0.65)',
+    checkpoint: '#ffb14a',
+    checkpointGlow: 'rgba(255,177,74,0.68)',
     border: '#6b111d'
   };
 
@@ -67,21 +56,21 @@
     roomId: '',
     clientId: '',
     difficulty: 'easy',
-    tier: 1,
     grid: [],
     size: 0,
     player: { x: 0, y: 0 },
     goal: { x: 0, y: 0 },
     visited: [],
     trail: [],
-    reactionMs: 3000,
+    checkpoints: [],
+    checkpointIndex: 0,
     timeLimit: 10,
     startAt: 0,
-    reactionEndsAt: 0,
     deadlineAt: 0,
     timerHandle: null,
     terminalHandle: null,
     active: false,
+    started: false,
     ended: false,
     outcome: ''
   };
@@ -95,10 +84,6 @@
 
   function pick(list) {
     return list[Math.floor(Math.random() * list.length)];
-  }
-
-  function randomInt(min, max) {
-    return Math.floor(Math.random() * ((max - min) + 1)) + min;
   }
 
   function shuffle(list) {
@@ -150,12 +135,15 @@
   function closeModal() {
     clearTimers();
     state.active = false;
+    state.started = false;
     state.sessionId = '';
     state.roomId = '';
     state.clientId = '';
     state.grid = [];
     state.visited = [];
     state.trail = [];
+    state.checkpoints = [];
+    state.checkpointIndex = 0;
     state.ended = false;
     state.outcome = '';
     el('remote-breach-modal')?.classList.remove('show');
@@ -168,22 +156,56 @@
   function setChip(status) {
     const chip = el('remote-breach-chip');
     if (!chip) return;
-    chip.textContent = String(status || 'PENDING').toUpperCase();
+    chip.textContent = String(status || 'pending').toUpperCase();
     chip.className = 'remote-breach-chip';
-    if (status === 'running') chip.classList.add('live');
+    if (status === 'running' || status === 'armed' || status === 'success') chip.classList.add('live');
     if (['fail', 'cancelled'].includes(status)) chip.classList.add('fail');
-    if (status === 'success') chip.classList.add('live');
+  }
+
+  function setStartButtonState() {
+    const button = el('remote-breach-start-btn');
+    if (!button) return;
+    button.hidden = state.started || state.ended;
+    button.disabled = !state.active || state.started || state.ended;
+  }
+
+  function updateObjectiveReadout() {
+    const node = el('remote-nr-target');
+    if (!node) return;
+    if (state.checkpointIndex < state.checkpoints.length) {
+      node.textContent = `TARGET // CHECKPOINT ${state.checkpointIndex + 1}`;
+      return;
+    }
+    node.textContent = 'TARGET // EXIT';
+  }
+
+  function updateRuleCopy() {
+    const node = el('remote-nr-rules');
+    if (!node) return;
+    const checkpointLine = state.checkpoints.length
+      ? `${state.checkpoints.length} yellow checkpoint${state.checkpoints.length > 1 ? 's' : ''} required before red.`
+      : 'No checkpoint gate on this route.';
+    node.innerHTML = [
+      `<div class="nr-rule-copy">${state.timeLimit} seconds once you press START.</div>`,
+      '<div class="nr-rule-copy">Hit a wall and you die.</div>',
+      '<div class="nr-rule-copy">Touch your own path and you die.</div>',
+      `<div class="nr-rule-copy">${checkpointLine}</div>`,
+      '<div class="nr-rule-copy">Touch red before checkpoints are complete and you die.</div>'
+    ].join('');
   }
 
   function updateTimerDisplay() {
     const node = el('remote-nr-timer');
     if (!node) return;
-    const remainingMs = Math.max(0, state.deadlineAt - Date.now());
+    const remainingMs = state.started
+      ? Math.max(0, state.deadlineAt - Date.now())
+      : state.timeLimit * 1000;
     const safeTime = Math.ceil(remainingMs / 1000);
     const minutes = Math.floor(safeTime / 60);
     const seconds = safeTime % 60;
     node.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
     node.classList.remove('running', 'expired');
+    if (!state.started) return;
     if (remainingMs <= 10000) node.classList.add('expired');
     else node.classList.add('running');
   }
@@ -283,9 +305,12 @@
         const isBlocked = state.grid[y][x] === 1;
         const isGoal = state.goal.x === x && state.goal.y === y;
         const isPlayer = state.player.x === x && state.player.y === y;
+        const checkpointHitIndex = state.checkpoints.findIndex((point) => point.x === x && point.y === y);
+        const isCheckpoint = checkpointHitIndex >= state.checkpointIndex;
+
         ctx.fillStyle = isBlocked ? COLORS.blocked : COLORS.open;
         ctx.fillRect(px + 2, py + 2, cell - 4, cell - 4);
-        if (state.visited[y][x] && !isBlocked && !isGoal && !isPlayer) {
+        if (state.visited[y][x] && !isBlocked && !isGoal && !isPlayer && !isCheckpoint) {
           ctx.fillStyle = COLORS.visited;
           ctx.fillRect(px + 5, py + 5, cell - 10, cell - 10);
         }
@@ -315,6 +340,10 @@
       ctx.stroke();
     }
 
+    state.checkpoints.forEach((point, index) => {
+      if (index < state.checkpointIndex) return;
+      drawNode(ctx, point.x, point.y, cell, COLORS.checkpoint, COLORS.checkpointGlow);
+    });
     drawNode(ctx, state.goal.x, state.goal.y, cell, COLORS.goal, COLORS.goalGlow);
     drawNode(ctx, state.player.x, state.player.y, cell, COLORS.player, COLORS.playerGlow);
     ctx.strokeStyle = COLORS.border;
@@ -357,7 +386,7 @@
 
     let opened = 0;
     let attempts = 0;
-    while (opened < extraOpenings && attempts < 120) {
+    while (opened < extraOpenings && attempts < 180) {
       attempts += 1;
       const x = Math.floor(Math.random() * size);
       const y = Math.floor(Math.random() * size);
@@ -378,6 +407,7 @@
     const visited = new Set([coordKey(0, 0)]);
     const parents = new Map();
     const moves = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
     while (queue.length) {
       const current = queue.shift();
       if (current.x === size - 1 && current.y === size - 1) {
@@ -466,41 +496,54 @@
     return grid.reduce((total, row) => total + row.filter((cell) => cell === 0).length, 0);
   }
 
-  function buildRankedGrid(config) {
-    let bestGrid = null;
-    let bestScore = -Infinity;
-    for (let attempt = 0; attempt < (config.attempts || 20); attempt += 1) {
-      let grid = buildPlayableGrid(config.size, config.extraOpenings);
-      if (config.stairPatterns) grid = applyStairPatterns(grid, config.stairPatterns);
-      const path = findPath(grid);
-      if (!path.length) continue;
-      const openCells = countOpenCells(grid);
-      const targetPath = config.minPath || 0;
-      const targetOpen = config.maxOpen ?? Number.POSITIVE_INFINITY;
-      const pathDelta = Math.abs(path.length - targetPath);
-      const openDelta = Math.abs(openCells - targetOpen);
-      const score = (path.length >= targetPath ? 60 : 0) + (openCells <= targetOpen ? 24 : 0) - pathDelta - (openDelta * 0.6);
-      if (path.length >= targetPath && openCells <= targetOpen) return grid;
-      if (score > bestScore) {
-        bestScore = score;
-        bestGrid = grid;
-      }
+  function pickCheckpoints(path, checkpointCount) {
+    if (!checkpointCount) return [];
+    const nodes = [];
+    const usableStart = 3;
+    const usableEnd = Math.max(usableStart + 1, path.length - 4);
+    for (let index = 1; index <= checkpointCount; index += 1) {
+      const slot = Math.round((usableEnd * index) / (checkpointCount + 1));
+      const clamped = Math.min(Math.max(usableStart, slot), path.length - 4);
+      nodes.push({ ...path[clamped] });
     }
-    return bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
+    return nodes.filter((node, index, list) => list.findIndex((other) => other.x === node.x && other.y === node.y) === index);
   }
 
   function buildGridForDifficulty(difficulty) {
-    state.tier = randomInt(...(MODE_TIERS[difficulty] || MODE_TIERS.easy));
-    const config = { ...(TIER_CONFIGS[state.tier] || TIER_CONFIGS[1]) };
+    const config = { ...(MODE_CONFIGS[difficulty] || MODE_CONFIGS.easy) };
     state.size = config.size;
     state.player = { x: 0, y: 0 };
     state.goal = { x: state.size - 1, y: state.size - 1 };
     state.visited = Array.from({ length: state.size }, () => Array(state.size).fill(false));
     state.visited[0][0] = true;
     state.trail = [{ x: 0, y: 0 }];
-    state.grid = (config.minPath || config.maxOpen || config.stairPatterns)
-      ? buildRankedGrid(config)
-      : buildPlayableGrid(config.size, config.extraOpenings);
+    state.checkpoints = [];
+    state.checkpointIndex = 0;
+
+    let bestGrid = null;
+    let bestPath = [];
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < (config.attempts || 16); attempt += 1) {
+      let grid = buildPlayableGrid(config.size, config.extraOpenings);
+      if (config.stairPatterns) grid = applyStairPatterns(grid, config.stairPatterns);
+      const path = findPath(grid);
+      if (!path.length) continue;
+      const openCells = countOpenCells(grid);
+      const pathDelta = Math.abs(path.length - config.minPath);
+      const openDelta = Math.abs(openCells - config.maxOpen);
+      const score = (path.length >= config.minPath ? 70 : 0) + (openCells <= config.maxOpen ? 28 : 0) - pathDelta - (openDelta * 0.6);
+      if (score > bestScore) {
+        bestScore = score;
+        bestGrid = grid;
+        bestPath = path;
+      }
+      if (path.length >= config.minPath && openCells <= config.maxOpen) break;
+    }
+
+    state.grid = bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
+    bestPath = bestPath.length ? bestPath : findPath(state.grid);
+    state.checkpoints = pickCheckpoints(bestPath, config.checkpoints || 0);
   }
 
   async function pushSessionPatch(patch) {
@@ -517,6 +560,7 @@
     state.ended = true;
     state.outcome = status;
     clearTimers();
+    setStartButtonState();
     if (reasonLine) appendTerminalLine(reasonLine, status === 'success' ? 'success' : 'fail');
     appendTerminalLine(status === 'success' ? SUCCESS_LINE : FAIL_LINE, status === 'success' ? 'success' : 'fail');
     renderOverlay(status === 'success' ? '///BREACH<br>SUCCESS///' : '///ICE<br>DETECTED///', status === 'success' ? 'success' : 'fail');
@@ -525,8 +569,7 @@
     await pushSessionPatch({
       status,
       endedAt: Date.now(),
-      result: status,
-      tier: state.tier
+      result: status
     });
     setTimeout(() => closeModal(), 1500);
   }
@@ -538,6 +581,7 @@
     }
     state.ended = true;
     clearTimers();
+    setStartButtonState();
     appendTerminalLine('CMD.DeckTerminal///BREACH///>CANCELLED', 'fail');
     renderOverlay('///BREACH<br>ABORTED///', 'fail');
     setChip('cancelled');
@@ -545,8 +589,22 @@
     setTimeout(() => closeModal(), 1200);
   }
 
+  function advanceCheckpointIfNeeded(x, y) {
+    if (state.checkpointIndex >= state.checkpoints.length) return false;
+    const checkpoint = state.checkpoints[state.checkpointIndex];
+    if (checkpoint.x !== x || checkpoint.y !== y) return false;
+    state.checkpointIndex += 1;
+    updateObjectiveReadout();
+    appendTerminalLine(`CMD.Checkpoint///>${state.checkpointIndex}/${state.checkpoints.length}`, 'success');
+    renderOverlay(`///CHECKPOINT<br>${state.checkpointIndex}///`, 'idle');
+    setTimeout(() => {
+      if (!state.ended && state.active) clearOverlay();
+    }, 500);
+    return true;
+  }
+
   function movePlayer(direction) {
-    if (!state.active || state.ended || Date.now() < state.reactionEndsAt) return;
+    if (!state.active || state.ended || !state.started) return;
     const moves = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
     const move = moves[direction];
     if (!move) return;
@@ -568,8 +626,13 @@
     state.visited[nextY][nextX] = true;
     state.trail.push({ x: nextX, y: nextY });
     playMoveBeep();
+    advanceCheckpointIfNeeded(nextX, nextY);
     drawGrid();
     if (nextX === state.goal.x && nextY === state.goal.y) {
+      if (state.checkpointIndex < state.checkpoints.length) {
+        finishRun('fail', 'TARGET.lock///>CHECKPOINT-MISSING');
+        return;
+      }
       finishRun('success');
     }
   }
@@ -588,18 +651,34 @@
 
   function tickTimer() {
     updateTimerDisplay();
-    const now = Date.now();
-    if (now < state.reactionEndsAt) {
-      setChip('pending');
-      const secs = Math.max(1, Math.ceil((state.reactionEndsAt - now) / 1000));
-      renderOverlay(`///SYNC<br>${secs}///`, 'idle');
-      return;
-    }
+    if (!state.started) return;
     setChip('running');
     clearOverlay();
-    if (now >= state.deadlineAt) {
+    if (Date.now() >= state.deadlineAt) {
       finishRun('fail', 'TRACE.timeout///>LOCKOUT');
     }
+  }
+
+  async function beginPlayerRun() {
+    if (!state.active || state.started || state.ended) return;
+    state.started = true;
+    state.startAt = Date.now();
+    state.deadlineAt = state.startAt + (state.timeLimit * 1000);
+    setChip('running');
+    setStartButtonState();
+    clearOverlay();
+    startMusic();
+    updateTimerDisplay();
+    await pushSessionPatch({
+      sessionId: state.sessionId,
+      difficulty: state.difficulty,
+      status: 'running',
+      startedAt: state.startAt,
+      deadlineAt: state.deadlineAt,
+      timeLimit: state.timeLimit,
+      checkpointCount: state.checkpoints.length
+    });
+    state.timerHandle = setInterval(tickTimer, 100);
   }
 
   async function startRun(session, context = {}) {
@@ -608,39 +687,31 @@
     state.roomId = String(context?.roomId || '').trim();
     state.clientId = String(context?.clientId || '').trim();
     state.difficulty = String(session?.difficulty || 'easy').trim().toLowerCase();
-    state.reactionMs = Math.max(0, Number(session?.reactionMs || 3000));
     state.timeLimit = Math.max(1, Number(session?.timeLimit || 10));
-    state.startAt = Date.now();
-    state.reactionEndsAt = state.startAt + state.reactionMs;
-    state.deadlineAt = state.reactionEndsAt + (state.timeLimit * 1000);
     state.active = true;
+    state.started = String(session?.status || 'pending').toLowerCase() === 'running' && Number(session?.startedAt || 0) > 0;
     state.ended = false;
     state.outcome = '';
+    state.startAt = state.started ? Number(session.startedAt || Date.now()) : 0;
+    state.deadlineAt = state.started
+      ? Number(session.deadlineAt || (state.startAt + (state.timeLimit * 1000)))
+      : 0;
 
     buildGridForDifficulty(state.difficulty);
     openModal();
     el('remote-breach-sub').textContent = 'REFEREE INITIATED NETRUNNING OVERRIDE';
     el('remote-nr-mode').textContent = `REMOTE // ${state.difficulty.toUpperCase()}`;
     setChip('pending');
+    updateObjectiveReadout();
+    updateRuleCopy();
     drawGrid();
-    renderOverlay(`///SYNC<br>${Math.max(1, Math.ceil(state.reactionMs / 1000))}///`, 'idle');
+    renderOverlay(state.started ? '///BREACH<br>LIVE///' : '///PRESS<br>START///', 'idle');
     startTerminalLoop();
     updateTimerDisplay();
-    startMusic();
-
-    await pushSessionPatch({
-      sessionId: state.sessionId,
-      difficulty: state.difficulty,
-      status: 'running',
-      startedAt: state.startAt,
-      reactionEndsAt: state.reactionEndsAt,
-      deadlineAt: state.deadlineAt,
-      reactionMs: state.reactionMs,
-      timeLimit: state.timeLimit,
-      tier: state.tier
-    });
-
-    state.timerHandle = setInterval(tickTimer, 100);
+    setStartButtonState();
+    if (state.started) {
+      state.timerHandle = setInterval(tickTimer, 100);
+    }
   }
 
   function handleIncomingSession(session, context = {}) {
@@ -669,9 +740,14 @@
       finishRun('fail');
       return;
     }
-    if (status === 'running') {
-      setChip(Date.now() < state.reactionEndsAt ? 'pending' : 'running');
+    if (status === 'running' && !state.started && session.startedAt) {
+      state.started = true;
+      state.startAt = Number(session.startedAt || Date.now());
+      state.deadlineAt = Number(session.deadlineAt || (state.startAt + (state.timeLimit * 1000)));
+      setStartButtonState();
+      state.timerHandle = setInterval(tickTimer, 100);
     }
+    setChip(status === 'pending' ? 'armed' : status);
   }
 
   window.handleIncomingRemoteBreachSession = handleIncomingSession;
@@ -694,5 +770,9 @@
 
   window.addEventListener('resize', () => {
     if (state.active && state.grid.length) drawGrid();
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    el('remote-breach-start-btn')?.addEventListener('click', beginPlayerRun);
   });
 })();

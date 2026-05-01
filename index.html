@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Access Terminal</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="index.css?v=20260417a">
+<link rel="stylesheet" href="index.css?v=20260501b">
 </head>
 <body>
 <div class="launcher-shell">
@@ -16,182 +16,90 @@
       <p class="launcher-copy">A browser-based Cyberpunk 2020 interface suite for dossiers, GM control, rolling, and session-side atmosphere.</p>
       <p class="launcher-access-copy">Use the live site at <a href="https://markleprimes.github.io/Cyberpunk2020Tools/">markleprimes.github.io/Cyberpunk2020Tools</a> or open the local files directly.</p>
     </div>
-    <div class="launcher-status">
-      <span class="status-dot"></span>
-      ACCESS READY
+    <div class="launcher-header-side">
+      <button class="launcher-auth-trigger" id="launcher-auth-open-btn" type="button">LOG IN</button>
+      <div class="launcher-status" id="launcher-status-pill">
+        <span class="status-dot"></span>
+        <span id="launcher-status-pill-label">ACCESS READY</span>
+      </div>
     </div>
   </header>
 
   <main class="launcher-grid">
     <section class="launcher-card">
-      <div class="card-eyebrow">Existing Dossier</div>
+      <div class="card-eyebrow">&#9654; Existing Dossier</div>
       <h2>Load File</h2>
       <p>Import a `.txt` or bundled `.zip` dossier and push it straight into the dossier.</p>
-      <button class="launcher-btn" id="launcher-load-btn" type="button">LOAD FILE</button>
+      <div class="launcher-load-actions">
+        <button class="format-guide-trigger" id="format-guide-open-btn" type="button">FORMAT GUIDE</button>
+        <button class="launcher-btn" id="launcher-load-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>LOAD FILE</span></button>
+      </div>
       <input type="file" id="launcher-file-input" accept=".txt,.zip" hidden>
-      <details class="format-guide">
-        <summary>CHARACTER / ITEM FORMAT</summary>
-        <div class="format-guide-body">
-          <div class="format-block">
-            <div class="format-title">Character .txt</div>
-            <pre>name: {
-  "Character Name", "Street Name"
-}
-
-stats: {
-  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, EMPT=0
-}
-
-career: {
-  "Solo"
-}
-
-careerSkill: {
-  point=0
-  Awareness/Notice=0
-}
-
-reputation: {
-  rep=0
-}
-
-wallet: {
-  eddies=0
-}
-
-physicalBody: {
-  bodylevel=0
-  weight=0
-  stunpoint=0
-}
-
-armor: {
-  Head=0
-  Torso=0
-  R.Arm=0
-  L.Arm=0
-  R.Leg=0
-  L.Leg=0
-}
-
-damage: {
-  Head=0
-  Torso=0
-  R.Arm=0
-  L.Arm=0
-  R.Leg=0
-  L.Leg=0
-}</pre>
-          </div>
-          <div class="format-block">
-            <div class="format-title">Item .txt</div>
-            <pre>weapon: {
-  weapon1:{
-    name="",
-    Type="",
-    Accuracy=,
-    Concealability="",
-    Availability="",
-    Damage/Ammo="",
-    ShotsCapacity=,
-    "Rates of Fire"=,
-    Reliability="",
-    Range=,
-    Cost=,
-    info:{ "" }
-  }
-}
-
-cyberware: {
-  cyberware1:{
-    name="",
-    Type="",
-    HumanityCost="",
-    Cost=,
-    info:{ "" }
-  }
-}
-
-miscellaneous: {
-  misc1:{
-    name="",
-    Type="",
-    Cost=,
-    info:{ "" }
-  }
-}
-
-buff: {
-  buff1:{
-    name="",
-    Type="",
-    Duration="",
-    Effect="",
-    info:{ "" }
-  }
-}</pre>
-          </div>
-        </div>
-      </details>
     </section>
 
     <section class="launcher-card launcher-card-alt">
-      <div class="card-eyebrow">Blank Shell</div>
+      <div class="card-eyebrow">&#9654; Blank Shell</div>
       <h2>Create New Character</h2>
       <p>Enter name, street name, and career first, then let the dossier open with a blank statline.</p>
-      <button class="launcher-btn alt" id="launcher-create-btn" type="button">CREATE NEW CHARACTER</button>
+      <button class="launcher-btn alt" id="launcher-create-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>CREATE CHARACTER</span></button>
     </section>
 
     <section class="launcher-card launcher-card-gm">
-      <div class="card-eyebrow">Referee Console</div>
-      <h2>Referee(GM) Acess</h2>
+      <div class="card-eyebrow">&#9654; Referee Console</div>
+      <h2>Referee(GM) Access</h2>
       <p>Open the referee monitor to watch connected players in a room and manage the live table uplink.</p>
-      <a class="launcher-btn gm" href="gm.html">OPEN GM PAGE</a>
+      <a class="launcher-btn gm" id="launcher-gm-link" href="gm.html"><span class="launcher-btn-mark">&#9654;</span><span>OPEN GM PAGE</span></a>
     </section>
   </main>
 
   <section class="launcher-readme">
     <div class="launcher-readme-head">
-      <div class="launcher-kicker">QUICK START // SITE GUIDE</div>
-      <h2>How To Use This Site</h2>
-      <p class="launcher-readme-copy">Use this page as the quick guide before opening the dossier or referee console. The goal is to make setup, upload, and live table use easy to understand at a glance.</p>
+      <div class="launcher-kicker">QUICK START</div>
+      <h2>HOW TO USE THIS SITE</h2>
+      <p class="launcher-readme-copy">Use this page as the fast setup guide before opening the dossier or referee console. It reflects the current live workflow: linked rooms, GM character tabs, local NPC tabs, and dossier-side play.</p>
     </div>
 
     <div class="launcher-readme-grid">
       <article class="readme-card readme-card-wide">
-        <div class="card-eyebrow">Start Here</div>
+        <div class="card-eyebrow">// 01 - START HERE</div>
         <h3>Choose Your Entry Point</h3>
-        <p>Use <strong>Load File</strong> for an existing dossier, <strong>Create New Character</strong> for a blank sheet, or <strong>Referee Access</strong> for the GM console. The launcher feeds into the same shared toolkit after the transition.</p>
+        <p>Use <strong>Load File</strong> for an existing dossier, <strong>Create Character</strong> for a blank sheet, or <strong>Open GM Page</strong> for the referee console. All three flow into the same live toolkit after the transition.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">// 02 - ROOM LINK</div>
+        <h3>Connect Players &amp; GM</h3>
+        <p>Open the GM page, enter a room ID, then connect player dossiers using that same ID. Connected players appear as their own GM tabs instead of a simple monitor list.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">// 03 - NPC / MOOKS</div>
+        <h3>Generate With AI</h3>
+        <p>For fast NPCs, mooks, or one-off enemies, use an external chatbot AI, format the result to match the upload template, then import it as <strong>.txt</strong> or bundled <strong>.zip</strong>.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">// 04 - FILES</div>
+        <h3>What You Can Import</h3>
+        <p>The site supports character <strong>.txt</strong>, item <strong>.txt</strong>, special-skill <strong>.txt</strong>, and bundled dossier <strong>.zip</strong> files. Use the format guide on the load card as the template.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">// 05 - SESSION FLOW</div>
+        <h3>Typical Use</h3>
+        <p>Load or create characters, connect the room, use the dossier for player-side tracking, and use the GM page for live player tabs, remote breach control, NPC handling, and session-side reference.</p>
+      </article>
+
+      <article class="readme-card">
+        <div class="card-eyebrow">// 06 - LIVE TOOLS</div>
+        <h3>Dossier + GM Tabs</h3>
+        <p>Players work from dossier sheets. GMs work from linked player tabs and local NPC tabs, with editing, exports, presets, and monitoring collected into one live page.</p>
       </article>
 
       <article class="readme-card readme-card-ai">
-        <div class="card-eyebrow">Files</div>
-        <h3>What You Can Import</h3>
-        <p>The site supports character <strong>.txt</strong>, item <strong>.txt</strong>, and bundled dossier <strong>.zip</strong> files. The format guide above is the template to follow when preparing files for upload.</p>
-      </article>
-
-      <article class="readme-card">
-        <div class="card-eyebrow">Room Link</div>
-        <h3>Connecting Players And GM</h3>
-        <p>Open the GM page, enter a room ID, then connect player dossiers to that same room from the dossier page. This lets the referee monitor linked characters and use the live table tools.</p>
-      </article>
-
-      <article class="readme-card">
-        <div class="card-eyebrow">NPC / Mooks</div>
-        <h3>Use External Chatbot AI</h3>
-        <p>For fast random NPCs, mooks, or one-off enemies, the intended workflow is to use an outside chatbot AI, then format the result to match the upload template shown above and import it as a dossier file.</p>
-      </article>
-
-      <article class="readme-card">
-        <div class="card-eyebrow">Session Flow</div>
-        <h3>Typical Use</h3>
-        <p>Load or create characters, connect the room if you want live GM support, then use the dossier for player-side tracking and the GM page for monitoring, NPC handling, and combat-side control.</p>
-      </article>
-
-      <article class="readme-card">
-        <div class="card-eyebrow">Build Note</div>
+        <div class="card-eyebrow">// 07 - BUILD NOTE</div>
         <h3>Development</h3>
-        <p>This project was built with roughly 80% AI assistance during development, but for actual use the important part is the workflow: upload correctly formatted files, link the room when needed, and use external chatbot generation for random content.</p>
+        <p>Built with roughly 80% AI assistance. For practical use, the important part is the workflow: upload correctly formatted files, link the room when needed, and use external chatbot generation for random content.</p>
       </article>
     </div>
   </section>
@@ -225,6 +133,7 @@ buff: {
           <option value="Nomad">Nomad</option>
           <option value="Rockerboy">Rockerboy</option>
           <option value="Hobo">Hobo</option>
+          <option value="Corpo">Corpo</option>
         </select>
       </label>
       <div class="launcher-modal-actions">
@@ -232,6 +141,140 @@ buff: {
         <button class="launcher-btn alt" type="submit">ENTER</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="launcher-modal" id="launcher-auth-modal" aria-hidden="true">
+  <div class="launcher-modal-box launcher-auth-modal-box">
+    <div class="launcher-kicker">ACCOUNT LINK</div>
+    <h3>GOOGLE SIGN IN</h3>
+    <p class="launcher-auth-copy">Use your Google account to link this browser to your Firebase save slot. Character persistence can be added on top of this login state.</p>
+    <button class="launcher-btn alt launcher-google-btn" id="launcher-google-login-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>CONTINUE WITH GOOGLE</span></button>
+    <div class="launcher-modal-actions launcher-auth-actions">
+      <button class="launcher-btn ghost" id="launcher-auth-cancel-btn" type="button">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="launcher-modal" id="format-guide-modal" aria-hidden="true">
+  <div class="launcher-modal-box launcher-modal-box-wide format-guide-modal-box">
+    <div class="format-guide-modal-head">
+      <div>
+        <div class="launcher-kicker">FORMAT GUIDE</div>
+        <h3>CHARACTER / ITEM FORMAT</h3>
+      </div>
+      <button class="launcher-btn ghost format-guide-close-btn" id="format-guide-close-btn" type="button">CLOSE</button>
+    </div>
+    <div class="format-guide-body format-guide-body-modal">
+      <div class="format-block">
+        <div class="format-title">Character .txt</div>
+        <pre>name: {
+  "Character Name", "Street Name"
+}
+
+stats: {
+  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, MA=0, BODY=0, EMP=0
+}
+
+career: {
+  "Solo"
+}
+
+careerSkill: {
+  point=0
+  Awareness=0
+  Handgun=0
+}
+
+specialSkills: {
+  aikido1:{
+    name="Throw Redirect",
+    tiedSkill="Martial Art (Aikido)",
+    value=2,
+    info:{ "Redirect incoming momentum into a throw." }
+  }
+}
+
+reputation: {
+  rep=0
+}
+
+wallet: {
+  eddies=0
+}
+
+physicalBody: {
+  bodylevel=0
+  weight=0
+  stunpoint=0
+}
+
+armor: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}
+
+damage: {
+  Head=0
+  Torso=0
+  R.Arm=0
+  L.Arm=0
+  R.Leg=0
+  L.Leg=0
+}</pre>
+      </div>
+      <div class="format-block">
+        <div class="format-title">Item / Inventory .txt</div>
+        <pre>weapon: {
+  weapon1:{
+    name="Medium Pistol",
+    Type="Handgun",
+    Accuracy=+1,
+    Damage="2d6+3",
+    Ammo=12,
+    Range=50m,
+    Cost=250eb,
+    info:{ "Standard sidearm." }
+  }
+}
+
+cyberware: {
+  cyberware1:{
+    name="Amplified Hearing",
+    Type="Sensory",
+    Cost=600eb,
+    Awareness=+2,
+    info:{ "Boosted hearing in loud environments." }
+  }
+}
+
+buff: {
+  buff1:{
+    name="Combat Stim",
+    Type="Drug",
+    Duration="3 turns",
+    REF=+1,
+    BodyLevel=+1,
+    info:{ "Short burst combat enhancer." }
+  }
+}</pre>
+      </div>
+      <div class="format-block">
+        <div class="format-title">Bundled .zip</div>
+        <pre>character.txt
+items.txt
+specialskills.txt
+banner.png
+
+Use character.txt for the main sheet.
+Add items.txt and specialskills.txt if needed.
+Banner image is optional.</pre>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -248,10 +291,11 @@ buff: {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260422a"></script>
+<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
+<script src="functions/firebase-sync.js?v=20260501b"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
-<script src="functions/createNewCharacter.js?v=20260423a"></script>
+<script src="functions/createNewCharacter.js?v=20260427a"></script>
 <script src="functions/index-transition.js?v=20260415e"></script>
-<script src="functions/index.js?v=20260423a"></script>
+<script src="functions/index.js?v=20260501c"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 // This file expects the compat scripts to be loaded first:
 // firebase-app-compat.js
 // firebase-database-compat.js
+// firebase-auth-compat.js (optional on pages that need sign-in UI)
 
 (function initCyberpunkFirebaseScope() {
   const TAB_ID_STORAGE_KEY = 'cp2020_sync_tab_id';
@@ -32,7 +33,67 @@
     const database = firebase.database();
     window.cp2020FirebaseApp = firebase.app();
     window.cp2020Database = database;
+    if (firebase.auth) {
+      window.cp2020Auth = firebase.auth();
+    }
     return database;
+  }
+
+  function getFirebaseAuth() {
+    if (!ensureFirebaseLoaded()) return null;
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    if (typeof firebase.auth !== 'function') {
+      console.warn('Firebase auth compat script is not loaded yet.');
+      return null;
+    }
+    const auth = firebase.auth();
+    window.cp2020FirebaseApp = firebase.app();
+    window.cp2020Auth = auth;
+    return auth;
+  }
+
+  function getFirebaseGoogleProvider() {
+    if (!ensureFirebaseLoaded() || !firebase.auth) return null;
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    return provider;
+  }
+
+  async function signInWithGooglePopup() {
+    const auth = getFirebaseAuth();
+    if (!auth) throw new Error('Firebase auth is unavailable.');
+    if (typeof window !== 'undefined' && window.location?.protocol === 'file:') {
+      throw new Error('Google sign-in needs the hosted site, not a local file URL.');
+    }
+    try {
+      if (auth.setPersistence && firebase.auth?.Auth?.Persistence?.LOCAL) {
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      }
+    } catch (error) {
+      console.warn('Failed to set local auth persistence.', error);
+    }
+    const provider = getFirebaseGoogleProvider();
+    if (!provider) throw new Error('Google auth provider is unavailable.');
+    const result = await auth.signInWithPopup(provider);
+    return result?.user || auth.currentUser || null;
+  }
+
+  async function signOutFirebaseUser() {
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+    await auth.signOut();
+  }
+
+  function watchFirebaseAuthState(callback) {
+    const auth = getFirebaseAuth();
+    if (!auth || typeof callback !== 'function') return () => {};
+    return auth.onAuthStateChanged((user) => callback(user || null));
+  }
+
+  function getFirebaseCurrentUser() {
+    return getFirebaseAuth()?.currentUser || null;
   }
 
   function getSyncRoomRef(roomId = 'default-room') {
@@ -341,6 +402,12 @@
 
   window.CP2020_FIREBASE_CONFIG = FIREBASE_CONFIG;
   window.initFirebaseRealtime = initFirebaseRealtime;
+  window.getFirebaseAuth = getFirebaseAuth;
+  window.getFirebaseGoogleProvider = getFirebaseGoogleProvider;
+  window.signInWithGooglePopup = signInWithGooglePopup;
+  window.signOutFirebaseUser = signOutFirebaseUser;
+  window.watchFirebaseAuthState = watchFirebaseAuthState;
+  window.getFirebaseCurrentUser = getFirebaseCurrentUser;
   window.getSyncRoomRef = getSyncRoomRef;
   window.getPlayerPromptRef = getPlayerPromptRef;
   window.getPlayerEffectsRef = getPlayerEffectsRef;

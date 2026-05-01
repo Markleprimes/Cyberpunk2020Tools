@@ -58,6 +58,7 @@
   const GM_NPC_DOSSIER_SYNC_PREFIX = 'cp2020_npc_dossier_';
   const GM_DEFAULT_STATS = ['INT', 'REF', 'COOL', 'TECH', 'ATTR', 'LUCK', 'MA', 'BODY', 'EMP'];
   const GM_DEFAULT_NPC_SKILLS = ['Awareness', 'Athletics', 'Stealth', 'Handgun', 'Brawling', 'Melee'];
+  const GM_CAREER_OPTIONS = ['NPC', 'Solo', 'Netrunner', 'Techie', 'Medtech', 'Fixer', 'Media', 'Cop', 'Nomad', 'Rockerboy', 'Hobo', 'Corpo'];
 
   function getGMNpcSyncKey(npcId) {
     return `${GM_NPC_DOSSIER_SYNC_PREFIX}${String(npcId || '').trim()}`;
@@ -73,6 +74,12 @@
   function setGMStatus(message) {
     const node = document.getElementById('gm-status');
     if (node) node.textContent = message;
+  }
+
+  function updateGMAuthDisplay(user) {
+    const node = document.getElementById('gm-auth-tag');
+    if (!node) return;
+    node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
   }
 
   function setGMLastUpdated(value) {
@@ -601,6 +608,185 @@
     };
   }
 
+  function sanitizeGMDownloadBaseName(value, fallback = 'npc') {
+    const cleaned = String(value || fallback).trim().replace(/[^\w.\-]+/g, '_');
+    return cleaned || fallback;
+  }
+
+  function serializeGMNpcInventoryBlock(inventoryMap) {
+    const categories = Object.keys(inventoryMap || {}).filter((category) => Array.isArray(inventoryMap?.[category]) && inventoryMap[category].length);
+    if (!categories.length) return '';
+    return `${categories.map((category) => {
+      const items = (inventoryMap[category] || []).map((item, idx) => {
+        const key = item.id || `${category}${idx + 1}`;
+        const fieldLines = [`name="${String(item.name || '').replace(/"/g, '\\"')}"`];
+        Object.entries(item.fields || {}).forEach(([label, value]) => {
+          fieldLines.push(`${label}="${String(value).replace(/"/g, '\\"')}"`);
+        });
+        if (Array.isArray(item.info) && item.info.length) {
+          fieldLines.push(`info:{ ${item.info.map((line) => `"${String(line).replace(/"/g, '\\"')}"`).join(', ')} }`);
+        }
+        return `  ${key}:{ ${fieldLines.join(', ')} }`;
+      }).join(',\n');
+      return `${category}: {\n${items}\n}`;
+    }).join('\n\n')}\n\n`;
+  }
+
+  function buildGMNpcCharacterTxt(entry) {
+    const data = buildDossierDataFromGMNpc(entry);
+    const names = (data.name || []).filter(Boolean).map((name) => `"${String(name).replace(/"/g, '\\"')}"`).join(', ');
+    const statLines = Object.entries(data.stats || {}).map(([key, value]) => `  ${key}=${parseGMNumericValue(value) ?? value ?? 0}`).join(', ');
+    const skillLines = Object.entries(data.careerSkill || {})
+      .map(([key, value]) => key === 'point' ? `  point=${parseGMNumericValue(value) ?? 0}` : `  ${key}=${parseGMNumericValue(value) ?? value ?? 0}`)
+      .join('\n');
+    const armorLines = GM_LIMBS.map((limb) => `  ${limb}=${parseGMNumericValue(data.armor?.[limb]) ?? 0}`).join(', ');
+    const damageLines = GM_LIMBS.map((limb) => `  ${limb}=${parseGMNumericValue(data.damage?.[limb]) ?? 0}`).join(', ');
+    return `name: {
+  ${names}
+}
+
+stats: {
+  ${statLines}
+}
+
+career: {
+  "${String(data.career?.[0] || 'NPC').replace(/"/g, '\\"')}"
+}
+
+careerSkill: {
+${skillLines}
+}
+
+reputation: {
+  rep=${parseGMNumericValue(data.reputation?.rep) ?? 0}
+}
+
+wallet: {
+  eddies=${parseGMNumericValue(data.wallet?.eddies) ?? 0}
+}
+
+physicalBody: {
+  bodylevel=${parseGMNumericValue(data.physicalBody?.bodylevel) ?? 0}
+  weight=${parseGMNumericValue(data.physicalBody?.weight) ?? 0}
+  stunpoint=${parseGMNumericValue(data.physicalBody?.stunpoint) ?? 0}
+}
+
+armor: {
+${armorLines}
+}
+
+damage: {
+${damageLines}
+}
+`;
+  }
+
+  function buildGMNpcSpecialSkillsTxt(entry) {
+    const skills = Array.isArray(entry?.specialSkills) ? entry.specialSkills.filter(Boolean) : [];
+    if (!skills.length) return '';
+    const skillLines = skills.map((skill, idx) => {
+      const key = String(skill?.id || `specialskill${idx + 1}`).replace(/[^\w.-]+/g, '_') || `specialskill${idx + 1}`;
+      const parts = [
+        `name="${String(skill?.name || '').replace(/"/g, '\\"')}"`,
+        `tiedSkill="${String(skill?.tiedSkill || '').replace(/"/g, '\\"')}"`,
+        `value=${parseGMNumericValue(skill?.value) ?? 0}`
+      ];
+      if (String(skill?.description || '').trim()) {
+        parts.push(`info:{ "${String(skill.description || '').replace(/"/g, '\\"')}" }`);
+      }
+      return `  ${key}:{ ${parts.join(', ')} }`;
+    }).join(',\n');
+    return `specialSkills: {\n${skillLines}\n}\n`;
+  }
+
+  async function triggerGMZipDownload(zip, filename) {
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const anchor = document.createElement('a');
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+  }
+
+  async function downloadGMLocalNpcDossierZip(npcId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) {
+      setGMStatus('Selected NPC is no longer available.');
+      return;
+    }
+    if (!ensureGMZipSupport()) return;
+    const zip = new JSZip();
+    zip.file('character.txt', buildGMNpcCharacterTxt(npc));
+    const specialSkillsText = buildGMNpcSpecialSkillsTxt(npc);
+    if (specialSkillsText.trim()) zip.file('specialskills.txt', specialSkillsText);
+    const inventoryText = serializeGMNpcInventoryBlock(npc.inventoryMap || {});
+    if (inventoryText.trim()) zip.file('items.txt', inventoryText);
+    await triggerGMZipDownload(zip, `${sanitizeGMDownloadBaseName(npc.name || 'npc')}_dossier.zip`);
+    setGMStatus(`${npc.name || 'NPC'} dossier zip downloaded.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
+  async function downloadGMLocalNpcItemsZip(npcId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    if (!npc) {
+      setGMStatus('Selected NPC is no longer available.');
+      return;
+    }
+    if (!ensureGMZipSupport()) return;
+    const inventoryText = serializeGMNpcInventoryBlock(npc.inventoryMap || {});
+    if (!inventoryText.trim()) {
+      setGMStatus('No inventory to download for this NPC.');
+      return;
+    }
+    const zip = new JSZip();
+    zip.file('items.txt', inventoryText);
+    await triggerGMZipDownload(zip, `${sanitizeGMDownloadBaseName(npc.name || 'npc')}_items.zip`);
+    setGMStatus(`${npc.name || 'NPC'} item zip downloaded.`);
+    setGMStatusVisual(activeRef ? 'connected' : 'pending');
+  }
+
+  function openGMLocalNpcIdentityModal(npcId) {
+    const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
+    const modal = document.getElementById('gm-npc-identity-modal');
+    const nameInput = document.getElementById('gm-npc-identity-name');
+    const careerSelect = document.getElementById('gm-npc-identity-career');
+    if (!npc || !modal || !nameInput || !careerSelect) return;
+    modal.dataset.npcId = npcId;
+    nameInput.value = String(npc.name || '').trim();
+    careerSelect.innerHTML = GM_CAREER_OPTIONS.map((career) => `<option value="${escapeGMValue(career)}">${escapeGMValue(career)}</option>`).join('');
+    const currentCareer = String(npc.career || 'NPC').trim() || 'NPC';
+    if (!GM_CAREER_OPTIONS.includes(currentCareer)) {
+      const option = document.createElement('option');
+      option.value = currentCareer;
+      option.textContent = currentCareer;
+      careerSelect.appendChild(option);
+    }
+    careerSelect.value = currentCareer;
+    modal.classList.add('show');
+    nameInput.focus();
+  }
+
+  function closeGMLocalNpcIdentityModal() {
+    const modal = document.getElementById('gm-npc-identity-modal');
+    if (!modal) return;
+    modal.classList.remove('show');
+    delete modal.dataset.npcId;
+  }
+
+  function saveGMLocalNpcIdentityModal() {
+    const modal = document.getElementById('gm-npc-identity-modal');
+    const npcId = String(modal?.dataset?.npcId || '').trim();
+    const name = String(document.getElementById('gm-npc-identity-name')?.value || '').trim();
+    const career = String(document.getElementById('gm-npc-identity-career')?.value || '').trim();
+    if (!npcId || !name || !career) {
+      setGMStatus('NPC identity requires a name and career.');
+      return;
+    }
+    updateLocalNpcText(npcId, 'setIdentity', 'name', name);
+    updateLocalNpcText(npcId, 'setIdentity', 'career', career);
+    closeGMLocalNpcIdentityModal();
+  }
+
   function persistGMNpcDossierSync(npcId) {
     const npc = gmLocalNpcs.find((entry) => entry.id === npcId);
     if (!npc) return;
@@ -746,9 +932,68 @@
     return entries.map((entry) => `
       <div class="gm-sheet-line">
         <span class="gm-sheet-key">${escapeGMValue(entry.label)}:</span>
-        <input class="gm-ad-input gm-remote-input" type="number" min="0" value="${escapeGMValue(entry.value)}" data-gm-remote-edit="${escapeGMValue(options.commandType || 'setValue')}" data-gm-client-id="${escapeGMValue(options.clientId || '')}" data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">
+        ${renderGMRemoteStepperValue(entry.value, {
+          commandType: options.commandType || 'setValue',
+          clientId: options.clientId || '',
+          label: entry.label,
+          commandField: entry.commandField || entry.label,
+          valueClass: 'gm-sheet-step-value',
+          wrapClass: 'gm-sheet-step-wrap'
+        })}
       </div>
     `).join('');
+  }
+
+  function renderGMLocalStepperValue(value, options = {}) {
+    const numericValue = Math.max(0, parseGMNumericValue(value) ?? 0);
+    return `
+      <div class="gm-local-stepper-wrap ${escapeGMValue(options.wrapClass || '')}">
+        <div class="${escapeGMValue(options.valueClass || 'gm-dossier-stat-value')}">${escapeGMValue(numericValue)}</div>
+        <div class="gm-local-stepper">
+          <button type="button" class="gm-step-btn gm-step-btn-minus" data-gm-local-step="${escapeGMValue(options.commandType || 'setValue')}" data-gm-npc-id="${escapeGMValue(options.npcId || '')}" data-gm-label="${escapeGMValue(options.commandField || options.label || '')}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="-1">-</button>
+          <button type="button" class="gm-step-btn gm-step-btn-plus" data-gm-local-step="${escapeGMValue(options.commandType || 'setValue')}" data-gm-npc-id="${escapeGMValue(options.npcId || '')}" data-gm-label="${escapeGMValue(options.commandField || options.label || '')}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="1">+</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMRemoteStepperValue(value, options = {}) {
+    const numericValue = Math.max(0, parseGMNumericValue(value) ?? 0);
+    return `
+      <div class="gm-local-stepper-wrap ${escapeGMValue(options.wrapClass || '')}">
+        <div class="${escapeGMValue(options.valueClass || 'gm-dossier-stat-value')}">${escapeGMValue(numericValue)}</div>
+        <div class="gm-local-stepper">
+          <button type="button" class="gm-step-btn gm-step-btn-minus" data-gm-remote-step="${escapeGMValue(options.commandType || 'setValue')}" data-gm-client-id="${escapeGMValue(options.clientId || '')}" data-gm-label="${escapeGMValue(options.commandField || options.label || '')}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="-1">-</button>
+          <button type="button" class="gm-step-btn gm-step-btn-plus" data-gm-remote-step="${escapeGMValue(options.commandType || 'setValue')}" data-gm-client-id="${escapeGMValue(options.clientId || '')}" data-gm-label="${escapeGMValue(options.commandField || options.label || '')}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="1">+</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMLocalArmorDamageStepper(field, limb, value, npcId) {
+    const numericValue = Math.max(0, parseGMNumericValue(value) ?? 0);
+    return `
+      <div class="gm-local-stepper-wrap gm-local-stepper-wrap-table">
+        <div class="gm-ad-table-value">${escapeGMValue(numericValue)}</div>
+        <div class="gm-local-stepper gm-local-stepper-table">
+          <button type="button" class="gm-step-btn gm-step-btn-minus" data-gm-local-ad-step="${escapeGMValue(field)}" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="-1">-</button>
+          <button type="button" class="gm-step-btn gm-step-btn-plus" data-gm-local-ad-step="${escapeGMValue(field)}" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-limb="${escapeGMValue(limb)}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="1">+</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGMRemoteArmorDamageStepper(field, limb, value, clientId) {
+    const numericValue = Math.max(0, parseGMNumericValue(value) ?? 0);
+    return `
+      <div class="gm-local-stepper-wrap gm-local-stepper-wrap-table">
+        <div class="gm-ad-table-value">${escapeGMValue(numericValue)}</div>
+        <div class="gm-local-stepper gm-local-stepper-table">
+          <button type="button" class="gm-step-btn gm-step-btn-minus" data-gm-remote-ad-step="${escapeGMValue(field)}" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-limb="${escapeGMValue(limb)}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="-1">-</button>
+          <button type="button" class="gm-step-btn gm-step-btn-plus" data-gm-remote-ad-step="${escapeGMValue(field)}" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-limb="${escapeGMValue(limb)}" data-gm-value="${escapeGMValue(numericValue)}" data-gm-delta="1">+</button>
+        </div>
+      </div>
+    `;
   }
 
   function renderGMLocalEditableNumberLines(block, options = {}) {
@@ -761,7 +1006,14 @@
     return entries.map((entry) => `
       <div class="gm-sheet-line">
         <span class="gm-sheet-key">${escapeGMValue(entry.label)}:</span>
-        <input class="gm-ad-input gm-remote-input" type="number" min="0" value="${escapeGMValue(entry.value)}" data-gm-local-edit="${escapeGMValue(options.commandType || 'setValue')}" data-gm-npc-id="${escapeGMValue(options.npcId || '')}" data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">
+        ${renderGMLocalStepperValue(entry.value, {
+          commandType: options.commandType || 'setValue',
+          npcId: options.npcId || '',
+          label: entry.label,
+          commandField: entry.commandField || entry.label,
+          valueClass: 'gm-sheet-step-value',
+          wrapClass: 'gm-sheet-step-wrap'
+        })}
       </div>
     `).join('');
   }
@@ -801,10 +1053,14 @@
             <tr>
               <td>${escapeGMValue(limb)}</td>
               <td>${editable
-                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(armorMap.get(limb) ?? 0)}" data-gm-ad-input="armor" data-gm-target-type="${escapeGMValue(targetType)}" data-gm-target-id="${escapeGMValue(targetId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                ? targetType === 'npc'
+                  ? renderGMLocalArmorDamageStepper('armor', limb, armorMap.get(limb) ?? 0, targetId)
+                  : renderGMRemoteArmorDamageStepper('armor', limb, armorMap.get(limb) ?? 0, targetId)
                 : escapeGMValue(armorMap.get(limb) ?? 0)}</td>
               <td>${editable
-                ? `<input class="gm-ad-input" type="number" min="0" value="${escapeGMValue(damageMap.get(limb) ?? 0)}" data-gm-ad-input="damage" data-gm-target-type="${escapeGMValue(targetType)}" data-gm-target-id="${escapeGMValue(targetId)}" data-gm-limb="${escapeGMValue(limb)}">`
+                ? targetType === 'npc'
+                  ? renderGMLocalArmorDamageStepper('damage', limb, damageMap.get(limb) ?? 0, targetId)
+                  : renderGMRemoteArmorDamageStepper('damage', limb, damageMap.get(limb) ?? 0, targetId)
                 : escapeGMValue(damageMap.get(limb) ?? 0)}</td>
             </tr>
           `).join('')}
@@ -1129,6 +1385,7 @@
         <div class="gm-empty">No inventory items.</div>
         <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
           <button type="button" class="gm-btn" data-gm-add-local-item="${escapeGMValue(npcId)}">ADD ITEM</button>
+          <button type="button" class="gm-btn" data-gm-download-local-npc-items="${escapeGMValue(npcId)}">DOWNLOAD ITEMS .ZIP</button>
         </div>
       `;
     }
@@ -1153,6 +1410,7 @@
       </div>
       <div class="gm-card-actions" style="justify-content:flex-start;margin-top:10px;margin-bottom:0;">
         <button type="button" class="gm-btn" data-gm-add-local-item="${escapeGMValue(npcId)}">ADD ITEM</button>
+        <button type="button" class="gm-btn" data-gm-download-local-npc-items="${escapeGMValue(npcId)}">DOWNLOAD ITEMS .ZIP</button>
       </div>
     `;
   }
@@ -1245,15 +1503,21 @@
           <div class="gm-dossier-stat-item">
             <div class="gm-dossier-stat-label">${escapeGMValue(entry.label)}</div>
             ${options.localEditable ? `
-              <input class="gm-dossier-stat-input" type="number" min="0" value="${escapeGMValue(entry.value)}"
-                data-gm-local-edit="${escapeGMValue(options.commandType || 'setStat')}"
-                data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
-                data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">`
+              ${renderGMLocalStepperValue(entry.value, {
+                commandType: options.commandType || 'setStat',
+                npcId: options.npcId || '',
+                label: entry.label,
+                commandField: entry.commandField || entry.label,
+                valueClass: 'gm-dossier-stat-value'
+              })}`
             : options.remoteEditable ? `
-              <input class="gm-dossier-stat-input" type="number" min="0" value="${escapeGMValue(entry.value)}"
-                data-gm-remote-edit="${escapeGMValue(options.commandType || 'setStat')}"
-                data-gm-client-id="${escapeGMValue(options.clientId || '')}"
-                data-gm-label="${escapeGMValue(entry.commandField || entry.label)}">`
+              ${renderGMRemoteStepperValue(entry.value, {
+                commandType: options.commandType || 'setStat',
+                clientId: options.clientId || '',
+                label: entry.label,
+                commandField: entry.commandField || entry.label,
+                valueClass: 'gm-dossier-stat-value'
+              })}`
             : `<div class="gm-dossier-stat-value">${escapeGMValue(entry.value)}</div>`}
           </div>
         `).join('')}
@@ -1273,15 +1537,21 @@
           <div class="gm-dossier-bs-item">
             <div class="gm-dossier-bs-label">${escapeGMValue(field.label)}</div>
             ${options.localEditable ? `
-              <input class="gm-dossier-bs-input" type="number" min="0" value="${escapeGMValue(field.value)}"
-                data-gm-local-edit="${escapeGMValue(options.commandType || 'setPhysical')}"
-                data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
-                data-gm-label="${escapeGMValue(field.commandField)}">`
+              ${renderGMLocalStepperValue(field.value, {
+                commandType: options.commandType || 'setPhysical',
+                npcId: options.npcId || '',
+                label: field.label,
+                commandField: field.commandField,
+                valueClass: 'gm-dossier-bs-value'
+              })}`
             : options.remoteEditable ? `
-              <input class="gm-dossier-bs-input" type="number" min="0" value="${escapeGMValue(field.value)}"
-                data-gm-remote-edit="${escapeGMValue(options.commandType || 'setPhysical')}"
-                data-gm-client-id="${escapeGMValue(options.clientId || '')}"
-                data-gm-label="${escapeGMValue(field.commandField)}">`
+              ${renderGMRemoteStepperValue(field.value, {
+                commandType: options.commandType || 'setPhysical',
+                clientId: options.clientId || '',
+                label: field.label,
+                commandField: field.commandField,
+                valueClass: 'gm-dossier-bs-value'
+              })}`
             : `<div class="gm-dossier-bs-value">${escapeGMValue(field.value)}</div>`}
           </div>
         `).join('')}
@@ -1294,15 +1564,23 @@
     return `
       <div class="gm-dossier-rep-main">
         ${options.localEditable ? `
-          <input class="gm-dossier-rep-input" type="number" min="0" value="${escapeGMValue(value)}"
-            data-gm-local-edit="${escapeGMValue(options.commandType || 'setReputation')}"
-            data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
-            data-gm-label="reputation">`
+          ${renderGMLocalStepperValue(value, {
+            commandType: options.commandType || 'setReputation',
+            npcId: options.npcId || '',
+            label: 'reputation',
+            commandField: 'reputation',
+            valueClass: 'gm-dossier-rep-number',
+            wrapClass: 'gm-dossier-rep-wrap'
+          })}`
         : options.remoteEditable ? `
-          <input class="gm-dossier-rep-input" type="number" min="0" value="${escapeGMValue(value)}"
-            data-gm-remote-edit="${escapeGMValue(options.commandType || 'setReputation')}"
-            data-gm-client-id="${escapeGMValue(options.clientId || '')}"
-            data-gm-label="reputation">`
+          ${renderGMRemoteStepperValue(value, {
+            commandType: options.commandType || 'setReputation',
+            clientId: options.clientId || '',
+            label: 'reputation',
+            commandField: 'reputation',
+            valueClass: 'gm-dossier-rep-number',
+            wrapClass: 'gm-dossier-rep-wrap'
+          })}`
         : `<div class="gm-dossier-rep-number">${escapeGMValue(value)}</div>`}
         <div class="gm-dossier-rep-side">
           <div class="gm-dossier-rep-label">STREET CRED</div>
@@ -1316,15 +1594,23 @@
     return `
       <div class="gm-dossier-wallet-row">
         ${options.localEditable ? `
-          <input class="gm-dossier-wallet-input" type="number" min="0" value="${escapeGMValue(value)}"
-            data-gm-local-edit="${escapeGMValue(options.commandType || 'setWallet')}"
-            data-gm-npc-id="${escapeGMValue(options.npcId || '')}"
-            data-gm-label="wallet">`
+          ${renderGMLocalStepperValue(value, {
+            commandType: options.commandType || 'setWallet',
+            npcId: options.npcId || '',
+            label: 'wallet',
+            commandField: 'wallet',
+            valueClass: 'gm-dossier-wallet-value',
+            wrapClass: 'gm-dossier-wallet-wrap'
+          })}`
         : options.remoteEditable ? `
-          <input class="gm-dossier-wallet-input" type="number" min="0" value="${escapeGMValue(value)}"
-            data-gm-remote-edit="${escapeGMValue(options.commandType || 'setWallet')}"
-            data-gm-client-id="${escapeGMValue(options.clientId || '')}"
-            data-gm-label="wallet">`
+          ${renderGMRemoteStepperValue(value, {
+            commandType: options.commandType || 'setWallet',
+            clientId: options.clientId || '',
+            label: 'wallet',
+            commandField: 'wallet',
+            valueClass: 'gm-dossier-wallet-value',
+            wrapClass: 'gm-dossier-wallet-wrap'
+          })}`
         : `<div class="gm-dossier-wallet-value">${escapeGMValue(value)}</div>`}
         <div class="gm-dossier-wallet-side">
           <div class="gm-dossier-wallet-label">EDDIES</div>
@@ -1336,83 +1622,178 @@
   function renderGMRemotePlayerDossier(clientId, entry) {
     const identityMeta = `${escapeGMValue(entry.career || 'UNKNOWN')} // ${escapeGMValue((entry.role || 'player').toUpperCase())}`;
     return `
-      <section class="gm-panel gm-panel-dossier gm-player-dossier-host" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-role="${escapeGMValue(entry.role || 'player')}" data-gm-player-name="${escapeGMValue(entry.name || 'Unknown')}">
+      <section class="gm-character-sheet-tab gm-character-sheet-player" data-gm-client-id="${escapeGMValue(clientId)}" data-gm-role="${escapeGMValue(entry.role || 'player')}" data-gm-player-name="${escapeGMValue(entry.name || 'Unknown')}">
         <div class="gm-npc-tab-toolbar">
           <div>
             <div class="gm-panel-title" style="margin-bottom:6px;">${escapeGMValue(String(entry.name || 'Player').toUpperCase())} // DOSSIER TAB</div>
             <div class="gm-npc-sheet-kicker">Remote player dossier mirror // same section rhythm as the dossier sheet, tuned for GM editing.</div>
           </div>
-          <div class="gm-card-actions" style="margin-bottom:0;">
+          <div class="gm-card-actions gm-card-actions-split" style="margin-bottom:0;">
+            <div class="gm-breach-section" style="margin-top:0;padding-top:0;border-top:none;">
+              <div class="gm-sheet-title">Remote Breach</div>
+              <div class="gm-breach-btn-row">
+                <button type="button" class="gm-btn" data-gm-breach-start="${escapeGMValue(clientId)}" data-gm-breach-mode="easy">EASY</button>
+                <button type="button" class="gm-btn" data-gm-breach-start="${escapeGMValue(clientId)}" data-gm-breach-mode="medium">MEDIUM</button>
+                <button type="button" class="gm-btn" data-gm-breach-start="${escapeGMValue(clientId)}" data-gm-breach-mode="hard">HARD</button>
+              </div>
+            </div>
             <button type="button" class="gm-btn gm-btn-muted gm-tab-toolbar-badge" disabled>REMOTE PLAYER</button>
           </div>
         </div>
-        <div class="gm-dossier-frame-shell">
-          <div class="gm-dossier-frame-body gm-dossier-frame-body-player">
-            <div class="gm-player-card gm-player-detail gm-player-dossier-view">
-              <div class="gm-dossier-name-banner">
-                <div>
-                  <div class="gm-dossier-name-main">${escapeGMValue(entry.name || 'Unknown')}</div>
-                  <div class="gm-dossier-name-meta">${identityMeta}</div>
-                </div>
+        <div class="gm-player-card gm-player-detail gm-player-dossier-view">
+          <div class="gm-dossier-name-banner">
+            <div>
+              <div class="gm-dossier-name-row">
+                <div class="gm-dossier-name-main">${escapeGMValue(entry.name || 'Unknown')}</div>
               </div>
-              <div class="gm-dossier-section">
-                <div class="gm-dossier-panel" style="margin-bottom:18px;">
-                  <div class="gm-dossier-panel-title">Core Statistics</div>
-                  ${renderGMDossierStatGrid(Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats, {
-                    remoteEditable: true,
-                    commandType: 'setStat',
-                    clientId
-                  })}
-                </div>
+              <div class="gm-dossier-name-meta">${identityMeta}</div>
+            </div>
+          </div>
+          <div class="gm-dossier-section">
+            <div class="gm-dossier-panel" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel-title">Core Statistics</div>
+              ${renderGMDossierStatGrid(Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats, {
+                remoteEditable: true,
+                commandType: 'setStat',
+                clientId
+              })}
+            </div>
 
-                <div class="gm-dossier-band" style="margin-bottom:18px;">
-                  <div class="gm-dossier-panel gm-dossier-panel-physical">
-                    <div class="gm-dossier-panel-title">Physical</div>
-                    ${renderGMDossierPhysicalPanel(entry, {
-                      remoteEditable: true,
-                      commandType: 'setPhysical',
-                      clientId
-                    })}
-                  </div>
-                  <div class="gm-dossier-panel gm-dossier-panel-reputation">
-                    <div class="gm-dossier-panel-title">Reputation</div>
-                    ${renderGMDossierReputationPanel(entry, {
-                      remoteEditable: true,
-                      commandType: 'setReputation',
-                      clientId
-                    })}
-                  </div>
-                  <div class="gm-dossier-panel gm-dossier-panel-wallet">
-                    <div class="gm-dossier-panel-title">Wallet</div>
-                    ${renderGMDossierWalletPanel(entry, {
-                      remoteEditable: true,
-                      commandType: 'setWallet',
-                      clientId
-                    })}
-                  </div>
-                </div>
-
-                <div class="gm-dossier-two-col" style="margin-bottom:18px;">
-                  <div class="gm-dossier-panel">
-                    <div class="gm-dossier-panel-title">Career Skills</div>
-                    ${renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })}
-                  </div>
-                  <div class="gm-dossier-panel">
-                    <div class="gm-dossier-panel-title">Inventory</div>
-                    ${renderGMRemoteInventory(entry, clientId)}
-                  </div>
-                </div>
-
-                <div class="gm-dossier-panel" style="margin-bottom:18px;">
-                  <div class="gm-dossier-panel-title">Damage &amp; Armor</div>
-                  ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: true, targetType: 'player', targetId: clientId })}
-                </div>
-
-                <div class="gm-dossier-panel">
-                  <div class="gm-dossier-panel-title">Last Roll</div>
-                  ${renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending, { showTitle: false })}
-                </div>
+            <div class="gm-dossier-band" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel gm-dossier-panel-physical">
+                <div class="gm-dossier-panel-title">Physical</div>
+                ${renderGMDossierPhysicalPanel(entry, {
+                  remoteEditable: true,
+                  commandType: 'setPhysical',
+                  clientId
+                })}
               </div>
+              <div class="gm-dossier-panel gm-dossier-panel-reputation">
+                <div class="gm-dossier-panel-title">Reputation</div>
+                ${renderGMDossierReputationPanel(entry, {
+                  remoteEditable: true,
+                  commandType: 'setReputation',
+                  clientId
+                })}
+              </div>
+              <div class="gm-dossier-panel gm-dossier-panel-wallet">
+                <div class="gm-dossier-panel-title">Wallet</div>
+                ${renderGMDossierWalletPanel(entry, {
+                  remoteEditable: true,
+                  commandType: 'setWallet',
+                  clientId
+                })}
+              </div>
+            </div>
+
+            <div class="gm-dossier-two-col" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel">
+                <div class="gm-dossier-panel-title">Career Skills</div>
+                ${renderGMEditableNumberLines(entry.skills, { commandType: 'setSkill', clientId })}
+              </div>
+              <div class="gm-dossier-panel">
+                <div class="gm-dossier-panel-title">Inventory</div>
+                ${renderGMRemoteInventory(entry, clientId)}
+              </div>
+            </div>
+
+            <div class="gm-dossier-panel" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel-title">Damage &amp; Armor</div>
+              ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: true, targetType: 'player', targetId: clientId })}
+            </div>
+
+            <div class="gm-dossier-panel">
+              <div class="gm-dossier-panel-title">Last Roll</div>
+              ${renderGMRollPanel(clientId, entry.lastRollVisible || null, entry.lastRollPending, { showTitle: false })}
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderGMLocalNpcDossier(npcId, entry) {
+    const identityMeta = `${escapeGMValue(entry.career || 'NPC')} // LOCAL NPC`;
+    return `
+      <section class="gm-character-sheet-tab gm-character-sheet-player gm-character-sheet-npc" data-gm-npc-id="${escapeGMValue(npcId)}" data-gm-role="${escapeGMValue(entry.role || 'npc-local')}" data-gm-player-name="${escapeGMValue(entry.name || 'NPC')}">
+        <div class="gm-npc-tab-toolbar">
+          <div>
+            <div class="gm-panel-title" style="margin-bottom:6px;">${escapeGMValue(String(entry.name || 'NPC').toUpperCase())} // DOSSIER TAB</div>
+            <div class="gm-npc-sheet-kicker">Local NPC dossier mirror // native GM sheet view, no embedded page stack.</div>
+          </div>
+          <div class="gm-card-actions gm-card-actions-split" style="margin-bottom:0;">
+            <button type="button" class="gm-btn" data-gm-download-local-npc="${escapeGMValue(npcId)}">DOWNLOAD .ZIP</button>
+            <button type="button" class="gm-btn" data-gm-download-local-npc-items="${escapeGMValue(npcId)}">ITEMS .ZIP</button>
+            <button type="button" class="gm-btn gm-btn-muted" data-gm-remove-npc="${escapeGMValue(npcId)}">REMOVE NPC</button>
+            <button type="button" class="gm-btn gm-btn-muted gm-tab-toolbar-badge" disabled>LOCAL NPC</button>
+          </div>
+        </div>
+        <div class="gm-player-card gm-player-detail gm-player-dossier-view">
+          <div class="gm-dossier-name-banner">
+            <div>
+              <div class="gm-dossier-name-row">
+                <div class="gm-dossier-name-main">${escapeGMValue(entry.name || 'NPC')}</div>
+                <button type="button" class="gm-btn gm-dossier-name-edit" data-gm-edit-local-npc-identity="${escapeGMValue(npcId)}">EDIT</button>
+              </div>
+              <div class="gm-dossier-name-meta">${identityMeta}</div>
+            </div>
+          </div>
+          <div class="gm-dossier-section">
+            <div class="gm-dossier-panel" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel-title">Core Statistics</div>
+              ${renderGMDossierStatGrid(Array.isArray(entry.baseStats) && entry.baseStats.length ? entry.baseStats : entry.stats, {
+                localEditable: true,
+                commandType: 'setStat',
+                npcId
+              })}
+            </div>
+
+            <div class="gm-dossier-band" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel gm-dossier-panel-physical">
+                <div class="gm-dossier-panel-title">Physical</div>
+                ${renderGMDossierPhysicalPanel(entry, {
+                  localEditable: true,
+                  commandType: 'setPhysical',
+                  npcId
+                })}
+              </div>
+              <div class="gm-dossier-panel gm-dossier-panel-reputation">
+                <div class="gm-dossier-panel-title">Reputation</div>
+                ${renderGMDossierReputationPanel(entry, {
+                  localEditable: true,
+                  commandType: 'setReputation',
+                  npcId
+                })}
+              </div>
+              <div class="gm-dossier-panel gm-dossier-panel-wallet">
+                <div class="gm-dossier-panel-title">Wallet</div>
+                ${renderGMDossierWalletPanel(entry, {
+                  localEditable: true,
+                  commandType: 'setWallet',
+                  npcId
+                })}
+              </div>
+            </div>
+
+            <div class="gm-dossier-two-col" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel">
+                <div class="gm-dossier-panel-title">Career Skills</div>
+                ${renderGMLocalEditableNumberLines(entry.skills, { commandType: 'setSkill', npcId })}
+              </div>
+              <div class="gm-dossier-panel">
+                <div class="gm-dossier-panel-title">Inventory</div>
+                ${renderGMLocalInventory(entry, npcId)}
+              </div>
+            </div>
+
+            <div class="gm-dossier-panel" style="margin-bottom:18px;">
+              <div class="gm-dossier-panel-title">Damage &amp; Armor</div>
+              ${renderGMArmorDamageTable(entry.armor, entry.damage, { editable: true, targetType: 'npc', targetId: npcId })}
+            </div>
+
+            <div class="gm-dossier-panel">
+              <div class="gm-dossier-panel-title">Last Roll</div>
+              ${renderGMRollPanel(npcId, entry.lastRollVisible || null, entry.lastRollPending, { showTitle: false })}
             </div>
           </div>
         </div>
@@ -1449,7 +1830,7 @@
           ${showTitle ? '<span class="gm-sheet-title">Last Roll</span>' : ''}
           <span class="gm-roll-dice">${escapeGMValue(lastRoll.dice)}</span>
         </div>
-        <div class="gm-roll-total" id="gm-roll-total-${escapeGMValue(clientId)}">${escapeGMValue(lastRoll.raw ?? lastRoll.total ?? '--')}</div>
+        <div class="gm-roll-total" id="gm-roll-total-${escapeGMValue(clientId)}">${escapeGMValue(lastRoll.total ?? lastRoll.raw ?? '--')}</div>
         <div class="gm-roll-meta">
           <span>POOL ${escapeGMValue(pool)}</span>
           <span>MOD ${escapeGMValue(modifierText)}</span>
@@ -2759,6 +3140,15 @@
     ], 10);
   }
 
+  function rollGMAwarenessCheckPreset() {
+    const combatant = requireGMSelectedCombatant();
+    if (!combatant) return;
+    setGMPresetRoll('AWARENESS CHECK', [
+      { source: combatant.name || 'Actor', label: 'REF', value: getGMCombatantStatValue(combatant, 'REF') },
+      { source: combatant.name || 'Actor', label: 'Awareness', value: getGMCombatantSkillValue(combatant, 'Awareness', 'AwarenessNotice') }
+    ], 10);
+  }
+
   function rollGMSuppressivePreset() {
     const combatant = requireGMSelectedCombatant();
     if (!combatant) return;
@@ -2922,6 +3312,7 @@
     window.getGMRemotePlayers = () => gmRemotePlayers.map((entry) => JSON.parse(JSON.stringify(entry)));
     window.getGMLocalNpcs = () => gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
     window.renderGMRemotePlayerDossierHtml = (clientId, entry) => renderGMRemotePlayerDossier(clientId, entry);
+    window.renderGMLocalNpcDossierHtml = (npcId, entry) => renderGMLocalNpcDossier(npcId, entry);
     window.addGMRollModifier = addGMRollModifier;
     window.getGMCurrentRoll = () => gmCurrentRoll ? JSON.parse(JSON.stringify(gmCurrentRoll)) : null;
     window.getGMActiveRoomId = () => activeRoomId;
@@ -2960,6 +3351,7 @@
     if (gmPresetArrow) gmPresetArrow.textContent = '\u25B2';
     document.getElementById('gm-roll-ambush-btn')?.addEventListener('click', rollGMAmbushPreset);
     document.getElementById('gm-roll-ambush-counter-btn')?.addEventListener('click', rollGMAmbushCounterPreset);
+    document.getElementById('gm-roll-awareness-check-btn')?.addEventListener('click', rollGMAwarenessCheckPreset);
     document.getElementById('gm-roll-suppressive-btn')?.addEventListener('click', rollGMSuppressivePreset);
     document.getElementById('gm-aim-btn')?.addEventListener('click', startOrKeepGMAim);
     document.getElementById('gm-clear-aim-btn')?.addEventListener('click', clearGMAim);
@@ -3000,8 +3392,13 @@
     document.getElementById('gm-item-cancel')?.addEventListener('click', closeGMInventoryModal);
     document.getElementById('gm-item-save')?.addEventListener('click', saveGMInventoryItem);
     document.getElementById('gm-item-type')?.addEventListener('change', toggleGMCustomItemType);
+    document.getElementById('gm-npc-identity-cancel')?.addEventListener('click', closeGMLocalNpcIdentityModal);
+    document.getElementById('gm-npc-identity-save')?.addEventListener('click', saveGMLocalNpcIdentityModal);
     document.getElementById('gm-inventory-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeGMInventoryModal();
+    });
+    document.getElementById('gm-npc-identity-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMLocalNpcIdentityModal();
     });
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
@@ -3036,6 +3433,24 @@
       const openNpcDossierButton = event.target.closest('[data-gm-open-npc-dossier]');
       if (openNpcDossierButton) {
         openGMNpcDossier(openNpcDossierButton.getAttribute('data-gm-open-npc-dossier'));
+        return;
+      }
+
+      const editLocalNpcIdentityButton = event.target.closest('[data-gm-edit-local-npc-identity]');
+      if (editLocalNpcIdentityButton) {
+        openGMLocalNpcIdentityModal(editLocalNpcIdentityButton.getAttribute('data-gm-edit-local-npc-identity'));
+        return;
+      }
+
+      const downloadLocalNpcButton = event.target.closest('[data-gm-download-local-npc]');
+      if (downloadLocalNpcButton) {
+        downloadGMLocalNpcDossierZip(downloadLocalNpcButton.getAttribute('data-gm-download-local-npc'));
+        return;
+      }
+
+      const downloadLocalNpcItemsButton = event.target.closest('[data-gm-download-local-npc-items]');
+      if (downloadLocalNpcItemsButton) {
+        downloadGMLocalNpcItemsZip(downloadLocalNpcItemsButton.getAttribute('data-gm-download-local-npc-items'));
         return;
       }
 
@@ -3103,6 +3518,61 @@
           deleteLocalItemButton.getAttribute('data-gm-item-category'),
           deleteLocalItemButton.getAttribute('data-gm-item-id')
         );
+        return;
+      }
+
+      const localStepButton = event.target.closest('[data-gm-local-step]');
+      if (localStepButton) {
+        const type = localStepButton.getAttribute('data-gm-local-step');
+        const npcId = localStepButton.getAttribute('data-gm-npc-id');
+        const label = localStepButton.getAttribute('data-gm-label');
+        const current = Math.max(0, parseGMNumericValue(localStepButton.getAttribute('data-gm-value')) ?? 0);
+        const delta = parseInt(localStepButton.getAttribute('data-gm-delta') || '0', 10) || 0;
+        updateLocalNpcValue(npcId, type, label, Math.max(0, current + delta));
+        return;
+      }
+
+      const remoteStepButton = event.target.closest('[data-gm-remote-step]');
+      if (remoteStepButton) {
+        const type = remoteStepButton.getAttribute('data-gm-remote-step');
+        const clientId = remoteStepButton.getAttribute('data-gm-client-id');
+        const label = remoteStepButton.getAttribute('data-gm-label');
+        const current = Math.max(0, parseGMNumericValue(remoteStepButton.getAttribute('data-gm-value')) ?? 0);
+        const delta = parseInt(remoteStepButton.getAttribute('data-gm-delta') || '0', 10) || 0;
+        const value = Math.max(0, current + delta);
+        if (type === 'setStat') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setStat', label, key: label, value });
+        } else if (type === 'setSkill') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setSkill', label, value });
+        } else if (type === 'setReputation') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setReputation', label: 'reputation', value });
+        } else if (type === 'setWallet') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setWallet', label: 'wallet', value });
+        } else if (type === 'setPhysical') {
+          sendGMRemotePlayerCommand(clientId, { type: 'setPhysical', label, field: label, value });
+        }
+        return;
+      }
+
+      const localArmorDamageStepButton = event.target.closest('[data-gm-local-ad-step]');
+      if (localArmorDamageStepButton) {
+        const field = localArmorDamageStepButton.getAttribute('data-gm-local-ad-step');
+        const npcId = localArmorDamageStepButton.getAttribute('data-gm-npc-id');
+        const limb = localArmorDamageStepButton.getAttribute('data-gm-limb');
+        const current = Math.max(0, parseGMNumericValue(localArmorDamageStepButton.getAttribute('data-gm-value')) ?? 0);
+        const delta = parseInt(localArmorDamageStepButton.getAttribute('data-gm-delta') || '0', 10) || 0;
+        updateLocalNpcArmorDamage(npcId, field, limb, Math.max(0, current + delta));
+        return;
+      }
+
+      const remoteArmorDamageStepButton = event.target.closest('[data-gm-remote-ad-step]');
+      if (remoteArmorDamageStepButton) {
+        const field = remoteArmorDamageStepButton.getAttribute('data-gm-remote-ad-step');
+        const clientId = remoteArmorDamageStepButton.getAttribute('data-gm-client-id');
+        const limb = remoteArmorDamageStepButton.getAttribute('data-gm-limb');
+        const current = Math.max(0, parseGMNumericValue(remoteArmorDamageStepButton.getAttribute('data-gm-value')) ?? 0);
+        const delta = parseInt(remoteArmorDamageStepButton.getAttribute('data-gm-delta') || '0', 10) || 0;
+        updateRemotePlayerArmorDamage(clientId, field, limb, Math.max(0, current + delta));
         return;
       }
 
@@ -3211,6 +3681,9 @@
       renderGMRollModifierList();
     });
     setGMStatusVisual('disconnected');
+    window.initFirebaseRealtime?.();
+    updateGMAuthDisplay(window.getFirebaseCurrentUser?.() || null);
+    window.watchFirebaseAuthState?.((user) => updateGMAuthDisplay(user));
 
     document.addEventListener('mouseover', (event) => {
       const control = event.target.closest('button, a, summary, select');

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260426k">
+<link rel="stylesheet" href="DND.css?v=20260501a">
 </head>
 <body>
 <div class="wrapper">
@@ -21,6 +21,7 @@
       <span class="online-dot"></span>
       JACKED IN
     </span>
+    <br><span class="auth-tag" id="dossier-auth-tag">USER // OFFLINE</span>
   </div>
 </header>
 
@@ -169,6 +170,7 @@
           <option value="Nomad">Nomad</option>
           <option value="Rockerboy">Rockerboy</option>
           <option value="Hobo">Hobo</option>
+          <option value="Corpo">Corpo</option>
         </select>
       </label>
 
@@ -368,8 +370,8 @@
             <div class="action-hud-custom-row">
               <input class="modifier-input" id="custom-mod-label" type="text" maxlength="40" placeholder="Custom label" />
               <input class="modifier-input" id="custom-mod-value" type="number" step="1" placeholder="Value" />
-              <button class="add-skill-btn" type="button" onclick="addCustomRollModifier()">ADD</button>
-              <button class="action-btn red" type="button" onclick="clearRollModifiers()">CLEAR</button>
+              <button class="hud-drawer-btn hud-drawer-btn-add" type="button" onclick="addCustomRollModifier()">ADD</button>
+              <button class="hud-drawer-btn hud-drawer-btn-clear" type="button" onclick="clearRollModifiers()">CLEAR</button>
             </div>
           </div>
         </div>
@@ -420,6 +422,12 @@
                 </div>
               </div>
               <div class="preset-hover-item">
+                <button class="preset-btn" type="button" onclick="rollAwarenessCheck()">Awareness Check</button>
+                <div class="preset-item-hover-panel">
+                  <div class="hud-hover-line">REF + Awareness + 1D10</div>
+                </div>
+              </div>
+              <div class="preset-hover-item">
                 <button class="preset-btn" type="button" onclick="rollSuppressiveFireSave()">Supressive Fire Save</button>
                 <div class="preset-item-hover-panel">
                   <div class="hud-hover-line">Athletics + REF + 1D10</div>
@@ -447,18 +455,15 @@
           <button class="nr-diff-btn" id="nr-diff-medium" type="button" onclick="setDifficulty('medium')">MEDIUM</button>
           <button class="nr-diff-btn" id="nr-diff-hard" type="button" onclick="setDifficulty('hard')">HARD</button>
         </div>
+        <div class="nr-section-label" style="margin-top:18px;">OBJECTIVE</div>
+        <div class="nr-mode-readout" id="nr-target">TARGET // EXIT</div>
         <div class="nr-section-label" style="margin-top:22px;">KEYBINDS</div>
         <div class="nr-info-list">
           <div class="nr-info-row"><span class="nr-key">R</span><span class="nr-info-copy">Generate new breach</span></div>
           <div class="nr-info-row"><span class="nr-key">ARROWS</span><span class="nr-info-copy">Move runner</span></div>
         </div>
         <div class="nr-section-label" style="margin-top:22px;">RULES</div>
-        <div class="nr-info-list nr-rules-list">
-          <div class="nr-rule-copy">10 seconds per breach.</div>
-          <div class="nr-rule-copy">Hit a wall and you die.</div>
-          <div class="nr-rule-copy">Touch your own path and you die.</div>
-          <div class="nr-rule-copy">Reach the red node to win.</div>
-        </div>
+        <div class="nr-info-list nr-rules-list" id="nr-rules"></div>
       </div>
 
       <!-- CENTER: Console + Maze -->
@@ -693,17 +698,15 @@
       <div class="nr-left remote-breach-left">
         <div class="nr-section-label">MODE</div>
         <div class="nr-mode-readout" id="remote-nr-mode">REMOTE // EASY</div>
+        <div class="nr-section-label" style="margin-top:18px;">OBJECTIVE</div>
+        <div class="nr-mode-readout" id="remote-nr-target">TARGET // EXIT</div>
+        <button class="nr-diff-btn" id="remote-breach-start-btn" type="button" hidden>START</button>
         <div class="nr-section-label" style="margin-top:22px;">KEYBINDS</div>
         <div class="nr-info-list">
           <div class="nr-info-row"><span class="nr-key">ARROWS</span><span class="nr-info-copy">Move runner</span></div>
         </div>
         <div class="nr-section-label" style="margin-top:22px;">RULES</div>
-        <div class="nr-info-list nr-rules-list">
-          <div class="nr-rule-copy">3 second sync window, then 10 seconds live.</div>
-          <div class="nr-rule-copy">Hit a wall and you die.</div>
-          <div class="nr-rule-copy">Touch your own path and you die.</div>
-          <div class="nr-rule-copy">Reach the red node to win.</div>
-        </div>
+        <div class="nr-info-list nr-rules-list" id="remote-nr-rules"></div>
       </div>
       <div class="nr-center">
         <div class="nr-header-bar">
@@ -728,14 +731,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260423b"></script>
-<script src="functions/DND.js?v=20260425c"></script>
-<script src="functions/createNewCharacter.js?v=20260425a"></script>
-<script src="functions/dossierSheet.js?v=20260425a"></script>
+<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
+<script src="functions/firebase-sync.js?v=20260501b"></script>
+<script src="functions/DND.js?v=20260501b"></script>
+<script src="functions/createNewCharacter.js?v=20260427a"></script>
+<script src="functions/dossierSheet.js?v=20260427b"></script>
 <script src="functions/inventory.js?v=20260424m"></script>
-<script src="functions/rollLab.js?v=20260425e"></script>
+<script src="functions/rollLab.js?v=20260427b"></script>
 <script src="functions/upload-download.js?v=20260424h"></script>
-<script src="functions/netrunner.js?v=20260423a"></script>
-<script src="functions/remote-breach.js?v=20260423a"></script>
+<script src="functions/netrunner.js?v=20260427c"></script>
+<script src="functions/remote-breach.js?v=20260427c"></script>
 </body>
 </html>

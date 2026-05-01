@@ -753,6 +753,13 @@ function rollAmbushCounter() {
   ], 10);
 }
 
+function rollAwarenessCheck() {
+  setPresetRoll('AWARENESS CHECK', [
+    { source: 'PRESET', label: 'REF', value: getEffectiveStatValue('REF') },
+    { source: 'PRESET', label: 'Awareness', value: getSkillValueByNames('Awareness', 'AwarenessNotice') }
+  ], 10);
+}
+
 function rollSuppressiveFireSave() {
   setPresetRoll('SUPRESSIVE FIRE SAVE', [
     { source: 'PRESET', label: 'Athletics', value: getSkillValueByNames('Athletics', 'Athletic') },

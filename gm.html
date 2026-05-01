@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260426p">
+<link rel="stylesheet" href="gm.css?v=20260501a">
 </head>
 <body>
   <div class="gm-shell">
@@ -15,7 +15,10 @@
         <h1>CYBERPUNK 2020</h1>
         <p class="gm-copy">Monitor connected players, manage live combat, and build local NPC dossier tabs directly inside the referee console.</p>
       </div>
-      <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
+      <div class="gm-header-side">
+        <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
+        <div class="gm-auth-chip" id="gm-auth-tag">USER // OFFLINE</div>
+      </div>
     </header>
 
     <div class="gm-tabs">
@@ -184,17 +187,17 @@
           <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-drawer-close">CLOSE</button>
         </div>
         <div class="gm-mod-list" id="gm-roll-mod-list"></div>
-        <div class="gm-room-row">
-          <label class="gm-field">
+        <div class="gm-mod-drawer-row">
+          <label class="gm-field gm-mod-field">
             <span>Custom Label</span>
             <input id="gm-roll-custom-label" type="text" maxlength="40" placeholder="Custom">
           </label>
-          <label class="gm-field gm-field-small">
+          <label class="gm-field gm-field-small gm-mod-field gm-mod-field-small">
             <span>Value</span>
             <input id="gm-roll-custom-value" type="number" step="1" value="0">
           </label>
-          <button class="gm-btn" type="button" id="gm-roll-add-mod-btn">ADD</button>
-          <button class="gm-btn gm-btn-muted" type="button" id="gm-roll-clear-mods-btn">CLEAR</button>
+          <button class="gm-btn gm-mod-drawer-btn" type="button" id="gm-roll-add-mod-btn">ADD</button>
+          <button class="gm-btn gm-btn-muted gm-mod-drawer-btn" type="button" id="gm-roll-clear-mods-btn">CLEAR</button>
           <button class="gm-btn" type="button" id="gm-roll-send-active-btn">SEND TO NPC</button>
         </div>
         <button class="gm-drawer-tail gm-drawer-tail-mod" type="button" id="gm-roll-mod-tail-close" aria-label="Close modifier tray"></button>
@@ -216,6 +219,12 @@
             <button class="gm-btn" type="button" id="gm-roll-ambush-counter-btn">AMBUSH COUNTER</button>
             <div class="gm-preset-item-hover-panel">
               <div class="gm-hud-hover-line">Awareness + 1D10</div>
+            </div>
+          </div>
+          <div class="gm-preset-hover-item">
+            <button class="gm-btn" type="button" id="gm-roll-awareness-check-btn">AWARENESS CHECK</button>
+            <div class="gm-preset-item-hover-panel">
+              <div class="gm-hud-hover-line">REF + Awareness + 1D10</div>
             </div>
           </div>
           <div class="gm-preset-hover-item">
@@ -347,6 +356,27 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-npc-identity-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>EDIT NPC IDENTITY</h3>
+      <div class="gm-roll-execute-copy">Update the local NPC name and career for this tab.</div>
+      <div class="gm-effect-form">
+        <label class="gm-field">
+          <span>Name</span>
+          <input id="gm-npc-identity-name" type="text" maxlength="80" placeholder="NPC name">
+        </label>
+        <label class="gm-field">
+          <span>Career</span>
+          <select id="gm-npc-identity-career"></select>
+        </label>
+      </div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-npc-identity-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-npc-identity-save">SAVE</button>
+      </div>
+    </div>
+  </div>
+
   <div class="gm-modal-overlay" id="gm-breach-modal">
     <div class="gm-modal-box gm-breach-box">
       <div class="gm-breach-head">
@@ -356,15 +386,29 @@
         </div>
         <div class="gm-breach-mode" id="gm-breach-mode">EASY</div>
       </div>
+      <div class="gm-breach-setup" id="gm-breach-launch-block" hidden>
+        <div class="gm-breach-setup-row">
+          <div class="gm-breach-setup-copy">
+            <div class="gm-sheet-title">Timer</div>
+            <div class="gm-roll-source">Set the live breach timer. The player starts the run when they press START.</div>
+          </div>
+          <div class="gm-breach-time-wrap">
+            <input id="gm-breach-time-slider" type="range" min="0" max="4" step="1" value="1">
+            <div class="gm-breach-time-value" id="gm-breach-time-value">10s</div>
+          </div>
+        </div>
+      </div>
       <div class="gm-breach-status-row">
         <div class="gm-breach-status" id="gm-breach-status">PENDING</div>
         <div class="gm-breach-timer" id="gm-breach-timer">13.0s</div>
       </div>
+      <div class="gm-roll-source" id="gm-breach-objective">DIRECT EXIT ROUTE</div>
       <div class="gm-breach-progress">
         <span class="gm-breach-progress-fill" id="gm-breach-progress-fill"></span>
       </div>
       <div class="gm-breach-terminal" id="gm-breach-terminal"></div>
       <div class="gm-modal-btns">
+        <button class="gm-btn" type="button" id="gm-breach-launch" hidden>SEND BREACH</button>
         <button class="gm-btn gm-btn-muted" type="button" id="gm-breach-cancel">CANCEL BREACH</button>
         <button class="gm-btn" type="button" id="gm-breach-close">CLOSE</button>
       </div>
@@ -442,11 +486,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
-  <script src="functions/firebase-sync.js?v=20260423b"></script>
-<script src="functions/gm.js?v=20260426g"></script>
-  <script src="functions/gm-breach.js?v=20260423a"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
+  <script src="functions/firebase-sync.js?v=20260501b"></script>
+<script src="functions/gm.js?v=20260501b"></script>
+  <script src="functions/gm-breach.js?v=20260427e"></script>
 <script src="functions/gm-action-play.js?v=20260426b"></script>
-  <script src="functions/gm-npc-tabs.js?v=20260426b"></script>
+  <script src="functions/gm-npc-tabs.js?v=20260427b"></script>
   <script src="functions/gm-facedown.js?v=20260416d"></script>
 </body>
 </html>

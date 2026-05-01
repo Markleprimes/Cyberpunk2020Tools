@@ -12,7 +12,9 @@ const DOSSIER_ROLE_KEYS = {
   nomad: 'nomad',
   rockerboy: 'rockerboy',
   rocker: 'rockerboy',
-  hobo: 'hobo'
+  hobo: 'hobo',
+  corpo: 'corpo',
+  corporate: 'corpo'
 };
 
 const DOSSIER_ROLE_LABELS = {
@@ -25,7 +27,8 @@ const DOSSIER_ROLE_LABELS = {
   cop: 'Cop',
   nomad: 'Nomad',
   rockerboy: 'Rockerboy',
-  hobo: 'Hobo'
+  hobo: 'Hobo',
+  corpo: 'Corpo'
 };
 
 function getDossierRoleLogoPath(key) {

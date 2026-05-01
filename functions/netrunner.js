@@ -1,22 +1,9 @@
 /* NETRUNNER DECK // GRID BREACH */
 
-const NR_MODE_TIERS = {
-  easy: [1, 3],
-  medium: [4, 6],
-  hard: [7, 10]
-};
-
-const NR_TIER_CONFIGS = {
-  1: { size: 8, extraOpenings: 10, timeLimit: 10, attempts: 8 },
-  2: { size: 8, extraOpenings: 8, timeLimit: 10, minPath: 14, maxOpen: 48, attempts: 12 },
-  3: { size: 8, extraOpenings: 6, timeLimit: 10, minPath: 18, maxOpen: 44, attempts: 14 },
-  4: { size: 12, extraOpenings: 10, timeLimit: 10, minPath: 20, maxOpen: 92, attempts: 14 },
-  5: { size: 12, extraOpenings: 8, timeLimit: 10, minPath: 26, maxOpen: 86, attempts: 18 },
-  6: { size: 12, extraOpenings: 6, timeLimit: 10, stairPatterns: 1, minPath: 32, maxOpen: 80, attempts: 22 },
-  7: { size: 16, extraOpenings: 6, timeLimit: 10, stairPatterns: 1, minPath: 36, maxOpen: 136, attempts: 24 },
-  8: { size: 16, extraOpenings: 5, timeLimit: 10, stairPatterns: 2, minPath: 40, maxOpen: 130, attempts: 28 },
-  9: { size: 16, extraOpenings: 4, timeLimit: 10, stairPatterns: 3, minPath: 46, maxOpen: 124, attempts: 32 },
-  10: { size: 16, extraOpenings: 3, timeLimit: 10, stairPatterns: 4, minPath: 52, maxOpen: 118, attempts: 36 }
+const NR_MODE_CONFIGS = {
+  easy: { size: 8, extraOpenings: 8, timeLimit: 10, minPath: 14, maxOpen: 54, attempts: 12, checkpoints: 0, stairPatterns: 0 },
+  medium: { size: 12, extraOpenings: 14, timeLimit: 10, minPath: 24, maxOpen: 104, attempts: 18, checkpoints: 1, stairPatterns: 0 },
+  hard: { size: 16, extraOpenings: 12, timeLimit: 10, minPath: 34, maxOpen: 156, attempts: 24, checkpoints: 2, stairPatterns: 1 }
 };
 
 const NR_COLORS = {
@@ -31,6 +18,8 @@ const NR_COLORS = {
   playerGlow: 'rgba(0,217,139,0.65)',
   goal: '#ff4d6d',
   goalGlow: 'rgba(255,77,109,0.65)',
+  checkpoint: '#ffb14a',
+  checkpointGlow: 'rgba(255,177,74,0.68)',
   border: '#6b111d'
 };
 
@@ -76,28 +65,25 @@ const NR_FAIL_LINE = 'CMD.DeckTerminal///BREACH///>FAIL';
 
 let nrDifficulty = 'easy';
 let nrGrid = [];
-let nrSize = 5;
+let nrSize = 8;
 let nrPlayer = { x: 0, y: 0 };
-let nrGoal = { x: 4, y: 4 };
+let nrGoal = { x: 7, y: 7 };
 let nrVisited = [];
 let nrTrail = [];
 let nrComplete = false;
 let nrFailed = false;
-let nrCountdown = 60;
+let nrCountdown = 10;
 let nrTimerHandle = null;
 let nrTerminalHandle = null;
 let nrStarted = false;
 let nrBreachAudio = null;
 let nrMoveAudio = null;
-let nrTier = 1;
+let nrCheckpoints = [];
+let nrCheckpointIndex = 0;
 const NR_AUDIO_OUTRO_TIME = 10.15;
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
-}
-
-function randomInt(min, max) {
-  return Math.floor(Math.random() * ((max - min) + 1)) + min;
 }
 
 function shuffle(list) {
@@ -118,7 +104,7 @@ function coordKey(x, y) {
 }
 
 function setDifficulty(level) {
-  if (!NR_MODE_TIERS[level]) return;
+  if (!NR_MODE_CONFIGS[level]) return;
   nrStarted = true;
   nrDifficulty = level;
   ['easy', 'medium', 'hard'].forEach((key) => {
@@ -129,24 +115,10 @@ function setDifficulty(level) {
   generateMaze();
 }
 
-function rollTierForMode(mode) {
-  const range = NR_MODE_TIERS[mode] || NR_MODE_TIERS.easy;
-  return randomInt(range[0], range[1]);
-}
-
-function getTierConfig(tier) {
-  return { ...NR_TIER_CONFIGS[tier] };
-}
-
 function buildPlayableGrid(size, extraOpenings) {
   const grid = Array.from({ length: size }, () => Array(size).fill(1));
   const stack = [{ x: 0, y: 0 }];
-  const dirs = [
-    [0, -2],
-    [2, 0],
-    [0, 2],
-    [-2, 0]
-  ];
+  const dirs = [[0, -2], [2, 0], [0, 2], [-2, 0]];
 
   grid[0][0] = 0;
 
@@ -182,7 +154,7 @@ function buildPlayableGrid(size, extraOpenings) {
 
   let opened = 0;
   let attempts = 0;
-  while (opened < extraOpenings && attempts < 120) {
+  while (opened < extraOpenings && attempts < 180) {
     attempts += 1;
     const x = Math.floor(Math.random() * size);
     const y = Math.floor(Math.random() * size);
@@ -209,12 +181,7 @@ function findPath(grid) {
   const queue = [{ x: 0, y: 0 }];
   const visited = new Set([coordKey(0, 0)]);
   const parents = new Map();
-  const moves = [
-    [0, -1],
-    [1, 0],
-    [0, 1],
-    [-1, 0]
-  ];
+  const moves = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
   while (queue.length) {
     const current = queue.shift();
@@ -246,10 +213,7 @@ function findPath(grid) {
 
 function buildStairCandidates(size) {
   const candidates = [];
-  const stepRuns = [
-    { dx: 1, dy: 1 },
-    { dx: -1, dy: 1 }
-  ];
+  const stepRuns = [{ dx: 1, dy: 1 }, { dx: -1, dy: 1 }];
 
   for (let y = 1; y < size - 3; y += 2) {
     for (let x = 1; x < size - 3; x += 2) {
@@ -316,11 +280,25 @@ function countOpenCells(grid) {
   return grid.reduce((total, row) => total + row.filter((cell) => cell === 0).length, 0);
 }
 
+function pickCheckpoints(path, checkpointCount) {
+  if (!checkpointCount) return [];
+  const nodes = [];
+  const usableStart = 3;
+  const usableEnd = Math.max(usableStart + 1, path.length - 4);
+  for (let index = 1; index <= checkpointCount; index += 1) {
+    const slot = Math.round((usableEnd * index) / (checkpointCount + 1));
+    const clamped = Math.min(Math.max(usableStart, slot), path.length - 4);
+    nodes.push({ ...path[clamped] });
+  }
+  return nodes.filter((node, index, list) => list.findIndex((other) => other.x === node.x && other.y === node.y) === index);
+}
+
 function buildRankedGrid(config) {
   let bestGrid = null;
+  let bestPath = [];
   let bestScore = -Infinity;
 
-  for (let attempt = 0; attempt < (config.attempts || 20); attempt += 1) {
+  for (let attempt = 0; attempt < (config.attempts || 16); attempt += 1) {
     let grid = buildPlayableGrid(config.size, config.extraOpenings);
     if (config.stairPatterns) {
       grid = applyStairPatterns(grid, config.stairPatterns);
@@ -330,28 +308,52 @@ function buildRankedGrid(config) {
     if (!path.length) continue;
 
     const openCells = countOpenCells(grid);
-    const targetPath = config.minPath || 0;
-    const targetOpen = config.maxOpen ?? Number.POSITIVE_INFINITY;
-    const pathDelta = Math.abs(path.length - targetPath);
-    const openDelta = Math.abs(openCells - targetOpen);
-    const score = (path.length >= targetPath ? 60 : 0) + (openCells <= targetOpen ? 24 : 0) - pathDelta - (openDelta * 0.6);
-
-    if (path.length >= targetPath && openCells <= targetOpen) {
-      return grid;
-    }
+    const pathDelta = Math.abs(path.length - config.minPath);
+    const openDelta = Math.abs(openCells - config.maxOpen);
+    const score = (path.length >= config.minPath ? 70 : 0) + (openCells <= config.maxOpen ? 28 : 0) - pathDelta - (openDelta * 0.6);
 
     if (score > bestScore) {
       bestScore = score;
       bestGrid = grid;
+      bestPath = path;
     }
+
+    if (path.length >= config.minPath && openCells <= config.maxOpen) break;
   }
 
-  return bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
+  return {
+    grid: bestGrid || buildPlayableGrid(config.size, config.extraOpenings),
+    path: bestPath
+  };
+}
+
+function updateObjectiveReadout() {
+  const node = getEl('nr-target');
+  if (!node) return;
+  if (nrCheckpointIndex < nrCheckpoints.length) {
+    node.textContent = `TARGET // CHECKPOINT ${nrCheckpointIndex + 1}`;
+    return;
+  }
+  node.textContent = 'TARGET // EXIT';
+}
+
+function updateRulesCopy(config) {
+  const node = getEl('nr-rules');
+  if (!node) return;
+  const checkpointLine = config.checkpoints
+    ? `${config.checkpoints} yellow checkpoint${config.checkpoints > 1 ? 's' : ''} required before red.`
+    : 'No checkpoint gate on this route.';
+  node.innerHTML = [
+    `<div class="nr-rule-copy">${config.timeLimit} seconds per breach.</div>`,
+    '<div class="nr-rule-copy">Hit a wall and you die.</div>',
+    '<div class="nr-rule-copy">Touch your own path and you die.</div>',
+    `<div class="nr-rule-copy">${checkpointLine}</div>`,
+    '<div class="nr-rule-copy">Touch red before checkpoints are complete and you die.</div>'
+  ].join('');
 }
 
 function generateMaze() {
-  nrTier = rollTierForMode(nrDifficulty);
-  const config = getTierConfig(nrTier);
+  const config = { ...(NR_MODE_CONFIGS[nrDifficulty] || NR_MODE_CONFIGS.easy) };
   nrSize = config.size;
   nrPlayer = { x: 0, y: 0 };
   nrGoal = { x: nrSize - 1, y: nrSize - 1 };
@@ -361,11 +363,15 @@ function generateMaze() {
   nrComplete = false;
   nrFailed = false;
   nrCountdown = config.timeLimit;
-  nrGrid = (config.minPath || config.maxOpen || config.stairPatterns)
-    ? buildRankedGrid(config)
-    : buildPlayableGrid(nrSize, config.extraOpenings);
+  nrCheckpointIndex = 0;
+  const ranked = buildRankedGrid(config);
+  nrGrid = ranked.grid;
+  const path = ranked.path.length ? ranked.path : findPath(nrGrid);
+  nrCheckpoints = pickCheckpoints(path, config.checkpoints || 0);
 
   clearResultOverlay();
+  updateObjectiveReadout();
+  updateRulesCopy(config);
   restartTimer();
   restartTerminalLoop();
   drawGrid();
@@ -411,10 +417,7 @@ function startBreachMusic() {
   try {
     nrBreachAudio.currentTime = 0;
   } catch (_err) {}
-  const playPromise = nrBreachAudio.play();
-  if (playPromise && typeof playPromise.catch === 'function') {
-    playPromise.catch(() => {});
-  }
+  nrBreachAudio.play().catch(() => {});
 }
 
 function jumpToBreachOutro() {
@@ -422,10 +425,7 @@ function jumpToBreachOutro() {
   try {
     nrBreachAudio.currentTime = NR_AUDIO_OUTRO_TIME;
   } catch (_err) {}
-  const playPromise = nrBreachAudio.play();
-  if (playPromise && typeof playPromise.catch === 'function') {
-    playPromise.catch(() => {});
-  }
+  nrBreachAudio.play().catch(() => {});
 }
 
 function playMoveBeep() {
@@ -437,10 +437,7 @@ function playMoveBeep() {
   try {
     nrMoveAudio.currentTime = 0;
   } catch (_err) {}
-  const playPromise = nrMoveAudio.play();
-  if (playPromise && typeof playPromise.catch === 'function') {
-    playPromise.catch(() => {});
-  }
+  nrMoveAudio.play().catch(() => {});
 }
 
 function showIdleOverlay() {
@@ -496,10 +493,13 @@ function renderIdleState() {
   nrGrid = [];
   nrTrail = [];
   nrVisited = [];
+  nrCheckpoints = [];
+  nrCheckpointIndex = 0;
   nrComplete = false;
   nrFailed = false;
   nrCountdown = 0;
   updateTimerDisplay();
+  updateObjectiveReadout();
   drawIdleCanvas();
   showIdleOverlay();
   renderIdleTerminal();
@@ -588,11 +588,13 @@ function drawGrid() {
       const isBlocked = nrGrid[y][x] === 1;
       const isGoal = nrGoal.x === x && nrGoal.y === y;
       const isPlayer = nrPlayer.x === x && nrPlayer.y === y;
+      const checkpointIndex = nrCheckpoints.findIndex((point) => point.x === x && point.y === y);
+      const isCheckpoint = checkpointIndex >= nrCheckpointIndex;
 
       ctx.fillStyle = isBlocked ? NR_COLORS.blocked : NR_COLORS.open;
       ctx.fillRect(px + 2, py + 2, cell - 4, cell - 4);
 
-      if (nrVisited[y][x] && !isBlocked && !isGoal && !isPlayer) {
+      if (nrVisited[y][x] && !isBlocked && !isGoal && !isPlayer && !isCheckpoint) {
         ctx.fillStyle = NR_COLORS.visited;
         ctx.fillRect(px + 5, py + 5, cell - 10, cell - 10);
       }
@@ -624,6 +626,10 @@ function drawGrid() {
     ctx.stroke();
   }
 
+  nrCheckpoints.forEach((point, index) => {
+    if (index < nrCheckpointIndex) return;
+    drawNode(ctx, point.x, point.y, cell, NR_COLORS.checkpoint, NR_COLORS.checkpointGlow);
+  });
   drawNode(ctx, nrGoal.x, nrGoal.y, cell, NR_COLORS.goal, NR_COLORS.goalGlow);
   drawNode(ctx, nrPlayer.x, nrPlayer.y, cell, NR_COLORS.player, NR_COLORS.playerGlow);
 
@@ -653,6 +659,27 @@ function drawNode(ctx, x, y, cell, color, glow) {
   ctx.beginPath();
   ctx.arc(cx, cy, Math.max(2, radius * 0.28), 0, Math.PI * 2);
   ctx.fill();
+}
+
+function advanceCheckpointIfNeeded(x, y) {
+  if (nrCheckpointIndex >= nrCheckpoints.length) return false;
+  const checkpoint = nrCheckpoints[nrCheckpointIndex];
+  if (checkpoint.x !== x || checkpoint.y !== y) return false;
+  nrCheckpointIndex += 1;
+  updateObjectiveReadout();
+  appendTerminalLine(`CMD.Checkpoint///>${nrCheckpointIndex}/${nrCheckpoints.length}`, 'success');
+  const overlay = getEl('nr-maze-overlay');
+  if (overlay) {
+    overlay.innerHTML = '';
+    const message = document.createElement('div');
+    message.className = 'nr-result-msg idle';
+    message.innerHTML = `///CHECKPOINT<br>${nrCheckpointIndex}///`;
+    overlay.appendChild(message);
+    setTimeout(() => {
+      if (!nrFailed && !nrComplete) overlay.innerHTML = '';
+    }, 500);
+  }
+  return true;
 }
 
 function movePlayer(direction) {
@@ -686,8 +713,13 @@ function movePlayer(direction) {
   nrVisited[nextY][nextX] = true;
   nrTrail.push({ x: nextX, y: nextY });
   playMoveBeep();
+  advanceCheckpointIfNeeded(nextX, nextY);
 
   if (nextX === nrGoal.x && nextY === nrGoal.y) {
+    if (nrCheckpointIndex < nrCheckpoints.length) {
+      failRun('TARGET.lock///>CHECKPOINT-MISSING');
+      return;
+    }
     nrComplete = true;
     clearInterval(nrTimerHandle);
     clearInterval(nrTerminalHandle);
@@ -725,6 +757,8 @@ function initNetrunner() {
     else renderIdleState();
   });
 
+  updateObjectiveReadout();
+  updateRulesCopy(NR_MODE_CONFIGS.easy);
   updateTimerDisplay();
   renderIdleState();
 }

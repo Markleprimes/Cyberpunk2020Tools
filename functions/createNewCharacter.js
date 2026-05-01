@@ -8,7 +8,8 @@ const CP2020_MAIN_ROLES = [
   'Cop',
   'Nomad',
   'Rockerboy',
-  'Hobo'
+  'Hobo',
+  'Corpo'
 ];
 
 const CP2020_ROLE_KEYS = {
@@ -25,7 +26,9 @@ const CP2020_ROLE_KEYS = {
   nomad: 'nomad',
   rockerboy: 'rockerboy',
   rocker: 'rockerboy',
-  hobo: 'hobo'
+  hobo: 'hobo',
+  corpo: 'corpo',
+  corporate: 'corpo'
 };
 
 function normalizeRoleLookup(value) {

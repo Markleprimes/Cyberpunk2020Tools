@@ -107,6 +107,12 @@ function isGMNpcLiteMode() {
   return IS_GM_NPC_LITE_MODE;
 }
 
+function updateDossierAuthDisplay(user) {
+  const node = getById('dossier-auth-tag');
+  if (!node) return;
+  node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
+}
+
 function renderEmbeddedNpcLiteHeader() {
   if (!isGMNpcLiteMode()) return;
   const nameNode = getById('npc-lite-name');
@@ -1526,6 +1532,9 @@ window.getEffectiveArmorValue = getEffectiveArmorValue;
 window.getEffectiveArmorBonus = getEffectiveArmorBonus;
 
 renderCombatSummaryDrawer();
+window.initFirebaseRealtime?.();
+updateDossierAuthDisplay(window.getFirebaseCurrentUser?.() || null);
+window.watchFirebaseAuthState?.((user) => updateDossierAuthDisplay(user));
 
 function resetSheet() {
   showModal('CLEAR DOSSIER?', 'Discard current character and reset the dossier to blank values?', () => {

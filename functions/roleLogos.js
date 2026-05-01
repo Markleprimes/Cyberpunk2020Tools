@@ -13,7 +13,9 @@
     nomad: 'nomad',
     rockerboy: 'rockerboy',
     rocker: 'rockerboy',
-    hobo: 'hobo'
+    hobo: 'hobo',
+    corpo: 'corpo',
+    corporate: 'corpo'
   };
 
   const ROLE_LABELS = {
@@ -26,7 +28,8 @@
     cop: 'Cop',
     nomad: 'Nomad',
     rockerboy: 'Rockerboy',
-    hobo: 'Hobo'
+    hobo: 'Hobo',
+    corpo: 'Corpo'
   };
 
   let isRendering = false;
