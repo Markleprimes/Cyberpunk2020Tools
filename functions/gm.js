@@ -49,6 +49,10 @@
   let gmInventoryTargetMode = 'remote';
   let gmInventoryEditItemId = '';
   let gmInventoryEditOriginalCategory = '';
+  let gmNpcAccountAutosaveTimer = null;
+  let gmNpcAccountLoadedUid = '';
+  let gmNpcAccountLastSavedHash = '';
+  let gmNpcAccountSuppressSave = false;
 
   const gmRollStateByClient = {};
   const gmDelayedRollsByClient = {};
@@ -59,6 +63,92 @@
   const GM_DEFAULT_STATS = ['INT', 'REF', 'COOL', 'TECH', 'ATTR', 'LUCK', 'MA', 'BODY', 'EMP'];
   const GM_DEFAULT_NPC_SKILLS = ['Awareness', 'Athletics', 'Stealth', 'Handgun', 'Brawling', 'Melee'];
   const GM_CAREER_OPTIONS = ['NPC', 'Solo', 'Netrunner', 'Techie', 'Medtech', 'Fixer', 'Media', 'Cop', 'Nomad', 'Rockerboy', 'Hobo', 'Corpo'];
+
+  function getGMNpcAccountRef(uid) {
+    const rootRef = window.getUserRootRef?.(uid);
+    if (!rootRef) return null;
+    return rootRef.child('gmNpcTabs');
+  }
+
+  function buildGMLocalNpcAccountPayload() {
+    return gmLocalNpcs.map((entry) => JSON.parse(JSON.stringify(entry)));
+  }
+
+  function getGMLocalNpcAccountHash() {
+    try {
+      return JSON.stringify(buildGMLocalNpcAccountPayload());
+    } catch (error) {
+      console.warn('Failed to serialize GM local NPC roster.', error);
+      return '';
+    }
+  }
+
+  function setGMLocalNpcAccountBaseline() {
+    gmNpcAccountLastSavedHash = getGMLocalNpcAccountHash();
+  }
+
+  async function saveGMLocalNpcRosterToAccount(trigger = 'AUTO') {
+    const user = window.getFirebaseCurrentUser?.();
+    if (!user?.uid) return null;
+    const ref = getGMNpcAccountRef(user.uid);
+    if (!ref) return null;
+    const payload = window.sanitizeFirebaseValue?.(buildGMLocalNpcAccountPayload()) || buildGMLocalNpcAccountPayload();
+    const payloadHash = JSON.stringify(payload);
+    if (trigger !== 'MANUAL' && payloadHash === gmNpcAccountLastSavedHash) return null;
+    await ref.set({
+      tabs: payload,
+      updatedAt: Date.now()
+    });
+    gmNpcAccountLastSavedHash = payloadHash;
+    gmNpcAccountLoadedUid = user.uid;
+    return true;
+  }
+
+  function scheduleGMLocalNpcAccountSave() {
+    if (gmNpcAccountSuppressSave) return;
+    const user = window.getFirebaseCurrentUser?.();
+    if (!user?.uid) return;
+    clearTimeout(gmNpcAccountAutosaveTimer);
+    gmNpcAccountAutosaveTimer = setTimeout(() => {
+      saveGMLocalNpcRosterToAccount('AUTO').catch((error) => {
+        console.warn('Failed to autosave GM NPC tabs.', error);
+      });
+    }, 900);
+  }
+
+  async function loadGMLocalNpcRosterFromAccount(user) {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) return;
+    const ref = getGMNpcAccountRef(uid);
+    if (!ref) return;
+    try {
+      const snapshot = await ref.get();
+      const raw = snapshot.val() || {};
+      const savedTabs = Array.isArray(raw?.tabs)
+        ? raw.tabs
+        : Array.isArray(raw)
+          ? raw
+          : [];
+      gmNpcAccountSuppressSave = true;
+      try {
+        gmLocalNpcs = (window.desanitizeFirebaseValue?.(savedTabs) || savedTabs).map((entry) => JSON.parse(JSON.stringify(entry)));
+        gmLocalNpcSeed = Math.max(gmLocalNpcSeed, gmLocalNpcs.length);
+        renderGMNpcList();
+      } finally {
+        gmNpcAccountSuppressSave = false;
+      }
+      gmNpcAccountLoadedUid = uid;
+      gmNpcAccountLastSavedHash = JSON.stringify(window.sanitizeFirebaseValue?.(gmLocalNpcs) || gmLocalNpcs);
+      if (gmLocalNpcs.length) {
+        setGMStatus(`Loaded ${gmLocalNpcs.length} saved NPC tab${gmLocalNpcs.length === 1 ? '' : 's'} from account.`);
+        setGMStatusVisual(activeRef ? 'connected' : 'pending');
+      }
+    } catch (error) {
+      console.warn('Failed to load GM NPC tabs from account.', error);
+      setGMStatus(`NPC tab load error: ${error.message || 'UNKNOWN ERROR'}`);
+      setGMStatusVisual('disconnected');
+    }
+  }
 
   function getGMNpcSyncKey(npcId) {
     return `${GM_NPC_DOSSIER_SYNC_PREFIX}${String(npcId || '').trim()}`;
@@ -2046,6 +2136,7 @@ ${damageLines}
     window.dispatchEvent(new CustomEvent('gm-monitor-updated', {
       detail: window.gmMonitorState
     }));
+    scheduleGMLocalNpcAccountSave();
   }
 
   function disconnectGMRoom() {
@@ -3682,8 +3773,18 @@ ${damageLines}
     });
     setGMStatusVisual('disconnected');
     window.initFirebaseRealtime?.();
-    updateGMAuthDisplay(window.getFirebaseCurrentUser?.() || null);
-    window.watchFirebaseAuthState?.((user) => updateGMAuthDisplay(user));
+    const initialGMUser = window.getFirebaseCurrentUser?.() || null;
+    updateGMAuthDisplay(initialGMUser);
+    if (initialGMUser?.uid) {
+      loadGMLocalNpcRosterFromAccount(initialGMUser);
+    }
+    window.watchFirebaseAuthState?.((user) => {
+      updateGMAuthDisplay(user);
+      const nextUid = String(user?.uid || '').trim();
+      if (!nextUid) return;
+      if (nextUid === gmNpcAccountLoadedUid) return;
+      loadGMLocalNpcRosterFromAccount(user);
+    });
 
     document.addEventListener('mouseover', (event) => {
       const control = event.target.closest('button, a, summary, select');
