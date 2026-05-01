@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Access Terminal</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="index.css?v=20260501b">
+<link rel="stylesheet" href="index.css?v=20260501c">
 </head>
 <body>
 <div class="launcher-shell">
@@ -51,6 +51,17 @@
       <a class="launcher-btn gm" id="launcher-gm-link" href="gm.html"><span class="launcher-btn-mark">&#9654;</span><span>OPEN GM PAGE</span></a>
     </section>
   </main>
+
+  <section class="launcher-saves" id="launcher-saves-panel" hidden>
+    <div class="launcher-readme-head launcher-saves-head">
+      <div class="launcher-kicker">ACCOUNT DOSSIERS</div>
+      <h2>SAVED CHARACTERS</h2>
+      <p class="launcher-readme-copy">Characters saved to this signed-in account will appear here. Select one to boot directly into the dossier.</p>
+    </div>
+    <div class="launcher-saves-list" id="launcher-saves-list">
+      <div class="launcher-saves-empty" id="launcher-saves-empty">No saved characters in this account yet.</div>
+    </div>
+  </section>
 
   <section class="launcher-readme">
     <div class="launcher-readme-head">
@@ -292,10 +303,11 @@ Banner image is optional.</pre>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
-<script src="functions/firebase-sync.js?v=20260501b"></script>
+<script src="functions/firebase-sync.js?v=20260501d"></script>
 <script src="functions/upload-download.js?v=20260415f"></script>
 <script src="functions/createNewCharacter.js?v=20260427a"></script>
 <script src="functions/index-transition.js?v=20260415e"></script>
-<script src="functions/index.js?v=20260501c"></script>
+<script src="functions/account-characters.js?v=20260501b"></script>
+<script src="functions/index.js?v=20260501e"></script>
 </body>
 </html>

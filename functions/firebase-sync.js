@@ -103,6 +103,19 @@
     return db.ref(`rooms/${cleanRoomId}`);
   }
 
+  function getUserRootRef(uid) {
+    const db = window.cp2020Database || initFirebaseRealtime();
+    const cleanUid = String(uid || getFirebaseCurrentUser()?.uid || '').trim();
+    if (!db || !cleanUid) return null;
+    return db.ref(`users/${cleanUid}`);
+  }
+
+  function getUserCharactersRef(uid) {
+    const rootRef = getUserRootRef(uid);
+    if (!rootRef) return null;
+    return rootRef.child('characters');
+  }
+
   function getPlayerPromptRef(roomId, clientId = getSyncClientId()) {
     const roomRef = getSyncRoomRef(roomId);
     if (!roomRef) return null;
@@ -409,6 +422,8 @@
   window.watchFirebaseAuthState = watchFirebaseAuthState;
   window.getFirebaseCurrentUser = getFirebaseCurrentUser;
   window.getSyncRoomRef = getSyncRoomRef;
+  window.getUserRootRef = getUserRootRef;
+  window.getUserCharactersRef = getUserCharactersRef;
   window.getPlayerPromptRef = getPlayerPromptRef;
   window.getPlayerEffectsRef = getPlayerEffectsRef;
   window.getPlayerCommandsRef = getPlayerCommandsRef;

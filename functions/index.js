@@ -27,6 +27,8 @@ function clearLauncherStatus() {
   launcherStatus.textContent = '';
   launcherStatus.classList.remove('show');
 }
+window.setLauncherStatus = setLauncherStatus;
+window.clearLauncherStatus = clearLauncherStatus;
 
 function openLauncherModal() {
   clearLauncherStatus();
