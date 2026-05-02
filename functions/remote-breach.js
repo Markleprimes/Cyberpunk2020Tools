@@ -1,8 +1,8 @@
 (function initRemoteBreachModule() {
   const MODE_CONFIGS = {
-    easy: { size: 8, extraOpenings: 10, minPath: 13, maxOpen: 58, attempts: 14, checkpoints: 1, stairPatterns: 0 },
-    medium: { size: 12, extraOpenings: 18, minPath: 22, maxOpen: 116, attempts: 20, checkpoints: 1, stairPatterns: 0 },
-    hard: { size: 16, extraOpenings: 28, minPath: 30, maxOpen: 182, attempts: 28, checkpoints: 2, stairPatterns: 0 }
+    easy: { size: 8, extraOpenings: 8, minPath: 14, maxOpen: 54, attempts: 14, checkpoints: 1, stairPatterns: 0, minTurns: 4 },
+    medium: { size: 12, extraOpenings: 13, minPath: 24, maxOpen: 100, attempts: 22, checkpoints: 1, stairPatterns: 0, minTurns: 9 },
+    hard: { size: 16, extraOpenings: 16, minPath: 37, maxOpen: 146, attempts: 34, checkpoints: 2, stairPatterns: 1, minTurns: 17 }
   };
 
   const COLORS = {
@@ -118,28 +118,29 @@
     const config = { ...base };
 
     if (pressure === 'rush') {
-      config.extraOpenings += config.size <= 8 ? 2 : config.size <= 12 ? 4 : 6;
-      config.maxOpen += config.size <= 8 ? 4 : config.size <= 12 ? 10 : 14;
-      config.minPath = Math.max(10, config.minPath - (config.size <= 8 ? 1 : 3));
+      config.extraOpenings += config.size <= 8 ? 1 : config.size <= 12 ? 2 : 4;
+      config.maxOpen += config.size <= 8 ? 2 : config.size <= 12 ? 6 : 10;
+      config.minPath = Math.max(10, config.minPath - (config.size <= 8 ? 1 : 2));
+      config.minTurns = Math.max(2, config.minTurns - (config.size <= 8 ? 1 : 2));
       config.stairPatterns = Math.max(0, (config.stairPatterns || 0) - 1);
     } else if (pressure === 'steady') {
-      config.extraOpenings += config.size <= 8 ? 1 : 2;
-      config.maxOpen += config.size <= 8 ? 2 : 6;
+      config.extraOpenings += 1;
+      config.maxOpen += config.size <= 8 ? 1 : 4;
     } else if (pressure === 'thoughtful') {
-      config.extraOpenings = Math.max(6, config.extraOpenings - 1);
+      config.extraOpenings = Math.max(6, config.extraOpenings - (config.size >= 16 ? 1 : 0));
       config.minPath += config.size <= 8 ? 0 : 1;
+      config.minTurns += 1;
       config.stairPatterns += config.size >= 16 ? 1 : 0;
     } else if (pressure === 'puzzle') {
-      config.extraOpenings = Math.max(6, config.extraOpenings - (config.size <= 8 ? 0 : config.size <= 12 ? 2 : 4));
-      config.maxOpen = Math.max(config.minPath + 10, config.maxOpen - (config.size <= 8 ? 0 : config.size <= 12 ? 6 : 14));
+      config.extraOpenings = Math.max(6, config.extraOpenings - (config.size <= 8 ? 0 : config.size <= 12 ? 1 : 2));
+      config.maxOpen = Math.max(config.minPath + 10, config.maxOpen - (config.size <= 8 ? 0 : config.size <= 12 ? 4 : 10));
       config.minPath += config.size <= 8 ? 0 : config.size <= 12 ? 2 : 3;
+      config.minTurns += config.size <= 8 ? 0 : config.size <= 12 ? 2 : 4;
       config.stairPatterns += config.size >= 12 ? 1 : 0;
     }
 
     if (difficulty === 'easy') {
       config.stairPatterns = 0;
-      config.extraOpenings += 1;
-      config.maxOpen += 2;
     }
 
     if (difficulty === 'medium') {
@@ -153,6 +154,21 @@
     }
 
     return config;
+  }
+
+  function countPathTurns(path) {
+    if (!Array.isArray(path) || path.length < 3) return 0;
+    let turns = 0;
+    let lastDx = path[1].x - path[0].x;
+    let lastDy = path[1].y - path[0].y;
+    for (let index = 2; index < path.length; index += 1) {
+      const dx = path[index].x - path[index - 1].x;
+      const dy = path[index].y - path[index - 1].y;
+      if (dx !== lastDx || dy !== lastDy) turns += 1;
+      lastDx = dx;
+      lastDy = dy;
+    }
+    return turns;
   }
 
   function buildRandomTerminalLine() {
@@ -586,15 +602,22 @@
       const path = findPath(grid);
       if (!path.length) continue;
       const openCells = countOpenCells(grid);
+      const turnCount = countPathTurns(path);
       const pathDelta = Math.abs(path.length - config.minPath);
       const openDelta = Math.abs(openCells - config.maxOpen);
-      const score = (path.length >= config.minPath ? 70 : 0) + (openCells <= config.maxOpen ? 28 : 0) - pathDelta - (openDelta * 0.6);
+      const turnDelta = Math.abs(turnCount - (config.minTurns || 0));
+      const score = (path.length >= config.minPath ? 70 : 0)
+        + (openCells <= config.maxOpen ? 28 : 0)
+        + (turnCount >= (config.minTurns || 0) ? 34 : 0)
+        - pathDelta
+        - (openDelta * 0.6)
+        - (turnDelta * 1.4);
       if (score > bestScore) {
         bestScore = score;
         bestGrid = grid;
         bestPath = path;
       }
-      if (path.length >= config.minPath && openCells <= config.maxOpen) break;
+      if (path.length >= config.minPath && openCells <= config.maxOpen && turnCount >= (config.minTurns || 0)) break;
     }
 
     state.grid = bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
