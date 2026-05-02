@@ -1,6 +1,6 @@
 (function initGMBreachModule() {
   const TIME_OPTIONS = [8, 10, 12, 15, 20];
-  const CHECKPOINTS_BY_MODE = { easy: 0, medium: 1, hard: 2 };
+  const CHECKPOINTS_BY_MODE = { easy: 1, medium: 1, hard: 2 };
   const BOOT_LINES = [
     'CMD.DeckTerminal///REMOTE///>OVERRIDE',
     'CMD.Buffer///Daemon.BreachData///',
@@ -81,6 +81,17 @@
     const label = el('gm-breach-time-value');
     if (label) label.textContent = `${value}s`;
     state.timeLimit = value;
+  }
+
+  function getCheckpointCountForMode(mode) {
+    return CHECKPOINTS_BY_MODE[String(mode || '').toLowerCase()] || 0;
+  }
+
+  function getObjectiveCopy(mode) {
+    const checkpointCount = getCheckpointCountForMode(mode);
+    return checkpointCount
+      ? `${checkpointCount} CHECKPOINT${checkpointCount > 1 ? 'S' : ''} BEFORE EXIT`
+      : 'DIRECT EXIT ROUTE';
   }
 
   function setGMStatus(message, mode = '') {
@@ -282,11 +293,7 @@
     if (timer) timer.textContent = `${state.timeLimit.toFixed(1)}s`;
     const objective = el('gm-breach-objective');
     if (objective) {
-      objective.textContent = state.difficulty === 'hard'
-        ? '2 CHECKPOINTS BEFORE EXIT'
-        : state.difficulty === 'medium'
-          ? '1 CHECKPOINT BEFORE EXIT'
-          : 'DIRECT EXIT ROUTE';
+      objective.textContent = getObjectiveCopy(state.difficulty);
     }
     const slider = el('gm-breach-time-slider');
     if (slider) slider.value = String(sliderIndexForTime(state.timeLimit));
@@ -313,7 +320,7 @@
       gmStartedAt: Date.now(),
       reactionMs: 0,
       timeLimit: state.timeLimit,
-      checkpointCount: CHECKPOINTS_BY_MODE[state.difficulty] || 0
+      checkpointCount: getCheckpointCountForMode(state.difficulty)
     };
 
     try {

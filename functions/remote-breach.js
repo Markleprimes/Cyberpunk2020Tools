@@ -1,8 +1,8 @@
 (function initRemoteBreachModule() {
   const MODE_CONFIGS = {
-    easy: { size: 8, extraOpenings: 8, minPath: 14, maxOpen: 54, attempts: 12, checkpoints: 0, stairPatterns: 0 },
-    medium: { size: 12, extraOpenings: 14, minPath: 24, maxOpen: 104, attempts: 18, checkpoints: 1, stairPatterns: 0 },
-    hard: { size: 16, extraOpenings: 12, minPath: 34, maxOpen: 156, attempts: 24, checkpoints: 2, stairPatterns: 1 }
+    easy: { size: 8, extraOpenings: 10, minPath: 13, maxOpen: 58, attempts: 14, checkpoints: 1, stairPatterns: 0 },
+    medium: { size: 12, extraOpenings: 18, minPath: 22, maxOpen: 116, attempts: 20, checkpoints: 1, stairPatterns: 0 },
+    hard: { size: 16, extraOpenings: 28, minPath: 30, maxOpen: 182, attempts: 28, checkpoints: 2, stairPatterns: 0 }
   };
 
   const COLORS = {
@@ -97,6 +97,62 @@
 
   function coordKey(x, y) {
     return `${x},${y}`;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function getTimerPressure(timeLimit) {
+    const limit = Number(timeLimit || 10);
+    if (limit <= 8) return 'rush';
+    if (limit <= 10) return 'standard';
+    if (limit <= 12) return 'steady';
+    if (limit <= 15) return 'thoughtful';
+    return 'puzzle';
+  }
+
+  function resolveModeConfig(difficulty, timeLimit) {
+    const base = { ...(MODE_CONFIGS[difficulty] || MODE_CONFIGS.easy) };
+    const pressure = getTimerPressure(timeLimit);
+    const config = { ...base };
+
+    if (pressure === 'rush') {
+      config.extraOpenings += config.size <= 8 ? 2 : config.size <= 12 ? 4 : 6;
+      config.maxOpen += config.size <= 8 ? 4 : config.size <= 12 ? 10 : 14;
+      config.minPath = Math.max(10, config.minPath - (config.size <= 8 ? 1 : 3));
+      config.stairPatterns = Math.max(0, (config.stairPatterns || 0) - 1);
+    } else if (pressure === 'steady') {
+      config.extraOpenings += config.size <= 8 ? 1 : 2;
+      config.maxOpen += config.size <= 8 ? 2 : 6;
+    } else if (pressure === 'thoughtful') {
+      config.extraOpenings = Math.max(6, config.extraOpenings - 1);
+      config.minPath += config.size <= 8 ? 0 : 1;
+      config.stairPatterns += config.size >= 16 ? 1 : 0;
+    } else if (pressure === 'puzzle') {
+      config.extraOpenings = Math.max(6, config.extraOpenings - (config.size <= 8 ? 0 : config.size <= 12 ? 2 : 4));
+      config.maxOpen = Math.max(config.minPath + 10, config.maxOpen - (config.size <= 8 ? 0 : config.size <= 12 ? 6 : 14));
+      config.minPath += config.size <= 8 ? 0 : config.size <= 12 ? 2 : 3;
+      config.stairPatterns += config.size >= 12 ? 1 : 0;
+    }
+
+    if (difficulty === 'easy') {
+      config.stairPatterns = 0;
+      config.extraOpenings += 1;
+      config.maxOpen += 2;
+    }
+
+    if (difficulty === 'medium') {
+      config.stairPatterns = clamp(config.stairPatterns, 0, 1);
+    }
+
+    if (difficulty === 'hard') {
+      config.extraOpenings += pressure === 'puzzle' ? 0 : 2;
+      config.maxOpen += pressure === 'puzzle' ? 0 : 8;
+      config.stairPatterns = clamp(config.stairPatterns, 0, pressure === 'puzzle' ? 2 : 1);
+    }
+
+    return config;
   }
 
   function buildRandomTerminalLine() {
@@ -499,18 +555,18 @@
   function pickCheckpoints(path, checkpointCount) {
     if (!checkpointCount) return [];
     const nodes = [];
-    const usableStart = 3;
-    const usableEnd = Math.max(usableStart + 1, path.length - 4);
+    const usableStart = Math.min(4, Math.max(2, Math.floor(path.length * 0.18)));
+    const usableEnd = Math.max(usableStart + 1, path.length - Math.min(5, Math.max(3, Math.floor(path.length * 0.14))));
     for (let index = 1; index <= checkpointCount; index += 1) {
-      const slot = Math.round((usableEnd * index) / (checkpointCount + 1));
+      const slot = Math.round(usableStart + (((usableEnd - usableStart) * index) / (checkpointCount + 1)));
       const clamped = Math.min(Math.max(usableStart, slot), path.length - 4);
       nodes.push({ ...path[clamped] });
     }
     return nodes.filter((node, index, list) => list.findIndex((other) => other.x === node.x && other.y === node.y) === index);
   }
 
-  function buildGridForDifficulty(difficulty) {
-    const config = { ...(MODE_CONFIGS[difficulty] || MODE_CONFIGS.easy) };
+  function buildGridForDifficulty(difficulty, timeLimit) {
+    const config = resolveModeConfig(difficulty, timeLimit);
     state.size = config.size;
     state.player = { x: 0, y: 0 };
     state.goal = { x: state.size - 1, y: state.size - 1 };
@@ -697,7 +753,7 @@
       ? Number(session.deadlineAt || (state.startAt + (state.timeLimit * 1000)))
       : 0;
 
-    buildGridForDifficulty(state.difficulty);
+    buildGridForDifficulty(state.difficulty, state.timeLimit);
     openModal();
     el('remote-breach-sub').textContent = 'REFEREE INITIATED NETRUNNING OVERRIDE';
     el('remote-nr-mode').textContent = `REMOTE // ${state.difficulty.toUpperCase()}`;
