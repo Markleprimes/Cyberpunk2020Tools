@@ -1,8 +1,8 @@
 (function initRemoteBreachModule() {
   const MODE_CONFIGS = {
-    easy: { size: 8, extraOpenings: 8, minPath: 14, maxOpen: 54, attempts: 14, checkpoints: 1, stairPatterns: 0, minTurns: 4 },
-    medium: { size: 12, extraOpenings: 13, minPath: 24, maxOpen: 100, attempts: 22, checkpoints: 1, stairPatterns: 0, minTurns: 9 },
-    hard: { size: 16, extraOpenings: 16, minPath: 37, maxOpen: 146, attempts: 34, checkpoints: 2, stairPatterns: 1, minTurns: 17 }
+    easy: { size: 8, extraOpenings: 8, minPath: 14, maxOpen: 54, attempts: 14, checkpoints: 1, stairPatterns: 0, minTurns: 4, lureBranches: 0, lureDepth: 2 },
+    medium: { size: 12, extraOpenings: 13, minPath: 24, maxOpen: 100, attempts: 22, checkpoints: 1, stairPatterns: 0, minTurns: 9, lureBranches: 2, lureDepth: 3 },
+    hard: { size: 16, extraOpenings: 16, minPath: 37, maxOpen: 146, attempts: 34, checkpoints: 2, stairPatterns: 1, minTurns: 17, lureBranches: 4, lureDepth: 4 }
   };
 
   const COLORS = {
@@ -122,6 +122,7 @@
       config.maxOpen += config.size <= 8 ? 2 : config.size <= 12 ? 6 : 10;
       config.minPath = Math.max(10, config.minPath - (config.size <= 8 ? 1 : 2));
       config.minTurns = Math.max(2, config.minTurns - (config.size <= 8 ? 1 : 2));
+      config.lureBranches = Math.max(0, (config.lureBranches || 0) - 1);
       config.stairPatterns = Math.max(0, (config.stairPatterns || 0) - 1);
     } else if (pressure === 'steady') {
       config.extraOpenings += 1;
@@ -130,12 +131,14 @@
       config.extraOpenings = Math.max(6, config.extraOpenings - (config.size >= 16 ? 1 : 0));
       config.minPath += config.size <= 8 ? 0 : 1;
       config.minTurns += 1;
+      config.lureBranches += config.size <= 8 ? 0 : 1;
       config.stairPatterns += config.size >= 16 ? 1 : 0;
     } else if (pressure === 'puzzle') {
       config.extraOpenings = Math.max(6, config.extraOpenings - (config.size <= 8 ? 0 : config.size <= 12 ? 1 : 2));
       config.maxOpen = Math.max(config.minPath + 10, config.maxOpen - (config.size <= 8 ? 0 : config.size <= 12 ? 4 : 10));
       config.minPath += config.size <= 8 ? 0 : config.size <= 12 ? 2 : 3;
       config.minTurns += config.size <= 8 ? 0 : config.size <= 12 ? 2 : 4;
+      config.lureBranches += config.size <= 8 ? 0 : config.size <= 12 ? 1 : 2;
       config.stairPatterns += config.size >= 12 ? 1 : 0;
     }
 
@@ -169,6 +172,82 @@
       lastDy = dy;
     }
     return turns;
+  }
+
+  function countBranchDeadEnds(grid, pathSet) {
+    let deadEnds = 0;
+    for (let y = 0; y < grid.length; y += 1) {
+      for (let x = 0; x < grid.length; x += 1) {
+        if (grid[y][x] !== 0 || pathSet.has(coordKey(x, y))) continue;
+        const exits = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+          .map(([dx, dy]) => [x + dx, y + dy])
+          .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < grid.length && ny < grid.length && grid[ny][nx] === 0)
+          .length;
+        if (exits === 1) deadEnds += 1;
+      }
+    }
+    return deadEnds;
+  }
+
+  function carveLureBranches(grid, path, config) {
+    const lureTarget = Number(config.lureBranches || 0);
+    if (!lureTarget || !Array.isArray(path) || path.length < 8) return grid;
+
+    const pathSet = new Set(path.map((node) => coordKey(node.x, node.y)));
+    const candidates = shuffle(path.slice(2, Math.max(3, path.length - 3)));
+    const maxDepth = Math.max(2, Number(config.lureDepth || 3));
+    let placed = 0;
+
+    for (const node of candidates) {
+      if (placed >= lureTarget) break;
+      const nodeIndex = path.findIndex((entry) => entry.x === node.x && entry.y === node.y);
+      const previous = path[nodeIndex - 1];
+      const next = path[nodeIndex + 1];
+      const pathDirs = [];
+      if (previous) pathDirs.push([node.x - previous.x, node.y - previous.y]);
+      if (next) pathDirs.push([next.x - node.x, next.y - node.y]);
+
+      const directions = shuffle([[0, -1], [1, 0], [0, 1], [-1, 0]]).filter(([dx, dy]) => (
+        !pathDirs.some(([px, py]) => px === dx && py === dy) &&
+        !pathDirs.some(([px, py]) => px === -dx && py === -dy)
+      ));
+
+      for (const [dx, dy] of directions) {
+        const cells = [];
+        let success = true;
+        for (let step = 1; step <= maxDepth; step += 1) {
+          const x = node.x + (dx * step);
+          const y = node.y + (dy * step);
+          if (x <= 0 || y <= 0 || x >= grid.length - 1 || y >= grid.length - 1) {
+            success = false;
+            break;
+          }
+          if (grid[y][x] === 0 || pathSet.has(coordKey(x, y))) {
+            success = false;
+            break;
+          }
+          const sideTouches = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+            .map(([sx, sy]) => [x + sx, y + sy])
+            .filter(([nx, ny]) => !(nx === node.x && ny === node.y))
+            .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < grid.length && ny < grid.length && grid[ny][nx] === 0)
+            .length;
+          if (sideTouches > 0) {
+            success = false;
+            break;
+          }
+          cells.push({ x, y });
+        }
+
+        if (!success || cells.length < 2) continue;
+        cells.forEach((cell) => {
+          grid[cell.y][cell.x] = 0;
+        });
+        placed += 1;
+        break;
+      }
+    }
+
+    return grid;
   }
 
   function buildRandomTerminalLine() {
@@ -599,25 +678,37 @@
     for (let attempt = 0; attempt < (config.attempts || 16); attempt += 1) {
       let grid = buildPlayableGrid(config.size, config.extraOpenings);
       if (config.stairPatterns) grid = applyStairPatterns(grid, config.stairPatterns);
-      const path = findPath(grid);
+      let path = findPath(grid);
+      if (!path.length) continue;
+      grid = carveLureBranches(grid, path, config);
+      path = findPath(grid);
       if (!path.length) continue;
       const openCells = countOpenCells(grid);
       const turnCount = countPathTurns(path);
+      const deadEndCount = countBranchDeadEnds(grid, new Set(path.map((node) => coordKey(node.x, node.y))));
       const pathDelta = Math.abs(path.length - config.minPath);
       const openDelta = Math.abs(openCells - config.maxOpen);
       const turnDelta = Math.abs(turnCount - (config.minTurns || 0));
+      const lureDelta = Math.abs(deadEndCount - (config.lureBranches || 0));
       const score = (path.length >= config.minPath ? 70 : 0)
         + (openCells <= config.maxOpen ? 28 : 0)
         + (turnCount >= (config.minTurns || 0) ? 34 : 0)
+        + (deadEndCount >= (config.lureBranches || 0) ? 22 : 0)
         - pathDelta
         - (openDelta * 0.6)
-        - (turnDelta * 1.4);
+        - (turnDelta * 1.4)
+        - (lureDelta * 2.2);
       if (score > bestScore) {
         bestScore = score;
         bestGrid = grid;
         bestPath = path;
       }
-      if (path.length >= config.minPath && openCells <= config.maxOpen && turnCount >= (config.minTurns || 0)) break;
+      if (
+        path.length >= config.minPath &&
+        openCells <= config.maxOpen &&
+        turnCount >= (config.minTurns || 0) &&
+        deadEndCount >= (config.lureBranches || 0)
+      ) break;
     }
 
     state.grid = bestGrid || buildPlayableGrid(config.size, config.extraOpenings);
