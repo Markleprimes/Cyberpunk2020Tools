@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Access Terminal</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="index.css?v=20260501c">
+<link rel="stylesheet" href="index.css?v=20260502a">
 </head>
 <body>
 <div class="launcher-shell">
@@ -18,9 +18,14 @@
     </div>
     <div class="launcher-header-side">
       <button class="launcher-auth-trigger" id="launcher-auth-open-btn" type="button">LOG IN</button>
-      <div class="launcher-status" id="launcher-status-pill">
+      <div class="launcher-auth-menu">
+      <button class="launcher-status" id="launcher-status-pill" type="button">
         <span class="status-dot"></span>
         <span id="launcher-status-pill-label">ACCESS READY</span>
+      </button>
+      <div class="launcher-auth-dropdown" id="launcher-auth-dropdown" hidden>
+        <button class="launcher-auth-dropdown-btn" id="launcher-signout-btn" type="button">SIGN OUT</button>
+      </div>
       </div>
     </div>
   </header>
@@ -67,51 +72,51 @@
     <div class="launcher-readme-head">
       <div class="launcher-kicker">QUICK START</div>
       <h2>HOW TO USE THIS SITE</h2>
-      <p class="launcher-readme-copy">Use this page as the fast setup guide before opening the dossier or referee console. It reflects the current live workflow: linked rooms, GM character tabs, local NPC tabs, and dossier-side play.</p>
+      <p class="launcher-readme-copy">Use this page as the fast setup guide before opening the dossier or referee console. It reflects the current live workflow: guest entry or Google login, linked rooms, GM character tabs, local NPC tabs, and dossier-side saves.</p>
     </div>
 
     <div class="launcher-readme-grid">
-      <article class="readme-card readme-card-wide">
-        <div class="card-eyebrow">// 01 - START HERE</div>
-        <h3>Choose Your Entry Point</h3>
-        <p>Use <strong>Load File</strong> for an existing dossier, <strong>Create Character</strong> for a blank sheet, or <strong>Open GM Page</strong> for the referee console. All three flow into the same live toolkit after the transition.</p>
-      </article>
+        <article class="readme-card readme-card-wide">
+          <div class="card-eyebrow">// 01 - START HERE</div>
+          <h3>Choose Your Entry Point</h3>
+          <p>Use <strong>Load File</strong> for an existing dossier, <strong>Create Character</strong> for a blank sheet, or <strong>Open GM Page</strong> for the referee console. If you are not signed in, the site now lets you choose <strong>Log In With Google</strong> or <strong>Enter Without Login</strong> before continuing.</p>
+        </article>
 
-      <article class="readme-card">
-        <div class="card-eyebrow">// 02 - ROOM LINK</div>
-        <h3>Connect Players &amp; GM</h3>
+        <article class="readme-card">
+          <div class="card-eyebrow">// 02 - ROOM LINK</div>
+          <h3>Connect Players &amp; GM</h3>
         <p>Open the GM page, enter a room ID, then connect player dossiers using that same ID. Connected players appear as their own GM tabs instead of a simple monitor list.</p>
       </article>
 
-      <article class="readme-card">
-        <div class="card-eyebrow">// 03 - NPC / MOOKS</div>
-        <h3>Generate With AI</h3>
-        <p>For fast NPCs, mooks, or one-off enemies, use an external chatbot AI, format the result to match the upload template, then import it as <strong>.txt</strong> or bundled <strong>.zip</strong>.</p>
-      </article>
+        <article class="readme-card">
+          <div class="card-eyebrow">// 03 - ACCOUNT SAVE</div>
+          <h3>Login Or Enter Guest</h3>
+          <p>Google login is for account-linked saves. Signed-in users can reopen saved dossiers from the homepage and save from inside the dossier. Guest entry is still valid if you only need a quick local session and do not need account restore.</p>
+        </article>
 
-      <article class="readme-card">
-        <div class="card-eyebrow">// 04 - FILES</div>
-        <h3>What You Can Import</h3>
-        <p>The site supports character <strong>.txt</strong>, item <strong>.txt</strong>, special-skill <strong>.txt</strong>, and bundled dossier <strong>.zip</strong> files. Use the format guide on the load card as the template.</p>
-      </article>
+        <article class="readme-card">
+          <div class="card-eyebrow">// 04 - FILES</div>
+          <h3>What You Can Import</h3>
+          <p>The site supports character <strong>.txt</strong>, item <strong>.txt</strong>, special-skill <strong>.txt</strong>, and bundled dossier <strong>.zip</strong> files. Use the format guide on the load card as the template.</p>
+        </article>
 
-      <article class="readme-card">
-        <div class="card-eyebrow">// 05 - SESSION FLOW</div>
-        <h3>Typical Use</h3>
-        <p>Load or create characters, connect the room, use the dossier for player-side tracking, and use the GM page for live player tabs, remote breach control, NPC handling, and session-side reference.</p>
-      </article>
+        <article class="readme-card">
+          <div class="card-eyebrow">// 05 - SESSION FLOW</div>
+          <h3>Typical Use</h3>
+          <p>Load or create characters, connect the room, use the dossier for player-side tracking, and use the GM page for live player tabs, remote breach control, NPC handling, and session-side reference. Signed-in players can also use <strong>Load From Save</strong> inside the dossier drawer.</p>
+        </article>
 
-      <article class="readme-card">
-        <div class="card-eyebrow">// 06 - LIVE TOOLS</div>
-        <h3>Dossier + GM Tabs</h3>
-        <p>Players work from dossier sheets. GMs work from linked player tabs and local NPC tabs, with editing, exports, presets, and monitoring collected into one live page.</p>
-      </article>
+        <article class="readme-card">
+          <div class="card-eyebrow">// 06 - NPC / MOOKS</div>
+          <h3>Generate With AI</h3>
+          <p>For fast NPCs, mooks, or one-off enemies, use an external chatbot AI, format the result to match the upload template, then import it as <strong>.txt</strong> or bundled <strong>.zip</strong>. GM local NPC tabs can now persist to the signed-in account too.</p>
+        </article>
 
-      <article class="readme-card readme-card-ai">
-        <div class="card-eyebrow">// 07 - BUILD NOTE</div>
-        <h3>Development</h3>
-        <p>Built with roughly 80% AI assistance. For practical use, the important part is the workflow: upload correctly formatted files, link the room when needed, and use external chatbot generation for random content.</p>
-      </article>
+        <article class="readme-card readme-card-ai">
+          <div class="card-eyebrow">// 07 - BUILD NOTE</div>
+          <h3>Development</h3>
+          <p>Built with roughly 80% AI assistance. For practical use, the important part is the workflow: upload correctly formatted files, link the room when needed, use external chatbot generation for random content, and sign in only when you want account-backed saves.</p>
+        </article>
     </div>
   </section>
 
@@ -163,6 +168,33 @@
     <button class="launcher-btn alt launcher-google-btn" id="launcher-google-login-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>CONTINUE WITH GOOGLE</span></button>
     <div class="launcher-modal-actions launcher-auth-actions">
       <button class="launcher-btn ghost" id="launcher-auth-cancel-btn" type="button">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="launcher-modal" id="launcher-access-modal" aria-hidden="true">
+  <div class="launcher-modal-box launcher-auth-modal-box">
+    <div class="launcher-kicker">ACCESS GATE</div>
+    <h3>ENTER TERMINAL</h3>
+    <p class="launcher-auth-copy">You can log in with Google for account saves, or enter without login and use the site as a guest for tonight.</p>
+    <div class="launcher-access-actions">
+      <button class="launcher-btn alt launcher-google-btn" id="launcher-access-google-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>LOG IN WITH GOOGLE</span></button>
+      <button class="launcher-btn ghost launcher-google-btn" id="launcher-access-guest-btn" type="button"><span class="launcher-btn-mark">&#9654;</span><span>ENTER WITHOUT LOGIN</span></button>
+    </div>
+    <div class="launcher-modal-actions launcher-auth-actions">
+      <button class="launcher-btn ghost" id="launcher-access-cancel-btn" type="button">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="launcher-modal" id="launcher-signout-modal" aria-hidden="true">
+  <div class="launcher-modal-box launcher-auth-modal-box">
+    <div class="launcher-kicker">ACCOUNT LINK</div>
+    <h3>SIGN OUT</h3>
+    <p class="launcher-auth-copy">Do you want to sign out of this Google account on the access terminal?</p>
+    <div class="launcher-modal-actions">
+      <button class="launcher-btn ghost" id="launcher-signout-cancel-btn" type="button">CANCEL</button>
+      <button class="launcher-btn" id="launcher-signout-confirm-btn" type="button">SIGN OUT</button>
     </div>
   </div>
 </div>
@@ -308,6 +340,6 @@ Banner image is optional.</pre>
 <script src="functions/createNewCharacter.js?v=20260427a"></script>
 <script src="functions/index-transition.js?v=20260415e"></script>
 <script src="functions/account-characters.js?v=20260501c"></script>
-<script src="functions/index.js?v=20260501e"></script>
+<script src="functions/index.js?v=20260502b"></script>
 </body>
 </html>

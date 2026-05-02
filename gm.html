@@ -5,21 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk 2020 // Referee Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="gm.css?v=20260501a">
+  <link rel="stylesheet" href="gm.css?v=20260502a">
 </head>
 <body>
   <div class="gm-shell">
     <header class="gm-header">
-      <div>
-        <div class="gm-kicker">REFEREE UPLINK // LIVE TABLE CONTROL</div>
-        <h1>CYBERPUNK 2020</h1>
-        <p class="gm-copy">Monitor connected players, manage live combat, and build local NPC dossier tabs directly inside the referee console.</p>
-      </div>
-      <div class="gm-header-side">
-        <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
-        <div class="gm-auth-chip" id="gm-auth-tag">USER // OFFLINE</div>
-      </div>
-    </header>
+        <div>
+          <div class="gm-kicker">REFEREE UPLINK // LIVE TABLE CONTROL</div>
+          <h1>CYBERPUNK 2020</h1>
+          <p class="gm-copy">Monitor connected players, manage live combat, and build local NPC dossier tabs directly inside the referee console.</p>
+        </div>
+        <div class="gm-header-side">
+          <div class="gm-status-chip" id="gm-status-chip">DISCONNECTED</div>
+          <div class="gm-auth-menu">
+            <button type="button" class="gm-auth-chip gm-auth-chip-btn" id="gm-auth-tag">USER // OFFLINE</button>
+            <div class="gm-auth-dropdown" id="gm-auth-dropdown" hidden>
+              <button type="button" class="gm-auth-dropdown-btn" id="gm-signout-btn">SIGN OUT</button>
+            </div>
+          </div>
+        </div>
+      </header>
 
     <div class="gm-tabs">
       <div class="gm-npc-tab-strip" id="gm-character-tab-strip"></div>
@@ -483,12 +488,23 @@
     </div>
   </div>
 
+  <div class="gm-modal-overlay" id="gm-signout-modal">
+    <div class="gm-modal-box gm-action-confirm-box">
+      <h3>SIGN OUT</h3>
+      <div class="gm-roll-execute-copy">Do you want to sign out of this Google account on the referee console?</div>
+      <div class="gm-modal-btns">
+        <button class="gm-btn gm-btn-muted" type="button" id="gm-signout-cancel">CANCEL</button>
+        <button class="gm-btn" type="button" id="gm-signout-confirm">SIGN OUT</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
     <script src="functions/firebase-sync.js?v=20260501e"></script>
-  <script src="functions/gm.js?v=20260501c"></script>
+  <script src="functions/gm.js?v=20260502a"></script>
   <script src="functions/gm-breach.js?v=20260427e"></script>
 <script src="functions/gm-action-play.js?v=20260426b"></script>
   <script src="functions/gm-npc-tabs.js?v=20260427b"></script>

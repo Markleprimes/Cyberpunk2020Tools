@@ -170,6 +170,44 @@
     const node = document.getElementById('gm-auth-tag');
     if (!node) return;
     node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
+    node.classList.toggle('is-clickable', !!user);
+    if (!user) document.getElementById('gm-auth-dropdown')?.setAttribute('hidden', 'hidden');
+  }
+
+  function toggleGMAuthDropdown(forceOpen = null) {
+    const dropdown = document.getElementById('gm-auth-dropdown');
+    if (!dropdown) return;
+    if (!window.getFirebaseCurrentUser?.()) {
+      dropdown.setAttribute('hidden', 'hidden');
+      return;
+    }
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : dropdown.hasAttribute('hidden');
+    if (shouldOpen) dropdown.removeAttribute('hidden');
+    else dropdown.setAttribute('hidden', 'hidden');
+  }
+
+  function openGMSignoutModal() {
+    document.getElementById('gm-signout-modal')?.classList.add('show');
+  }
+
+  function closeGMSignoutModal() {
+    document.getElementById('gm-signout-modal')?.classList.remove('show');
+  }
+
+  async function confirmGMSignOut() {
+    const confirmBtn = document.getElementById('gm-signout-confirm');
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      await window.signOutFirebaseUser?.();
+      closeGMSignoutModal();
+      setGMStatus('Signed out of Google account.');
+      setGMStatusVisual(activeRef ? 'connected' : 'pending');
+    } catch (error) {
+      setGMStatus(`Sign out failed: ${error.message || 'UNKNOWN ERROR'}`);
+      setGMStatusVisual('disconnected');
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
   }
 
   function setGMLastUpdated(value) {
@@ -3491,6 +3529,19 @@ ${damageLines}
     document.getElementById('gm-npc-identity-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeGMLocalNpcIdentityModal();
     });
+    document.getElementById('gm-signout-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMSignoutModal();
+    });
+    document.getElementById('gm-auth-tag')?.addEventListener('click', () => {
+      if (!window.getFirebaseCurrentUser?.()) return;
+      toggleGMAuthDropdown();
+    });
+    document.getElementById('gm-signout-btn')?.addEventListener('click', () => {
+      toggleGMAuthDropdown(false);
+      openGMSignoutModal();
+    });
+    document.getElementById('gm-signout-cancel')?.addEventListener('click', closeGMSignoutModal);
+    document.getElementById('gm-signout-confirm')?.addEventListener('click', confirmGMSignOut);
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
     if (gmRollShakeBox) {
@@ -3781,9 +3832,17 @@ ${damageLines}
     window.watchFirebaseAuthState?.((user) => {
       updateGMAuthDisplay(user);
       const nextUid = String(user?.uid || '').trim();
-      if (!nextUid) return;
+      if (!nextUid) {
+        gmNpcAccountLoadedUid = '';
+        return;
+      }
       if (nextUid === gmNpcAccountLoadedUid) return;
       loadGMLocalNpcRosterFromAccount(user);
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.gm-auth-menu')) {
+        toggleGMAuthDropdown(false);
+      }
     });
 
     document.addEventListener('mouseover', (event) => {

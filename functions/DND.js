@@ -115,6 +115,34 @@ function updateDossierAuthDisplay(user) {
   const node = getById('dossier-auth-tag');
   if (!node) return;
   node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
+  node.classList.toggle('is-clickable', !!user);
+  if (!user) getById('dossier-auth-dropdown')?.setAttribute('hidden', 'hidden');
+}
+
+function toggleDossierAuthDropdown(forceOpen = null) {
+  const dropdown = getById('dossier-auth-dropdown');
+  const trigger = getById('dossier-auth-tag');
+  if (!dropdown || !trigger) return;
+  if (!window.getFirebaseCurrentUser?.()) {
+    dropdown.setAttribute('hidden', 'hidden');
+    return;
+  }
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : dropdown.hasAttribute('hidden');
+  if (shouldOpen) dropdown.removeAttribute('hidden');
+  else dropdown.setAttribute('hidden', 'hidden');
+}
+
+async function requestDossierSignOut() {
+  toggleDossierAuthDropdown(false);
+  showModal('SIGN OUT?', 'Do you want to sign out of this Google account on the dossier page?', async () => {
+    try {
+      await window.signOutFirebaseUser?.();
+      closeModal();
+      showActionLog('SIGNED OUT OF GOOGLE ACCOUNT');
+    } catch (error) {
+      showError(`SIGN OUT FAILED: ${error.message || 'UNKNOWN ERROR'}`);
+    }
+  });
 }
 
 function buildCurrentAccountCharacterPayload() {
@@ -1646,6 +1674,8 @@ window.saveCurrentCharacterToAccount = saveCurrentCharacterToAccount;
 window.loadAccountCharacterEntry = loadAccountCharacterEntry;
 window.clearActiveAccountCharacterId = clearActiveAccountCharacterId;
 window.setAccountSaveBaseline = setAccountSaveBaseline;
+window.toggleDossierAuthDropdown = toggleDossierAuthDropdown;
+window.requestDossierSignOut = requestDossierSignOut;
 
 renderCombatSummaryDrawer();
 window.initFirebaseRealtime?.();
@@ -1658,6 +1688,16 @@ if (typeof MutationObserver !== 'undefined' && dossierSheetNode) {
   });
   observer.observe(dossierSheetNode, { childList: true, subtree: true, characterData: true });
 }
+getById('dossier-auth-tag')?.addEventListener('click', () => {
+  if (!window.getFirebaseCurrentUser?.()) return;
+  toggleDossierAuthDropdown();
+});
+getById('dossier-signout-btn')?.addEventListener('click', requestDossierSignOut);
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.auth-menu-wrap')) {
+    toggleDossierAuthDropdown(false);
+  }
+});
 
 function resetSheet() {
   showModal('CLEAR DOSSIER?', 'Discard current character and reset the dossier to blank values?', () => {

@@ -30,6 +30,44 @@ header{display:flex;align-items:flex-end;gap:20px;margin-bottom:36px;border-bott
 .corner-tag{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--text-dim);text-align:right;line-height:1.9;}
 .corner-tag .online{color:var(--accent-g);text-shadow:var(--glow-g);}
 .corner-tag .auth-tag{color:var(--accent-y);text-shadow:var(--glow-y);}
+.auth-menu-wrap{position:relative;display:inline-flex;align-items:center}
+.auth-tag-btn{
+  border:1px solid rgba(255,177,74,.18);
+  background:rgba(255,177,74,.05);
+  padding:4px 8px;
+  cursor:default;
+  font:inherit;
+  letter-spacing:inherit;
+  color:inherit;
+  text-shadow:inherit;
+}
+.auth-tag-btn.is-clickable{cursor:pointer;transition:border-color .2s,background .2s,color .2s}
+.auth-tag-btn.is-clickable:hover{border-color:rgba(255,177,74,.34);background:rgba(255,177,74,.12);color:var(--text)}
+.auth-dropdown{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  min-width:160px;
+  padding:8px;
+  border:1px solid var(--border);
+  background:#14080b;
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+  z-index:2600;
+}
+.auth-dropdown-btn{
+  width:100%;
+  padding:9px 12px;
+  border:1px solid rgba(255,77,109,.16);
+  background:rgba(255,77,109,.05);
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:.64rem;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  text-align:left;
+  cursor:pointer;
+}
+.auth-dropdown-btn:hover{border-color:rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--accent-y)}
 .header-btns{display:flex;gap:8px;align-items:center;margin-left:16px;}
 .npc-lite-header-panel{display:none;margin-bottom:18px;padding:16px 18px;border:1px solid rgba(255,77,109,.18);border-left:4px solid var(--accent);background:linear-gradient(135deg,rgba(255,77,109,.08),rgba(255,177,74,.04));box-shadow:var(--shadow);}
 .npc-lite-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}

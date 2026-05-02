@@ -1,6 +1,6 @@
 # Cyberpunk 2020 Web Tools
 
-A browser-based Cyberpunk 2020 toolkit for player dossiers, GM monitoring, rolling, combat support, and lightweight online table play.
+A browser-based Cyberpunk 2020 toolkit for player dossiers, GM monitoring, rolling, combat support, lightweight online table play, and account-backed character persistence.
 
 ## What This Site Does
 
@@ -15,6 +15,9 @@ Main features:
 - Netrunner breach protocol minigame
 - `.txt` and `.zip` character import / export
 - Firebase room link for live GM-player sync
+- Google login for optional account saves
+- account save / restore for dossier characters
+- saved local NPC tabs on the GM page
 
 ## Main Pages
 
@@ -32,14 +35,40 @@ You can use either:
 - live site: [https://markleprimes.github.io/Cyberpunk2020Tools/](https://markleprimes.github.io/Cyberpunk2020Tools/)
 - local files: open `index.html` directly in the browser
 
+Notes:
+
+- the live site is hosted on GitHub Pages
+- Firebase is used for login, saves, and live sync
+- Google login will not work from a local `file://` page
+- if you want login and account saves, use the live site
+- if you just want a quick local session, opening the local files is still fine
+
 1. Open the live site or `index.html`
 2. Choose one of these:
    - `LOAD FILE`
    - `CREATE NEW CHARACTER`
    - `OPEN GM PAGE`
-3. If you load a character, use a `.txt` or bundled `.zip`
-4. If you create a new character, enter name, street name, and career
-5. The launcher will transition into the dossier
+3. If you are not signed in, the launcher now lets you choose:
+   - `LOG IN WITH GOOGLE`
+   - `ENTER WITHOUT LOGIN`
+4. If you load a character, use a `.txt` or bundled `.zip`
+5. If you create a new character, enter name, street name, and career
+6. The launcher will transition into the dossier
+
+## Login And Save Behavior
+
+- Google login is optional
+- guest entry is allowed from the launcher
+- signed-in users can save dossier characters to their account
+- signed-in users can reopen characters from the homepage `SAVED CHARACTERS` section
+- dossier also includes `LOAD FROM SAVE` and `SAVE` in the left drawer
+- GM local NPC tabs now persist to the signed-in account as well
+
+If you do not sign in:
+
+- the site still works
+- local play is fine
+- account restore after refresh is not available
 
 ## Character Files
 
@@ -47,12 +76,14 @@ Supported:
 
 - character `.txt`
 - item `.txt`
+- special-skill `.txt`
 - bundled dossier `.zip`
 
 Recommended dossier zip contents:
 
 - `character.txt`
 - `items.txt`
+- `specialskills.txt`
 - optional banner image such as `banner.png`
 
 Exports are zip-based.
@@ -65,7 +96,7 @@ name: {
 }
 
 stats: {
-  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, EMPT=0
+  REF=0, INT=0, COOL=0, ATTR=0, TECH=0, LUCK=0, MA=0, BODY=0, EMP=0
 }
 
 career: {
@@ -74,7 +105,16 @@ career: {
 
 careerSkill: {
   point=0
-  Awareness/Notice=0
+  Awareness=0
+}
+
+specialSkills: {
+  aikido1:{
+    name="Throw Redirect",
+    tiedSkill="Martial Art (Aikido)",
+    value=2,
+    info:{ "Redirect incoming momentum into a throw." }
+  }
 }
 
 reputation: {
@@ -115,47 +155,35 @@ damage: {
 ```txt
 weapon: {
   weapon1:{
-    name="",
-    Type="",
-    Accuracy=,
-    Concealability="",
-    Availability="",
-    Damage/Ammo="",
-    ShotsCapacity=,
-    "Rates of Fire"=,
-    Reliability="",
-    Range=,
-    Cost=,
-    info:{ "" }
+    name="Medium Pistol",
+    Type="Handgun",
+    Accuracy=+1,
+    Damage="2d6+3",
+    Ammo=12,
+    Range=50m,
+    Cost=250eb,
+    info:{ "Standard sidearm." }
   }
 }
 
 cyberware: {
   cyberware1:{
-    name="",
-    Type="",
-    HumanityCost="",
-    Cost=,
-    info:{ "" }
-  }
-}
-
-miscellaneous: {
-  misc1:{
-    name="",
-    Type="",
-    Cost=,
-    info:{ "" }
+    name="Amplified Hearing",
+    Type="Sensory",
+    Cost=600eb,
+    Awareness=+2,
+    info:{ "Boosted hearing in loud environments." }
   }
 }
 
 buff: {
   buff1:{
-    name="",
-    Type="",
-    Duration="",
-    Effect="",
-    info:{ "" }
+    name="Combat Stim",
+    Type="Drug",
+    Duration="3 turns",
+    REF=+1,
+    BodyLevel=+1,
+    info:{ "Short burst combat enhancer." }
   }
 }
 ```
@@ -174,6 +202,12 @@ Basic flow:
 
 After that, the GM page can see linked characters and use the referee tools.
 
+Current GM flow:
+
+- connected players appear as character tabs
+- local NPCs can be created or imported as their own tabs
+- local NPC tabs now save to the signed-in account
+
 ## NPC / Random Generation
 
 For NPCs, mooks, throwaway enemies, or other random generated content, the intended workflow is to use an external chatbot AI and have it output text in the same upload format shown on the front page.
@@ -189,10 +223,11 @@ That keeps random generation flexible without forcing this site itself to become
 
 ## Front Page Format Guide
 
-The front page already includes the visible upload template for:
+The front page includes a format guide modal for:
 
 - character files
 - item files
+- bundled zip structure
 
 That is the format to copy when preparing content from other tools.
 
@@ -203,10 +238,12 @@ This project runs client-side in the browser and uses:
 - HTML
 - CSS
 - JavaScript
+- Firebase Authentication for Google login
 - Firebase Realtime Database for live room sync
+- Firebase Realtime Database for account save data
 - JSZip for zip import / export
 
-No traditional install is required for normal local use beyond opening the pages in a browser.
+No traditional install is required for normal local use beyond opening the pages in a browser, but Google login and account saves should be tested from the hosted site, not local `file://` pages.
 
 ## Project Structure
 
@@ -224,6 +261,7 @@ No traditional install is required for normal local use beyond opening the pages
 This project was built with roughly 80% AI assistance during development, but the important part for use is the workflow:
 
 - load or create a character
+- sign in only if you want account-backed saves
 - connect players to the GM room if needed
 - use the dossier and GM tools during play
 - use external chatbot generation when you need fast random content

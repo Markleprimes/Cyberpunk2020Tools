@@ -32,6 +32,7 @@ body::before{
 .gm-shell{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:38px 24px 72px}
 .gm-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:end;margin-bottom:26px;padding-bottom:20px;border-bottom:2px solid var(--border)}
 .gm-header-side{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.gm-auth-menu{position:relative}
 .gm-kicker{font-family:'Share Tech Mono',monospace;font-size:.66rem;letter-spacing:.22em;color:var(--accent);margin-bottom:8px}
 .gm-header h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.4rem,6vw,5rem);line-height:.9;letter-spacing:.08em;background:linear-gradient(160deg,var(--accent-y) 0%,var(--accent) 48%,var(--accent-r) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 8px rgba(224,20,52,.3))}
 .gm-copy{margin-top:12px;max-width:720px;color:var(--text-dim);font-size:1rem;line-height:1.45}
@@ -39,6 +40,12 @@ body::before{
 .gm-status-chip.connected{border-color:rgba(0,217,139,.28);background:rgba(0,217,139,.08);color:var(--accent-g)}
 .gm-status-chip.pending{border-color:rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--accent-y)}
 .gm-auth-chip{padding:8px 12px;border:1px solid rgba(255,177,74,.18);background:rgba(255,177,74,.06);font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.14em;color:var(--accent-y);text-align:right;max-width:260px;word-break:break-word}
+.gm-auth-chip-btn{cursor:default}
+.gm-auth-chip-btn.is-clickable{cursor:pointer;transition:border-color .2s,background .2s,color .2s}
+.gm-auth-chip-btn.is-clickable:hover{border-color:rgba(255,177,74,.34);background:rgba(255,177,74,.12);color:var(--text)}
+.gm-auth-dropdown{position:absolute;top:calc(100% + 8px);right:0;min-width:170px;padding:8px;border:1px solid var(--border);background:#14080b;box-shadow:0 10px 24px rgba(0,0,0,.28);z-index:3200}
+.gm-auth-dropdown-btn{width:100%;padding:10px 12px;border:1px solid rgba(255,77,109,.16);background:rgba(255,77,109,.05);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:left;cursor:pointer}
+.gm-auth-dropdown-btn:hover{border-color:rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--accent-y)}
 .gm-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .gm-tab-btn{padding:10px 18px;border:1px solid rgba(255,77,109,.2);background:rgba(255,77,109,.05);color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:all .2s}
 .gm-tab-btn.active,.gm-tab-btn:hover{border-color:rgba(255,177,74,.28);background:rgba(255,177,74,.08);color:var(--accent-y)}

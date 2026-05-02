@@ -8,6 +8,16 @@ const launcherAuthOpenBtn = document.getElementById('launcher-auth-open-btn');
 const launcherAuthModal = document.getElementById('launcher-auth-modal');
 const launcherAuthCancelBtn = document.getElementById('launcher-auth-cancel-btn');
 const launcherGoogleLoginBtn = document.getElementById('launcher-google-login-btn');
+const launcherAccessModal = document.getElementById('launcher-access-modal');
+const launcherAccessGoogleBtn = document.getElementById('launcher-access-google-btn');
+const launcherAccessGuestBtn = document.getElementById('launcher-access-guest-btn');
+const launcherAccessCancelBtn = document.getElementById('launcher-access-cancel-btn');
+const launcherStatusPill = document.getElementById('launcher-status-pill');
+const launcherAuthDropdown = document.getElementById('launcher-auth-dropdown');
+const launcherSignoutBtn = document.getElementById('launcher-signout-btn');
+const launcherSignoutModal = document.getElementById('launcher-signout-modal');
+const launcherSignoutCancelBtn = document.getElementById('launcher-signout-cancel-btn');
+const launcherSignoutConfirmBtn = document.getElementById('launcher-signout-confirm-btn');
 const launcherStatusPillLabel = document.getElementById('launcher-status-pill-label');
 const formatGuideOpenBtn = document.getElementById('format-guide-open-btn');
 const formatGuideModal = document.getElementById('format-guide-modal');
@@ -17,6 +27,7 @@ const launcherStatus = document.getElementById('launcher-status');
 let launcherHoverAudio = null;
 let launcherHoveredButton = null;
 let currentLauncherUser = null;
+let pendingLauncherAction = '';
 
 function setLauncherStatus(message) {
   launcherStatus.textContent = message;
@@ -56,6 +67,28 @@ function closeLauncherAuthModal() {
   launcherAuthModal.setAttribute('aria-hidden', 'true');
 }
 
+function openLauncherAccessModal(actionKey) {
+  pendingLauncherAction = String(actionKey || '').trim();
+  clearLauncherStatus();
+  launcherAccessModal.classList.add('show');
+  launcherAccessModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeLauncherAccessModal() {
+  launcherAccessModal.classList.remove('show');
+  launcherAccessModal.setAttribute('aria-hidden', 'true');
+}
+
+function openLauncherSignoutModal() {
+  launcherSignoutModal.classList.add('show');
+  launcherSignoutModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeLauncherSignoutModal() {
+  launcherSignoutModal.classList.remove('show');
+  launcherSignoutModal.setAttribute('aria-hidden', 'true');
+}
+
 function openFormatGuideModal() {
   formatGuideModal.classList.add('show');
   formatGuideModal.setAttribute('aria-hidden', 'false');
@@ -71,17 +104,43 @@ function updateLauncherAuthUi(user) {
   if (user) {
     launcherAuthOpenBtn.hidden = true;
     launcherStatusPillLabel.textContent = user.displayName || user.email || 'SIGNED IN';
+    launcherStatusPill.classList.add('is-clickable');
     return;
   }
+  launcherAuthDropdown.hidden = true;
   launcherAuthOpenBtn.hidden = false;
+  launcherStatusPill.classList.remove('is-clickable');
   launcherStatusPillLabel.textContent = 'ACCESS READY';
 }
 
-function requireLauncherLogin() {
-  if (currentLauncherUser) return true;
-  setLauncherStatus('LOG IN WITH GOOGLE FIRST.');
-  openLauncherAuthModal();
-  return false;
+function closeLauncherAuthDropdown() {
+  launcherAuthDropdown.hidden = true;
+}
+
+function continueLauncherAction(actionKey) {
+  const nextAction = String(actionKey || pendingLauncherAction || '').trim();
+  pendingLauncherAction = '';
+  if (nextAction === 'load') {
+    clearLauncherStatus();
+    launcherFileInput.value = '';
+    launcherFileInput.click();
+    return;
+  }
+  if (nextAction === 'create') {
+    openLauncherModal();
+    return;
+  }
+  if (nextAction === 'gm') {
+    window.location.href = launcherGmLink.getAttribute('href') || 'gm.html';
+  }
+}
+
+function requestLauncherAccess(actionKey) {
+  if (currentLauncherUser) {
+    continueLauncherAction(actionKey);
+    return;
+  }
+  openLauncherAccessModal(actionKey);
 }
 
 function playLauncherHoverSound() {
@@ -111,10 +170,7 @@ document.addEventListener('mouseout', (event) => {
 });
 
 launcherLoadBtn.addEventListener('click', () => {
-  if (!requireLauncherLogin()) return;
-  clearLauncherStatus();
-  launcherFileInput.value = '';
-  launcherFileInput.click();
+  requestLauncherAccess('load');
 });
 
 launcherFileInput.addEventListener('change', (event) => {
@@ -146,8 +202,7 @@ launcherFileInput.addEventListener('change', (event) => {
 });
 
 launcherCreateBtn.addEventListener('click', () => {
-  if (!requireLauncherLogin()) return;
-  openLauncherModal();
+  requestLauncherAccess('create');
 });
 launcherCancelBtn.addEventListener('click', closeLauncherModal);
 launcherAuthOpenBtn.addEventListener('click', openLauncherAuthModal);
@@ -165,11 +220,52 @@ launcherGoogleLoginBtn.addEventListener('click', async () => {
     launcherGoogleLoginBtn.disabled = false;
   }
 });
+launcherAccessGoogleBtn.addEventListener('click', async () => {
+  launcherAccessGoogleBtn.disabled = true;
+  try {
+    const user = await window.signInWithGooglePopup();
+    updateLauncherAuthUi(user);
+    closeLauncherAccessModal();
+    setLauncherStatus(`SIGNED IN: ${user?.displayName || user?.email || 'GOOGLE ACCOUNT'}`);
+    continueLauncherAction();
+  } catch (error) {
+    setLauncherStatus(String(error?.message || 'GOOGLE SIGN-IN FAILED.').toUpperCase());
+  } finally {
+    launcherAccessGoogleBtn.disabled = false;
+  }
+});
+launcherAccessGuestBtn.addEventListener('click', () => {
+  closeLauncherAccessModal();
+  continueLauncherAction();
+});
+launcherAccessCancelBtn.addEventListener('click', closeLauncherAccessModal);
 formatGuideOpenBtn.addEventListener('click', openFormatGuideModal);
 formatGuideCloseBtn.addEventListener('click', closeFormatGuideModal);
 launcherGmLink.addEventListener('click', (event) => {
-  if (requireLauncherLogin()) return;
   event.preventDefault();
+  requestLauncherAccess('gm');
+});
+
+launcherStatusPill.addEventListener('click', () => {
+  if (!currentLauncherUser) return;
+  launcherAuthDropdown.hidden = !launcherAuthDropdown.hidden;
+});
+launcherSignoutBtn.addEventListener('click', () => {
+  closeLauncherAuthDropdown();
+  openLauncherSignoutModal();
+});
+launcherSignoutCancelBtn.addEventListener('click', closeLauncherSignoutModal);
+launcherSignoutConfirmBtn.addEventListener('click', async () => {
+  launcherSignoutConfirmBtn.disabled = true;
+  try {
+    await window.signOutFirebaseUser?.();
+    closeLauncherSignoutModal();
+    setLauncherStatus('SIGNED OUT.');
+  } catch (error) {
+    setLauncherStatus(String(error?.message || 'SIGN OUT FAILED.').toUpperCase());
+  } finally {
+    launcherSignoutConfirmBtn.disabled = false;
+  }
 });
 
 launcherModal.addEventListener('click', (event) => {
@@ -180,13 +276,20 @@ launcherAuthModal.addEventListener('click', (event) => {
   if (event.target === launcherAuthModal) closeLauncherAuthModal();
 });
 
+launcherAccessModal.addEventListener('click', (event) => {
+  if (event.target === launcherAccessModal) closeLauncherAccessModal();
+});
+
+launcherSignoutModal.addEventListener('click', (event) => {
+  if (event.target === launcherSignoutModal) closeLauncherSignoutModal();
+});
+
 formatGuideModal.addEventListener('click', (event) => {
   if (event.target === formatGuideModal) closeFormatGuideModal();
 });
 
 launcherForm.addEventListener('submit', (event) => {
   event.preventDefault();
-  if (!requireLauncherLogin()) return;
   const name = document.getElementById('launcher-name').value.trim();
   const street = document.getElementById('launcher-street').value.trim();
   const career = document.getElementById('launcher-career').value.trim();
@@ -203,4 +306,10 @@ launcherForm.addEventListener('submit', (event) => {
 window.initFirebaseRealtime?.();
 window.watchFirebaseAuthState?.((user) => {
   updateLauncherAuthUi(user);
+});
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.launcher-auth-menu')) {
+    closeLauncherAuthDropdown();
+  }
 });

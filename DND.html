@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260501a">
+<link rel="stylesheet" href="DND.css?v=20260502a">
 </head>
 <body>
 <div class="wrapper">
@@ -15,15 +15,15 @@
     <h1>CYBERPUNK 2020</h1>
     <div class="edition">// CHARACTER DOSSIER // NIGHT CITY //</div>
   </div>
-  <div class="corner-tag">
-    REV 2.7.4<br>NIGHT CITY UPLINK<br>
-    <span class="online">
-      <span class="online-dot"></span>
-      JACKED IN
-    </span>
-    <br><span class="auth-tag" id="dossier-auth-tag">USER // OFFLINE</span>
-  </div>
-</header>
+    <div class="corner-tag">
+      REV 2.7.4<br>NIGHT CITY UPLINK<br>
+      <span class="online">
+        <span class="online-dot"></span>
+        JACKED IN
+      </span>
+      <br><span class="auth-menu-wrap"><button class="auth-tag auth-tag-btn" id="dossier-auth-tag" type="button">USER // OFFLINE</button><span class="auth-dropdown" id="dossier-auth-dropdown" hidden><button class="auth-dropdown-btn" id="dossier-signout-btn" type="button">SIGN OUT</button></span></span>
+    </div>
+  </header>
 
 <div id="status-bar"></div>
 <div class="system-strip" id="system-strip">
@@ -750,7 +750,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260501e"></script>
-<script src="functions/DND.js?v=20260501e"></script>
+  <script src="functions/DND.js?v=20260502a"></script>
 <script src="functions/createNewCharacter.js?v=20260501a"></script>
 <script src="functions/dossierSheet.js?v=20260427b"></script>
 <script src="functions/inventory.js?v=20260424m"></script>

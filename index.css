@@ -54,6 +54,7 @@ body::before{
   align-items:flex-end;
   gap:10px;
 }
+.launcher-auth-menu{position:relative}
 .launcher-kicker{
   font-family:'Share Tech Mono',monospace;
   font-size:.66rem;
@@ -106,6 +107,47 @@ body::before{
   font-size:.68rem;
   letter-spacing:.16em;
   color:var(--accent-g);
+  appearance:none;
+  cursor:default;
+}
+.launcher-status.is-clickable{
+  cursor:pointer;
+  transition:border-color .2s,background .2s,color .2s;
+}
+.launcher-status.is-clickable:hover{
+  border-color:rgba(255,177,74,.36);
+  background:rgba(255,177,74,.08);
+  color:var(--accent-y);
+}
+.launcher-auth-dropdown{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  min-width:170px;
+  padding:8px;
+  border:1px solid var(--border);
+  background:#14080b;
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+  z-index:12;
+}
+.launcher-auth-dropdown-btn{
+  width:100%;
+  padding:10px 12px;
+  border:1px solid rgba(255,77,109,.14);
+  background:rgba(255,77,109,.04);
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:.68rem;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color .2s,background .2s,color .2s;
+}
+.launcher-auth-dropdown-btn:hover{
+  border-color:rgba(255,177,74,.28);
+  background:rgba(255,177,74,.08);
+  color:var(--accent-y);
 }
 .launcher-auth-trigger{
   padding:8px 12px;
@@ -150,19 +192,23 @@ body::before{
 .launcher-saves{
   margin-top:34px;
   padding:26px 28px 30px;
-  border:1px solid rgba(255,177,74,.22);
-  background:linear-gradient(180deg,rgba(255,177,74,.05),rgba(17,6,9,.86));
+  border:1px solid rgba(255,77,109,.28);
+  background:linear-gradient(180deg,rgba(255,77,109,.08),rgba(17,6,9,.88));
+  box-shadow:0 0 18px rgba(255,77,109,.08);
 }
 .launcher-saves-head{
   margin-bottom:14px;
 }
+.launcher-saves .launcher-kicker{color:var(--accent-r)}
+.launcher-saves .launcher-readme-head{border-bottom-color:rgba(255,77,109,.22)}
+.launcher-saves .launcher-readme-head h2{color:#ff6b86}
 .launcher-saves-list{
   display:grid;
   gap:12px;
 }
 .launcher-saves-empty{
   padding:16px 18px;
-  border:1px dashed rgba(255,177,74,.18);
+  border:1px dashed rgba(255,77,109,.2);
   background:rgba(0,0,0,.18);
   color:var(--text-dim);
   font-family:'Share Tech Mono',monospace;
@@ -175,8 +221,8 @@ body::before{
   gap:16px;
   align-items:center;
   padding:16px 18px;
-  border:1px solid rgba(255,77,109,.16);
-  background:rgba(0,0,0,.18);
+  border:1px solid rgba(255,77,109,.22);
+  background:linear-gradient(180deg,rgba(255,77,109,.05),rgba(0,0,0,.2));
 }
 .launcher-save-main{
   min-width:0;
@@ -503,6 +549,10 @@ body::before{
 }
 .launcher-auth-actions{
   margin-top:12px;
+}
+.launcher-access-actions{
+  display:grid;
+  gap:10px;
 }
 .format-guide-modal-box{
   padding:24px 24px 22px;
