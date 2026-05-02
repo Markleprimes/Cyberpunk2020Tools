@@ -170,7 +170,7 @@
     const node = document.getElementById('gm-auth-tag');
     if (!node) return;
     node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
-    node.classList.toggle('is-clickable', !!user);
+    node.classList.add('is-clickable');
     if (!user) document.getElementById('gm-auth-dropdown')?.setAttribute('hidden', 'hidden');
   }
 
@@ -194,6 +194,22 @@
     document.getElementById('gm-signout-modal')?.classList.remove('show');
   }
 
+  function openGMLoginModal() {
+    document.getElementById('gm-login-modal')?.classList.add('show');
+  }
+
+  function closeGMLoginModal() {
+    document.getElementById('gm-login-modal')?.classList.remove('show');
+  }
+
+  function openGMHomeModal() {
+    document.getElementById('gm-home-modal')?.classList.add('show');
+  }
+
+  function closeGMHomeModal() {
+    document.getElementById('gm-home-modal')?.classList.remove('show');
+  }
+
   async function confirmGMSignOut() {
     const confirmBtn = document.getElementById('gm-signout-confirm');
     if (confirmBtn) confirmBtn.disabled = true;
@@ -208,6 +224,27 @@
     } finally {
       if (confirmBtn) confirmBtn.disabled = false;
     }
+  }
+
+  async function confirmGMLogin() {
+    const confirmBtn = document.getElementById('gm-login-confirm');
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      const user = await window.signInWithGooglePopup?.();
+      closeGMLoginModal();
+      updateGMAuthDisplay(user || window.getFirebaseCurrentUser?.() || null);
+      setGMStatus(`Signed in: ${user?.displayName || user?.email || 'GOOGLE ACCOUNT'}`);
+      setGMStatusVisual(activeRef ? 'connected' : 'pending');
+    } catch (error) {
+      setGMStatus(`Google sign-in failed: ${error.message || 'UNKNOWN ERROR'}`);
+      setGMStatusVisual('disconnected');
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  }
+
+  function confirmGMReturnHome() {
+    window.location.href = 'index.html';
   }
 
   function setGMLastUpdated(value) {
@@ -3532,8 +3569,17 @@ ${damageLines}
     document.getElementById('gm-signout-modal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) closeGMSignoutModal();
     });
+    document.getElementById('gm-login-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMLoginModal();
+    });
+    document.getElementById('gm-home-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) closeGMHomeModal();
+    });
     document.getElementById('gm-auth-tag')?.addEventListener('click', () => {
-      if (!window.getFirebaseCurrentUser?.()) return;
+      if (!window.getFirebaseCurrentUser?.()) {
+        openGMLoginModal();
+        return;
+      }
       toggleGMAuthDropdown();
     });
     document.getElementById('gm-signout-btn')?.addEventListener('click', () => {
@@ -3542,6 +3588,11 @@ ${damageLines}
     });
     document.getElementById('gm-signout-cancel')?.addEventListener('click', closeGMSignoutModal);
     document.getElementById('gm-signout-confirm')?.addEventListener('click', confirmGMSignOut);
+    document.getElementById('gm-login-cancel')?.addEventListener('click', closeGMLoginModal);
+    document.getElementById('gm-login-confirm')?.addEventListener('click', confirmGMLogin);
+    document.getElementById('gm-home-link')?.addEventListener('click', openGMHomeModal);
+    document.getElementById('gm-home-cancel')?.addEventListener('click', closeGMHomeModal);
+    document.getElementById('gm-home-confirm')?.addEventListener('click', confirmGMReturnHome);
 
     const gmRollShakeBox = document.getElementById('gm-roll-shake-box');
     if (gmRollShakeBox) {

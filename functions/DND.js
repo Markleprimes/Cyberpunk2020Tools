@@ -115,7 +115,7 @@ function updateDossierAuthDisplay(user) {
   const node = getById('dossier-auth-tag');
   if (!node) return;
   node.textContent = `USER // ${user?.displayName || user?.email || 'OFFLINE'}`;
-  node.classList.toggle('is-clickable', !!user);
+  node.classList.add('is-clickable');
   if (!user) getById('dossier-auth-dropdown')?.setAttribute('hidden', 'hidden');
 }
 
@@ -142,6 +142,26 @@ async function requestDossierSignOut() {
     } catch (error) {
       showError(`SIGN OUT FAILED: ${error.message || 'UNKNOWN ERROR'}`);
     }
+  });
+}
+
+function requestDossierLoginPrompt() {
+  showModal('GOOGLE LOGIN?', 'Log in with Google on this dossier page? Your current dossier stays open while the popup login runs.', async () => {
+    closeModal();
+    try {
+      const user = await window.signInWithGooglePopup?.();
+      updateDossierAuthDisplay(user || window.getFirebaseCurrentUser?.() || null);
+      showActionLog(`SIGNED IN: ${(user?.displayName || user?.email || 'GOOGLE ACCOUNT').toUpperCase()}`);
+    } catch (error) {
+      showError(`GOOGLE SIGN-IN FAILED: ${error.message || 'UNKNOWN ERROR'}`);
+    }
+  });
+}
+
+function requestDossierReturnHome() {
+  showModal('RETURN TO HOME?', 'Go back to the home page? Your current dossier is not cleared, but unsaved guest changes will only remain in this open page.', () => {
+    closeModal();
+    window.location.href = 'index.html';
   });
 }
 
@@ -1676,6 +1696,8 @@ window.clearActiveAccountCharacterId = clearActiveAccountCharacterId;
 window.setAccountSaveBaseline = setAccountSaveBaseline;
 window.toggleDossierAuthDropdown = toggleDossierAuthDropdown;
 window.requestDossierSignOut = requestDossierSignOut;
+window.requestDossierLoginPrompt = requestDossierLoginPrompt;
+window.requestDossierReturnHome = requestDossierReturnHome;
 
 renderCombatSummaryDrawer();
 window.initFirebaseRealtime?.();
@@ -1689,10 +1711,14 @@ if (typeof MutationObserver !== 'undefined' && dossierSheetNode) {
   observer.observe(dossierSheetNode, { childList: true, subtree: true, characterData: true });
 }
 getById('dossier-auth-tag')?.addEventListener('click', () => {
-  if (!window.getFirebaseCurrentUser?.()) return;
+  if (!window.getFirebaseCurrentUser?.()) {
+    requestDossierLoginPrompt();
+    return;
+  }
   toggleDossierAuthDropdown();
 });
 getById('dossier-signout-btn')?.addEventListener('click', requestDossierSignOut);
+getById('dossier-home-link')?.addEventListener('click', requestDossierReturnHome);
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.auth-menu-wrap')) {
     toggleDossierAuthDropdown(false);

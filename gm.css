@@ -35,6 +35,8 @@ body::before{
 .gm-auth-menu{position:relative}
 .gm-kicker{font-family:'Share Tech Mono',monospace;font-size:.66rem;letter-spacing:.22em;color:var(--accent);margin-bottom:8px}
 .gm-header h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.4rem,6vw,5rem);line-height:.9;letter-spacing:.08em;background:linear-gradient(160deg,var(--accent-y) 0%,var(--accent) 48%,var(--accent-r) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 8px rgba(224,20,52,.3))}
+.gm-home-link{cursor:pointer;transition:filter .2s ease,transform .2s ease}
+.gm-home-link:hover{filter:drop-shadow(0 0 10px rgba(255,177,74,.36));transform:translateY(-1px)}
 .gm-copy{margin-top:12px;max-width:720px;color:var(--text-dim);font-size:1rem;line-height:1.45}
 .gm-status-chip{padding:10px 14px;border:1px solid rgba(255,77,109,.24);background:rgba(255,77,109,.08);font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.16em;color:var(--accent-r)}
 .gm-status-chip.connected{border-color:rgba(0,217,139,.28);background:rgba(0,217,139,.08);color:var(--accent-g)}
