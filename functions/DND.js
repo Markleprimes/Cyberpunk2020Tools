@@ -142,7 +142,7 @@ async function requestDossierSignOut() {
     } catch (error) {
       showError(`SIGN OUT FAILED: ${error.message || 'UNKNOWN ERROR'}`);
     }
-  });
+  }, 'SIGN OUT');
 }
 
 function requestDossierLoginPrompt() {
@@ -155,14 +155,14 @@ function requestDossierLoginPrompt() {
     } catch (error) {
       showError(`GOOGLE SIGN-IN FAILED: ${error.message || 'UNKNOWN ERROR'}`);
     }
-  });
+  }, 'LOG IN');
 }
 
 function requestDossierReturnHome() {
   showModal('RETURN TO HOME?', 'Go back to the home page? Your current dossier is not cleared, but unsaved guest changes will only remain in this open page.', () => {
     closeModal();
     window.location.href = 'index.html';
-  });
+  }, 'HOME');
 }
 
 function buildCurrentAccountCharacterPayload() {
@@ -1646,9 +1646,10 @@ function parseRollableValue(value) {
   return null;
 }
 
-function showModal(title, msg, cb) {
+function showModal(title, msg, cb, confirmLabel = 'CONFIRM') {
   getById('modal-title').textContent = title;
   getById('modal-msg').textContent = msg;
+  getById('modal-confirm').textContent = String(confirmLabel || 'CONFIRM').toUpperCase();
   _modalCb = cb;
   getById('modal').classList.add('show');
   getById('modal-confirm').onclick = () => {
@@ -1727,9 +1728,9 @@ document.addEventListener('click', (event) => {
 
 function resetSheet() {
   showModal('CLEAR DOSSIER?', 'Discard current character and reset the dossier to blank values?', () => {
-    getById('file-input2').value = '';
-    getById('item-file-input').value = '';
-    getById('banner-image-input').value = '';
+      getById('file-input2').value = '';
+      getById('item-file-input').value = '';
+      getById('banner-image-input').value = '';
     bannerImageData = '';
     bannerImageName = '';
     clearInventoryFieldEffects();
@@ -1745,9 +1746,9 @@ function resetSheet() {
     persistentRollPenalty = 0;
     clearInterval(_rollTimer);
     activeAccountCharacterId = '';
-    renderSheet(buildBlankSheetData());
-    setAccountSaveBaseline();
-    closeModal();
-    showActionLog('CLEARED DOSSIER');
-  });
-}
+      renderSheet(buildBlankSheetData());
+      setAccountSaveBaseline();
+      closeModal();
+      showActionLog('CLEARED DOSSIER');
+    }, 'CLEAR');
+  }
