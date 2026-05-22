@@ -61,7 +61,7 @@ function buildBlankSheetData(name = '--', aliases = [], career = 'UNKNOWN') {
     specialSkills: [],
     reputation: { rep: 0 },
     wallet: { eddies: 0 },
-    physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0 },
+    physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0, deathsave: 0 },
     body: {},
     stunpoint: {},
     armor: { Head: 0, Torso: 0, 'R.Arm': 0, 'L.Arm': 0, 'R.Leg': 0, 'L.Leg': 0 },

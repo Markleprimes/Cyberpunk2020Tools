@@ -394,6 +394,7 @@ physicalBody: {
   bodylevel=${bodyLevelVal}
   weight=${weightVal}
   stunpoint=${stunVal}
+  deathsave=${deathSaveVal}
 }
 
 armor: {

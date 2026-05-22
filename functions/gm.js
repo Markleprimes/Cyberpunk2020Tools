@@ -670,7 +670,8 @@
       physical: {
         bodyLevel: parseGMNumericValue(physicalBody.bodylevel) ?? 0,
         weight: parseGMNumericValue(physicalBody.weight ?? bodyBlock.weight) ?? 0,
-        stun: parseGMNumericValue(physicalBody.stunpoint ?? stunBlock.stun) ?? 0
+        stun: parseGMNumericValue(physicalBody.stunpoint ?? stunBlock.stun) ?? 0,
+        deathSave: parseGMNumericValue(physicalBody.deathsave ?? bodyBlock.deathsave) ?? 0
       },
       inventoryMap: JSON.parse(JSON.stringify(parsedData.inventory || {})),
       inventory: flattenGMInventory(parsedData.inventory || {}),
@@ -700,7 +701,7 @@
       specialSkills: [],
       reputation: { rep: 0 },
       wallet: { eddies: 0 },
-      physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0 },
+      physicalBody: { bodylevel: 0, weight: 0, stunpoint: 0, deathsave: 0 },
       armor: Object.fromEntries(GM_LIMBS.map((label) => [label, 0])),
       damage: Object.fromEntries(GM_LIMBS.map((label) => [label, 0])),
       inventory: {}
@@ -762,7 +763,8 @@
       physicalBody: {
         bodylevel: parseGMNumericValue(entry?.physical?.bodyLevel) ?? 0,
         weight: parseGMNumericValue(entry?.physical?.weight) ?? 0,
-        stunpoint: parseGMNumericValue(entry?.physical?.stun) ?? 0
+        stunpoint: parseGMNumericValue(entry?.physical?.stun) ?? 0,
+        deathsave: parseGMNumericValue(entry?.physical?.deathSave) ?? 0
       },
       body: {},
       stunpoint: {},
@@ -834,6 +836,7 @@ physicalBody: {
   bodylevel=${parseGMNumericValue(data.physicalBody?.bodylevel) ?? 0}
   weight=${parseGMNumericValue(data.physicalBody?.weight) ?? 0}
   stunpoint=${parseGMNumericValue(data.physicalBody?.stunpoint) ?? 0}
+  deathsave=${parseGMNumericValue(data.physicalBody?.deathsave) ?? 0}
 }
 
 armor: {
@@ -1281,7 +1284,7 @@ ${damageLines}
     } else if (type === 'setWallet') {
       npc.wallet = nextValue;
     } else if (type === 'setPhysical') {
-      if (!npc.physical) npc.physical = { bodyLevel: 0, weight: 0, stun: 0 };
+      if (!npc.physical) npc.physical = { bodyLevel: 0, weight: 0, stun: 0, deathSave: 0 };
       npc.physical[label] = nextValue;
     } else {
       return;
@@ -1694,7 +1697,8 @@ ${damageLines}
     const fields = [
       { label: 'BODY LEVEL', value: entry?.physical?.bodyLevel ?? 0, commandField: 'bodyLevel' },
       { label: 'BODY WEIGHT', value: entry?.physical?.weight ?? 0, commandField: 'weight' },
-      { label: 'STUN POINTS', value: entry?.physical?.stun ?? 0, commandField: 'stun' }
+      { label: 'STUN POINTS', value: entry?.physical?.stun ?? 0, commandField: 'stun' },
+      { label: 'DEATH SAVE', value: entry?.physical?.deathSave ?? 0, commandField: 'deathSave' }
     ];
     return `
       <div class="gm-dossier-body-row">
@@ -2028,7 +2032,8 @@ ${damageLines}
     const editablePhysical = {
       bodyLevel: entry.physical?.bodyLevel ?? 0,
       weight: entry.physical?.weight ?? 0,
-      stun: entry.physical?.stun ?? 0
+      stun: entry.physical?.stun ?? 0,
+      deathSave: entry.physical?.deathSave ?? 0
     };
     const identityContent = options.localEditable
       ? `${renderGMLocalEditableTextLines([
@@ -2054,18 +2059,21 @@ ${damageLines}
       ? renderGMLocalEditableNumberLines([
           { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
           { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
-          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' },
+          { label: 'DeathSave', value: editablePhysical.deathSave, commandField: 'deathSave' }
         ], { commandType: 'setPhysical', npcId: clientId })
       : options.remoteEditable
       ? renderGMEditableNumberLines([
           { label: 'BodyLevel', value: editablePhysical.bodyLevel, commandField: 'bodyLevel' },
           { label: 'Weight', value: editablePhysical.weight, commandField: 'weight' },
-          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' }
+          { label: 'Stun', value: editablePhysical.stun, commandField: 'stun' },
+          { label: 'DeathSave', value: editablePhysical.deathSave, commandField: 'deathSave' }
         ], { commandType: 'setPhysical', clientId })
       : renderGMKeyValueLines({
           BodyLevel: entry.physical?.bodyLevel ?? 0,
           Weight: entry.physical?.weight ?? 0,
-          Stun: entry.physical?.stun ?? 0
+          Stun: entry.physical?.stun ?? 0,
+          DeathSave: entry.physical?.deathSave ?? 0
         });
     const reputationContent = options.localEditable
       ? renderGMLocalEditableNumberLines([{ label: 'Reputation', value: entry.reputation ?? 0, commandField: 'reputation' }], { commandType: 'setReputation', npcId: clientId })

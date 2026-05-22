@@ -112,6 +112,8 @@ function renderSheet(data) {
   if (Number.isNaN(weightVal)) weightVal = parseInt(data.body?.weight, 10) || 0;
   stunVal = parseInt(data.physicalBody?.stunpoint, 10);
   if (Number.isNaN(stunVal)) stunVal = parseInt(data.stunpoint?.stun, 10) || 0;
+  deathSaveVal = parseInt(data.physicalBody?.deathsave, 10);
+  if (Number.isNaN(deathSaveVal)) deathSaveVal = parseInt(data.body?.deathsave, 10) || 0;
   renderPhysicalBody();
 
   if (typeof clearInventoryFieldEffects === 'function') clearInventoryFieldEffects();
@@ -445,7 +447,7 @@ function setWallet(value) {
 function renderPhysicalBody() {
   const effective = typeof getEffectivePhysicalValues === 'function'
     ? getEffectivePhysicalValues()
-    : { bodyLevel: bodyLevelVal, weight: weightVal, stun: stunVal };
+    : { bodyLevel: bodyLevelVal, weight: weightVal, stun: stunVal, deathSave: deathSaveVal };
   document.getElementById('body-level-val').innerHTML = effective.bodyLevel !== bodyLevelVal
     ? `${effective.bodyLevel}<span style="font-size:.45em;opacity:.6"> (${bodyLevelVal})</span>`
     : String(effective.bodyLevel);
@@ -455,6 +457,9 @@ function renderPhysicalBody() {
   document.getElementById('stun-val').innerHTML = effective.stun !== stunVal
     ? `${effective.stun}<span style="font-size:.45em;opacity:.6"> (${stunVal})</span>`
     : String(effective.stun);
+  document.getElementById('deathsave-val').innerHTML = effective.deathSave !== deathSaveVal
+    ? `${effective.deathSave}<span style="font-size:.45em;opacity:.6"> (${deathSaveVal})</span>`
+    : String(effective.deathSave);
   updateSystemStrip();
   syncCurrentPlayerPresence();
 }
@@ -469,12 +474,14 @@ function addEffectiveBodyLevelModifier() {
 function changeBS(which, delta) {
   if (which === 'bodylevel') bodyLevelVal = Math.max(0, Math.min(4, bodyLevelVal + delta));
   else if (which === 'weight') weightVal = Math.max(0, weightVal + delta);
-  else stunVal = Math.max(0, stunVal + delta);
+  else if (which === 'stun') stunVal = Math.max(0, stunVal + delta);
+  else deathSaveVal = Math.max(0, deathSaveVal + delta);
   renderPhysicalBody();
-  const label = which === 'bodylevel' ? 'BODY LEVEL' : which === 'weight' ? 'WEIGHT' : 'STUN';
-  const value = which === 'bodylevel' ? bodyLevelVal : which === 'weight' ? weightVal : stunVal;
-  flashById(which === 'bodylevel' ? 'body-level-val' : which === 'weight' ? 'body-val' : 'stun-val');
-  pulsePanelFromNode(document.getElementById(which === 'bodylevel' ? 'body-level-val' : which === 'weight' ? 'body-val' : 'stun-val'));
+  const label = which === 'bodylevel' ? 'BODY LEVEL' : which === 'weight' ? 'WEIGHT' : which === 'stun' ? 'STUN' : 'DEATH SAVE';
+  const value = which === 'bodylevel' ? bodyLevelVal : which === 'weight' ? weightVal : which === 'stun' ? stunVal : deathSaveVal;
+  const targetId = which === 'bodylevel' ? 'body-level-val' : which === 'weight' ? 'body-val' : which === 'stun' ? 'stun-val' : 'deathsave-val';
+  flashById(targetId);
+  pulsePanelFromNode(document.getElementById(targetId));
   showActionLog(`${label} ${delta > 0 ? 'INCREASED' : 'DECREASED'} TO ${value}`);
 }
 

@@ -228,6 +228,14 @@
             <button class="ctrl-btn minus" onclick="changeBS('stun',-1)">-</button>
           </div>
         </div>
+        <div class="bs-item">
+          <div class="bs-label">DEATH SAVE</div>
+          <div class="bs-value red-glass" id="deathsave-val">--</div>
+          <div class="bs-controls">
+            <button class="ctrl-btn" onclick="changeBS('deathsave',1)">+</button>
+            <button class="ctrl-btn minus" onclick="changeBS('deathsave',-1)">-</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="panel" id="reputation-panel" style="grid-column:4/5;">
@@ -758,12 +766,12 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260501e"></script>
-<script src="functions/DND.js?v=20260522a"></script>
-<script src="functions/createNewCharacter.js?v=20260522a"></script>
-<script src="functions/dossierSheet.js?v=20260522a"></script>
+<script src="functions/DND.js?v=20260522b"></script>
+<script src="functions/createNewCharacter.js?v=20260522b"></script>
+<script src="functions/dossierSheet.js?v=20260522b"></script>
 <script src="functions/inventory.js?v=20260424m"></script>
 <script src="functions/rollLab.js?v=20260427b"></script>
-<script src="functions/upload-download.js?v=20260522a"></script>
+<script src="functions/upload-download.js?v=20260522b"></script>
 <script src="functions/account-saves.js?v=20260501b"></script>
 <script src="functions/netrunner.js?v=20260502a"></script>
 <script src="functions/remote-breach.js?v=20260502a"></script>

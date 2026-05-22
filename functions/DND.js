@@ -8,6 +8,7 @@ let upgradePoints = 0;
 let bodyLevelVal = 0;
 let weightVal = 0;
 let stunVal = 0;
+let deathSaveVal = 0;
 let inventory = {};
 let rollModifiers = [];
 let currentRoll = { sides: null, qty: 0, diceTypes: [], diceLabel: '', rolls: [], result: 0, modifiers: 0, total: 0, rolledAt: 0 };
@@ -101,7 +102,8 @@ const INVENTORY_PHYSICAL_ALIASES = {
   stun: 'stun',
   stunpoint: 'stun',
   stunpoints: 'stun',
-  bodyweight: 'weight'
+  bodyweight: 'weight',
+  deathsave: 'deathSave'
 };
 const DOSSIER_THEME_CONFIGS = {
   'night-city': {
@@ -713,7 +715,8 @@ function buildCurrentDossierSheetData() {
     physicalBody: {
       bodylevel: Number(bodyLevelVal || 0),
       weight: Number(weightVal || 0),
-      stunpoint: Number(stunVal || 0)
+      stunpoint: Number(stunVal || 0),
+      deathsave: Number(deathSaveVal || 0)
     },
     body: {},
     stunpoint: {},
@@ -1097,7 +1100,8 @@ function getEffectivePhysicalValues() {
   return {
     bodyLevel: Math.max(0, Math.min(4, bodyLevelVal + (derived.bodyLevel || 0))),
     weight: Math.max(0, weightVal + (derived.weight || 0)),
-    stun: Math.max(0, stunVal + (derived.stun || 0))
+    stun: Math.max(0, stunVal + (derived.stun || 0)),
+    deathSave: Math.max(0, deathSaveVal)
   };
 }
 
@@ -1368,6 +1372,7 @@ function applyRemotePlayerCommand(commandId, command) {
       if (command.field === 'bodyLevel') bodyLevelVal = Math.max(0, Math.min(4, num(command.value)));
       else if (command.field === 'weight') weightVal = num(command.value);
       else if (command.field === 'stun') stunVal = num(command.value);
+      else if (command.field === 'deathSave') deathSaveVal = num(command.value);
       renderPhysicalBody();
       break;
     case 'setArmor':
@@ -1520,7 +1525,7 @@ function buildSystemTickerMessages() {
     `${name} // ${career} profile synced to ${theme.label} uplink.`,
     `Street cred ${repValue}. Wallet ${walletValue} eb. Upgrade pool ${upgradePoints}.`,
     `Inventory nodes ${inventoryCount}. Wound channels ${woundCount || 0}. Roll modifiers ${modTotal >= 0 ? '+' : ''}${modTotal}.`,
-    `Body ${bodyLevelVal}. Weight ${weightVal}. Stun ${stunVal}. Aim stack ${aimStackPoints}.`,
+    `Body ${bodyLevelVal}. Weight ${weightVal}. Stun ${stunVal}. Death Save ${deathSaveVal}. Aim stack ${aimStackPoints}.`,
     theme.tickerA,
     theme.tickerB,
     (currentRoll.diceLabel || currentRoll.sides)
