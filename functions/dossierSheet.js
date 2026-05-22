@@ -67,6 +67,9 @@ function renderCareerBadge(career) {
 
 function renderSheet(data) {
   document.getElementById('status-bar').style.display = 'none';
+  if (typeof applyDossierTheme === 'function') {
+    applyDossierTheme(data.settingTheme || data.setting?.[0] || data.theme?.[0] || data.theme || 'night-city', false);
+  }
   document.getElementById('char-name').textContent = data.name[0] || 'Unknown';
   document.getElementById('char-aliases').innerHTML = data.name.slice(1).map((a) => `<span class="alias-tag">${a}</span>`).join('');
   renderCareerBadge(data.career[0] || '???');

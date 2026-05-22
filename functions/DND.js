@@ -55,6 +55,7 @@ let activeAccountCharacterId = '';
 let accountAutosaveTimer = null;
 let lastSavedAccountHash = '';
 let suppressAccountAutosave = false;
+let currentDossierTheme = 'night-city';
 const DOSSIER_LAUNCH_PARAMS = new URLSearchParams(window.location.search);
 const IS_GM_NPC_LITE_MODE = DOSSIER_LAUNCH_PARAMS.get('gmNpcLite') === '1'
   || (DOSSIER_LAUNCH_PARAMS.get('embedded') === '1' && String(DOSSIER_LAUNCH_PARAMS.get('role') || '').trim().toLowerCase() === 'npc');
@@ -101,6 +102,26 @@ const INVENTORY_PHYSICAL_ALIASES = {
   stunpoint: 'stun',
   stunpoints: 'stun',
   bodyweight: 'weight'
+};
+const DOSSIER_THEME_CONFIGS = {
+  'night-city': {
+    key: 'night-city',
+    label: 'Night City',
+    edition: '// CHARACTER DOSSIER // NIGHT CITY //',
+    uplink: 'NIGHT CITY UPLINK',
+    boot: 'Night City uplink stabilizing...',
+    tickerA: 'Night City is playing tricks again. Keep one eye on the glass and one on the exits.',
+    tickerB: 'Signal ghosts are playing tricks in the dossier feed. That usually means the system is awake.'
+  },
+  'european-community': {
+    key: 'european-community',
+    label: 'European Community',
+    edition: '// CHARACTER DOSSIER // EUROPEAN COMMUNITY //',
+    uplink: 'EUROPEAN COMMUNITY UPLINK',
+    boot: 'European Community uplink stabilizing...',
+    tickerA: 'Cold-route traffic is pulsing through the dossier feed. Keep the lines clean and the exits cleaner.',
+    tickerB: 'Corporate blue noise is creeping across the glass. That usually means someone important is listening.'
+  }
 };
 
 function getNpcDossierSyncKey(npcId) {
@@ -304,6 +325,43 @@ applyEmbeddedDossierMode();
 // DOM helpers and shared event wiring
 function getById(id) {
   return document.getElementById(id);
+}
+
+function normalizeDossierThemeKey(value) {
+  const clean = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!clean) return 'night-city';
+  if (clean === 'night-city' || clean === 'nightcity') return 'night-city';
+  if (['european-community', 'europeancommunity', 'ec', 'europe'].includes(clean)) return 'european-community';
+  return DOSSIER_THEME_CONFIGS[clean] ? clean : 'night-city';
+}
+
+function getCurrentDossierThemeConfig() {
+  return DOSSIER_THEME_CONFIGS[currentDossierTheme] || DOSSIER_THEME_CONFIGS['night-city'];
+}
+
+function getDossierThemeLabel(themeKey = currentDossierTheme) {
+  return (DOSSIER_THEME_CONFIGS[normalizeDossierThemeKey(themeKey)] || DOSSIER_THEME_CONFIGS['night-city']).label;
+}
+
+function applyDossierTheme(themeValue, refreshStrip = true) {
+  currentDossierTheme = normalizeDossierThemeKey(themeValue);
+  const config = getCurrentDossierThemeConfig();
+  document.body.dataset.dossierTheme = currentDossierTheme;
+  const edition = getById('dossier-edition-line');
+  if (edition) edition.textContent = config.edition;
+  const uplink = getById('dossier-uplink-line');
+  if (uplink) uplink.textContent = config.uplink;
+  const selector = getById('dossier-theme-select');
+  if (selector) selector.value = currentDossierTheme;
+  const strip = getById('system-strip-text');
+  if (strip && !refreshStrip) strip.textContent = config.boot;
+  if (refreshStrip) updateSystemStrip(true);
+}
+
+function setDossierTheme(themeValue, showLog = true) {
+  applyDossierTheme(themeValue, true);
+  if (showLog) showActionLog(`SETTING THEME: ${getDossierThemeLabel().toUpperCase()}`);
+  scheduleAccountAutosave();
 }
 
 function toggleDossierRoomDrawer() {
@@ -641,6 +699,7 @@ function buildCurrentDossierSheetData() {
     name: names.length ? names : ['Unknown'],
     stats: Object.fromEntries(Object.entries(sheetStats).map(([key, value]) => [key, Number(value || 0)])),
     career: [String(getById('char-career')?.dataset?.career || getById('char-career')?.textContent || 'UNKNOWN').trim() || 'UNKNOWN'],
+    settingTheme: currentDossierTheme,
     careerSkill,
     specialSkills: sheetSpecialSkills.map((skill) => ({
       id: skill.id || '',
@@ -1456,13 +1515,14 @@ function buildSystemTickerMessages() {
   const modTotal = typeof getModifierTotal === 'function' ? getModifierTotal() : 0;
   const name = (document.getElementById('char-name')?.textContent || 'DOSSIER').trim();
   const career = (document.getElementById('char-career')?.textContent || 'UNKNOWN').trim();
+  const theme = getCurrentDossierThemeConfig();
   return [
-    `${name} // ${career} profile synced to Night City uplink.`,
+    `${name} // ${career} profile synced to ${theme.label} uplink.`,
     `Street cred ${repValue}. Wallet ${walletValue} eb. Upgrade pool ${upgradePoints}.`,
     `Inventory nodes ${inventoryCount}. Wound channels ${woundCount || 0}. Roll modifiers ${modTotal >= 0 ? '+' : ''}${modTotal}.`,
     `Body ${bodyLevelVal}. Weight ${weightVal}. Stun ${stunVal}. Aim stack ${aimStackPoints}.`,
-    'Night City is playing tricks again. Keep one eye on the glass and one on the exits.',
-    'Signal ghosts are playing tricks in the dossier feed. That usually means the system is awake.',
+    theme.tickerA,
+    theme.tickerB,
     (currentRoll.diceLabel || currentRoll.sides)
       ? `Last roll ${currentRoll.diceLabel || `${currentRoll.qty}D${currentRoll.sides}`} => ${currentRoll.result}.`
       : 'Roll lab idle. Breach protocol waiting for the next command.'
@@ -1699,8 +1759,11 @@ window.toggleDossierAuthDropdown = toggleDossierAuthDropdown;
 window.requestDossierSignOut = requestDossierSignOut;
 window.requestDossierLoginPrompt = requestDossierLoginPrompt;
 window.requestDossierReturnHome = requestDossierReturnHome;
+window.applyDossierTheme = applyDossierTheme;
+window.getDossierThemeLabel = getDossierThemeLabel;
 
 renderCombatSummaryDrawer();
+applyDossierTheme(currentDossierTheme, false);
 window.initFirebaseRealtime?.();
 updateDossierAuthDisplay(window.getFirebaseCurrentUser?.() || null);
 window.watchFirebaseAuthState?.((user) => updateDossierAuthDisplay(user));
@@ -1720,6 +1783,9 @@ getById('dossier-auth-tag')?.addEventListener('click', () => {
 });
 getById('dossier-signout-btn')?.addEventListener('click', requestDossierSignOut);
 getById('dossier-home-link')?.addEventListener('click', requestDossierReturnHome);
+getById('dossier-theme-select')?.addEventListener('change', (event) => {
+  setDossierTheme(event.target.value, true);
+});
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.auth-menu-wrap')) {
     toggleDossierAuthDropdown(false);

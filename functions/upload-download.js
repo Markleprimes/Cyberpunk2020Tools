@@ -179,13 +179,14 @@ async function mergeInventoryBundle(file) {
 
 function parseCharacter(raw) {
   try {
-    const data = { name: [], stats: {}, career: [], careerSkill: {}, specialSkills: [], reputation: {}, wallet: {}, physicalBody: {}, body: {}, stunpoint: {}, armor: {}, damage: {}, inventory: {} };
+    const data = { name: [], stats: {}, career: [], settingTheme: 'night-city', careerSkill: {}, specialSkills: [], reputation: {}, wallet: {}, physicalBody: {}, body: {}, stunpoint: {}, armor: {}, damage: {}, inventory: {} };
     const text = stripCommentLines(raw);
     extractTopLevelBlocks(text).forEach(({ key, body }) => {
       key = key.trim().toLowerCase();
       if (key === 'name') data.name = parseNameBlock(body);
       else if (key === 'stats') data.stats = parseKVBlock(body);
       else if (key === 'career') data.career = parseNameBlock(body);
+      else if (key === 'setting' || key === 'settingtheme' || key === 'theme') data.settingTheme = parseNameBlock(body)[0] || 'night-city';
       else if (key === 'careerskill') data.careerSkill = parseKVBlock(body);
       else if (key === 'specialskill' || key === 'specialskills') data.specialSkills = parseSpecialSkillBlock(body);
       else if (key === 'reputation') data.reputation = parseKVBlock(body);
@@ -370,6 +371,10 @@ stats: {
 
 career: {
   "${career}"
+}
+
+setting: {
+  "${typeof getDossierThemeLabel === 'function' ? getDossierThemeLabel() : 'Night City'}"
 }
 
 careerSkill: {

@@ -56,6 +56,7 @@ function buildBlankSheetData(name = '--', aliases = [], career = 'UNKNOWN') {
     name: [name, ...aliases.filter(Boolean)],
     stats,
     career: [career],
+    settingTheme: 'night-city',
     careerSkill: { point: 0 },
     specialSkills: [],
     reputation: { rep: 0 },

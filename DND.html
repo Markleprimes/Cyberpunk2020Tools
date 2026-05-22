@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260502b">
+<link rel="stylesheet" href="DND.css?v=20260522a">
 </head>
 <body>
 <div class="wrapper">
@@ -13,10 +13,10 @@
 <header id="app-header">
   <div class="logo-block">
     <h1 id="dossier-home-link" class="home-link-heading">CYBERPUNK 2020</h1>
-    <div class="edition">// CHARACTER DOSSIER // NIGHT CITY //</div>
+    <div class="edition" id="dossier-edition-line">// CHARACTER DOSSIER // NIGHT CITY //</div>
   </div>
     <div class="corner-tag">
-      REV 2.7.4<br>NIGHT CITY UPLINK<br>
+      REV 2.7.4<br><span id="dossier-uplink-line">NIGHT CITY UPLINK</span><br>
       <span class="online">
         <span class="online-dot"></span>
         JACKED IN
@@ -33,7 +33,7 @@
   </div>
   <div class="system-marquee">
     <span class="system-label">SYSTEM</span>
-    <span class="system-text" id="system-strip-text">Night City uplink stabilizing...</span>
+    <span class="system-text" id="system-strip-text">Dossier uplink stabilizing...</span>
   </div>
   <div class="system-metrics">
     <span class="system-metric" id="system-metric-inv">INV 0</span>
@@ -95,6 +95,14 @@
     </div>
     <div class="side-drawer-section">
       <div class="room-sync-label">CHARACTER</div>
+    </div>
+    <div class="side-drawer-section">
+      <div class="room-sync-label">SETTING</div>
+      <div class="room-sync-note" id="dossier-theme-note">Choose the campaign skin for this dossier. The selected setting is saved with this character.</div>
+      <select class="room-sync-role dossier-theme-select" id="dossier-theme-select">
+        <option value="night-city">NIGHT CITY</option>
+        <option value="european-community">EUROPEAN COMMUNITY</option>
+      </select>
     </div>
     <div class="sheet-actions side-drawer-actions">
       <button class="action-btn green" onclick="downloadTxt()">DOWNLOAD .ZIP</button>
@@ -750,12 +758,12 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260501e"></script>
-  <script src="functions/DND.js?v=20260502c"></script>
-<script src="functions/createNewCharacter.js?v=20260501a"></script>
-<script src="functions/dossierSheet.js?v=20260427b"></script>
+<script src="functions/DND.js?v=20260522a"></script>
+<script src="functions/createNewCharacter.js?v=20260522a"></script>
+<script src="functions/dossierSheet.js?v=20260522a"></script>
 <script src="functions/inventory.js?v=20260424m"></script>
 <script src="functions/rollLab.js?v=20260427b"></script>
-<script src="functions/upload-download.js?v=20260501a"></script>
+<script src="functions/upload-download.js?v=20260522a"></script>
 <script src="functions/account-saves.js?v=20260501b"></script>
 <script src="functions/netrunner.js?v=20260502a"></script>
 <script src="functions/remote-breach.js?v=20260502a"></script>
