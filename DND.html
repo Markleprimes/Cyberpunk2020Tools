@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CYBERPUNK 2020 // Character Dossier</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="DND.css?v=20260522a">
+<link rel="stylesheet" href="DND.css?v=20260523h">
 </head>
 <body>
 <div class="wrapper">
@@ -101,7 +101,7 @@
       <div class="room-sync-note" id="dossier-theme-note">Choose the campaign skin for this dossier. The selected setting is saved with this character.</div>
       <select class="room-sync-role dossier-theme-select" id="dossier-theme-select">
         <option value="night-city">NIGHT CITY</option>
-        <option value="european-community">EUROPEAN COMMUNITY</option>
+        <option value="european-community">EUROPEAN ECONOMY COMMUNITY</option>
       </select>
     </div>
     <div class="sheet-actions side-drawer-actions">
@@ -206,7 +206,7 @@
       <div class="body-stun-row">
         <div class="bs-item">
           <div class="bs-label">BODY LEVEL</div>
-          <div class="bs-value red-glass pickable" id="body-level-val" title="Add BODY LEVEL to roll" onclick="addEffectiveBodyLevelModifier()">--</div>
+          <div class="bs-value red-glass pickable" data-roll-pick="true" id="body-level-val" onclick="addEffectiveBodyLevelModifier()">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('bodylevel',1)">+</button>
             <button class="ctrl-btn minus" onclick="changeBS('bodylevel',-1)">-</button>
@@ -230,7 +230,7 @@
         </div>
         <div class="bs-item">
           <div class="bs-label">DEATH SAVE</div>
-          <div class="bs-value red-glass" id="deathsave-val">--</div>
+          <div class="bs-value red-glass pickable" data-roll-pick="true" id="deathsave-val" onclick="addEffectiveDeathSaveModifier()">--</div>
           <div class="bs-controls">
             <button class="ctrl-btn" onclick="changeBS('deathsave',1)">+</button>
             <button class="ctrl-btn minus" onclick="changeBS('deathsave',-1)">-</button>
@@ -241,7 +241,7 @@
     <div class="panel" id="reputation-panel" style="grid-column:4/5;">
       <div class="panel-title">Reputation</div>
       <div class="rep-row">
-        <div class="rep-main" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()">
+        <div class="rep-main" data-roll-pick="true" onclick="addEffectiveReputationModifier()">
           <div class="rep-number" id="rep-number">0</div>
           <div class="rep-side">
           <div class="rep-label">STREET CRED</div>
@@ -252,7 +252,7 @@
           </div>
         </div>
       </div>
-      <div class="rep-pips" id="rep-pips" title="Add Reputation to roll" onclick="addEffectiveReputationModifier()"></div>
+      <div class="rep-pips" data-roll-pick="true" id="rep-pips" onclick="addEffectiveReputationModifier()"></div>
     </div>
     <div class="panel" id="wallet-panel" style="grid-column:5/6;">
       <div class="panel-title">Wallet</div>
@@ -509,6 +509,7 @@
 </div><!-- end sheet -->
 
 <div class="action-toast" id="action-toast"></div>
+<div class="roll-pick-tooltip" id="roll-pick-tooltip">ADD TO ROLL</div>
 
 <!-- ROLL EXECUTE MODAL -->
 <div class="modal-overlay roll-execute-modal" id="roll-execute-modal">
@@ -630,19 +631,61 @@
         <div class="create-field-label">Custom Type</div>
         <input class="create-field-input" id="inventory-custom-type" type="text" maxlength="40" placeholder="ammo, armor, gear..." />
       </label>
-      <label>
-        <div class="create-field-label">Stats</div>
-        <textarea class="inventory-textarea" id="inventory-item-stats" placeholder="Accuracy=1&#10;Damage/Ammo=4D6&#10;Cost=450"></textarea>
-      </label>
+      <div class="inventory-editor-section">
+        <div class="inventory-editor-section-head">
+          <div class="create-field-label">Active Attributes</div>
+          <button class="action-btn inventory-row-add" type="button" onclick="addInventoryAttributeRow('active')">+ ROW</button>
+        </div>
+        <div class="inventory-editor-copy">Always-on effects that automatically change the dossier.</div>
+        <div class="inventory-attr-list" id="inventory-active-rows"></div>
+      </div>
+      <div class="inventory-editor-section">
+        <div class="inventory-editor-section-head">
+          <div class="create-field-label">Passive Attributes</div>
+          <button class="action-btn inventory-row-add" type="button" onclick="addInventoryAttributeRow('passive')">+ ROW</button>
+        </div>
+        <div class="inventory-editor-copy">Roll helpers or item lines that stay clickable inside the item modal.</div>
+        <div class="inventory-attr-list" id="inventory-passive-rows"></div>
+      </div>
       <label>
         <div class="create-field-label">Description</div>
         <textarea class="inventory-textarea" id="inventory-item-info" placeholder="One line per note&#10;Reliable sidearm"></textarea>
       </label>
-      <div class="create-form-note">Use one stat per line in <code>label=value</code> format. Numeric values stay clickable for rolls.</div>
+      <div class="create-form-note">Use the left field for the attribute label and the right field for its value. Positive numbers can be entered with or without <code>+</code>.</div>
     </div>
     <div class="modal-btns" style="margin-top:18px;">
       <button class="action-btn" type="button" onclick="closeInventoryEditor()">CANCEL</button>
       <button class="action-btn red" type="button" onclick="saveInventoryItem()">SAVE ITEM</button>
+    </div>
+  </div>
+</div>
+
+<div class="inventory-hover-card" id="inventory-hover-card"></div>
+
+<div class="modal-overlay" id="inventory-detail-modal">
+  <div class="modal-box inventory-detail-box">
+    <div class="inventory-detail-topline">ITEM DOSSIER</div>
+      <div class="inventory-detail-header">
+        <div>
+          <div class="inventory-detail-name" id="inventory-detail-name">Item</div>
+          <div class="inventory-detail-type" id="inventory-detail-type">Miscellaneous</div>
+        </div>
+        <div class="inventory-detail-actions">
+          <button class="action-btn inventory-detail-edit" type="button" onclick="editCurrentInventoryDetailItem()">EDIT</button>
+          <button class="action-btn inventory-detail-delete" type="button" onclick="deleteCurrentInventoryDetailItem()">DELETE</button>
+        </div>
+      </div>
+    <div class="inventory-detail-copy" id="inventory-detail-copy">No description logged.</div>
+    <div class="inventory-detail-section">
+      <div class="inventory-detail-section-title">Active Attributes</div>
+      <div id="inventory-detail-active"></div>
+    </div>
+    <div class="inventory-detail-section">
+      <div class="inventory-detail-section-title">Passive Attributes</div>
+      <div id="inventory-detail-passive"></div>
+    </div>
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="action-btn" type="button" onclick="closeInventoryDetailModal()">CLOSE</button>
     </div>
   </div>
 </div>
@@ -766,11 +809,11 @@
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-auth-compat.js"></script>
 <script src="functions/firebase-sync.js?v=20260501e"></script>
-<script src="functions/DND.js?v=20260522b"></script>
+<script src="functions/DND.js?v=20260523c"></script>
 <script src="functions/createNewCharacter.js?v=20260522b"></script>
-<script src="functions/dossierSheet.js?v=20260522b"></script>
-<script src="functions/inventory.js?v=20260424m"></script>
-<script src="functions/rollLab.js?v=20260427b"></script>
+<script src="functions/dossierSheet.js?v=20260523b"></script>
+<script src="functions/inventory.js?v=20260523c"></script>
+<script src="functions/rollLab.js?v=20260523f"></script>
 <script src="functions/upload-download.js?v=20260522b"></script>
 <script src="functions/account-saves.js?v=20260501b"></script>
 <script src="functions/netrunner.js?v=20260502a"></script>

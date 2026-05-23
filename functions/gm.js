@@ -2578,42 +2578,82 @@ ${damageLines}
   }
 
   function getGMRollModifierTotal() {
-    const base = gmRollModifiers.reduce((sum, modifier) => sum + (modifier.value || 0), 0);
+    return getGMDisplayRollModifiers().reduce((sum, modifier) => sum + (modifier.value || 0), 0);
+  }
+
+  function getGMDisplayRollModifiers() {
     const selectedKey = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
     const combatPenalty = typeof window.getGMCombatPenalty === 'function'
       ? Number(window.getGMCombatPenalty(selectedKey) || 0)
       : 0;
-    return base + combatPenalty;
+    const display = [...gmRollModifiers];
+    if (combatPenalty !== 0) {
+      display.push({
+        source: 'STATUS',
+        label: 'Facedown Penalty',
+        value: combatPenalty,
+        persistent: true
+      });
+    }
+    return display;
+  }
+
+  function getGMRollModifierPreviewToken(index) {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    return index < letters.length ? letters[index] : `M${index + 1}`;
+  }
+
+  function buildGMRollModifierPreview(modifiers = [], diceLabel = '1D10') {
+    const cleanDiceLabel = String(diceLabel || '').trim();
+    const cleanModifiers = Array.isArray(modifiers)
+      ? modifiers.filter((modifier) => Number.isFinite(Number(modifier?.value)))
+      : [];
+    const parts = [];
+    cleanModifiers.forEach((modifier, index) => {
+      const value = Number(modifier?.value || 0);
+      if (index === 0) {
+        parts.push(value < 0 ? `-${Math.abs(value)}` : `${value}`);
+        return;
+      }
+      parts.push(value < 0 ? `- ${Math.abs(value)}` : `+ ${value}`);
+    });
+    if (cleanDiceLabel) {
+      if (parts.length) parts.push(`+ ${cleanDiceLabel}`);
+      else parts.push(cleanDiceLabel);
+    }
+    const detailParts = cleanModifiers.map((modifier) => {
+      const source = String(modifier?.source || '').trim();
+      const label = String(modifier?.label || modifier?.source || 'Modifier').trim() || 'Modifier';
+      const value = Number(modifier?.value || 0);
+      const sourcePrefix = source && source !== label ? `${source} // ` : '';
+      return `${sourcePrefix}${label} ${value >= 0 ? '+' : ''}${value}`;
+    });
+    if (cleanDiceLabel) detailParts.push(`ROLL // ${cleanDiceLabel}`);
+    return {
+      text: parts.join(' '),
+      detail: detailParts.join('\n')
+    };
   }
 
   function renderGMRollModifierList() {
     const node = document.getElementById('gm-roll-mod-list');
     const totalNode = document.getElementById('gm-roll-mod-total-display');
     if (!node) return;
-    const selectedKey = gmSelectedRollSubjectKey || document.getElementById('gm-roll-subject-select')?.value || '';
-    const combatPenalty = typeof window.getGMCombatPenalty === 'function'
-      ? Number(window.getGMCombatPenalty(selectedKey) || 0)
-      : 0;
-    const hasVisiblePenalty = combatPenalty !== 0;
+    const displayModifiers = getGMDisplayRollModifiers();
     if (totalNode) totalNode.textContent = String(getGMRollModifierTotal());
-    if (!gmRollModifiers.length && !hasVisiblePenalty) {
+    if (!displayModifiers.length) {
       node.innerHTML = '<div class="gm-empty">No modifiers locked in.</div>';
+      renderGMRollDisplay();
       return;
     }
-    const items = gmRollModifiers.map((modifier, index) => `
+    const items = displayModifiers.map((modifier, index) => `
       <div class="gm-mod-pill">
         <span>${escapeGMValue(modifier.source)} // ${escapeGMValue(modifier.label)} ${modifier.value >= 0 ? '+' : ''}${escapeGMValue(modifier.value)}</span>
-        <button type="button" data-gm-remove-mod="${index}">X</button>
+        ${modifier.persistent ? '' : `<button type="button" data-gm-remove-mod="${index}">X</button>`}
       </div>
     `);
-    if (hasVisiblePenalty) {
-      items.push(`
-        <div class="gm-mod-pill">
-          <span>FACEDOWN // STAY STRONG PENALTY ${combatPenalty}</span>
-        </div>
-      `);
-    }
     node.innerHTML = items.join('');
+    renderGMRollDisplay();
   }
 
   function renderGMManualDicePool() {
@@ -2635,6 +2675,7 @@ ${damageLines}
       }
       if (button) button.classList.toggle('active', count > 0);
     });
+    renderGMRollDisplay();
   }
 
   function closeGMRollDrawers() {
@@ -2984,13 +3025,15 @@ ${damageLines}
     updateGMRollExecuteMeter();
     const rolls = dicePool.map((side) => Math.floor(Math.random() * side) + 1);
     const raw = rolls.reduce((sum, roll) => sum + roll, 0);
-    const modifiers = getGMRollModifierTotal();
+    const modifierSnapshot = getGMDisplayRollModifiers().map((modifier) => ({ ...modifier }));
+    const modifiers = modifierSnapshot.reduce((sum, modifier) => sum + (modifier.value || 0), 0);
     gmCurrentRoll = {
       dice: diceLabel,
       diceTypes: [...dicePool],
       pool: rolls,
       raw,
       modifiers,
+      modifierSnapshot,
       total: raw + modifiers,
       rolledAt: Date.now(),
       source: [
@@ -3070,10 +3113,18 @@ ${damageLines}
   function renderGMRollDisplay() {
     const node = document.getElementById('gm-roll-display');
     if (!node) return;
+    const livePreviewModifiers = getGMDisplayRollModifiers();
+    const previewModifiers = (livePreviewModifiers.length || gmManualDicePool.length)
+      ? livePreviewModifiers
+      : (gmCurrentRoll?.modifierSnapshot?.length ? gmCurrentRoll.modifierSnapshot : livePreviewModifiers);
+    const previewDiceLabel = gmCurrentRoll?.dice
+      || (gmManualDicePool.length ? describeGMDicePool(gmManualDicePool) : '');
+    const modifierPreview = buildGMRollModifierPreview(previewModifiers, previewDiceLabel);
     if (!gmCurrentRoll?.dice) {
       node.innerHTML = `
         <div class="gm-sheet-title">GM Result</div>
         <div class="gm-roll-empty">No GM roll yet.</div>
+        <div class="gm-roll-modifier-copy${modifierPreview.text ? ' gm-roll-modifier-preview' : ''}"${modifierPreview.text ? ` data-preview-detail="${escapeGMValue(modifierPreview.detail)}"` : ''}>${escapeGMValue(modifierPreview.text || 'Left click adds dice. Right click removes one. Fire the center roll core to launch the cinema.')}</div>
       `;
       return;
     }
@@ -3092,7 +3143,7 @@ ${damageLines}
         <span>MOD ${escapeGMValue(modifierText)}</span>
         <span>RAW ${escapeGMValue(gmCurrentRoll.raw)}</span>
       </div>
-      <div class="gm-roll-source">${escapeGMValue(gmCurrentRoll.source || 'Manual GM roll')}</div>
+      <div class="gm-roll-modifier-copy${previewModifiers.length ? ' gm-roll-modifier-preview' : ''}"${previewModifiers.length ? ` data-preview-detail="${escapeGMValue(modifierPreview.detail)}"` : ''}>${escapeGMValue(previewModifiers.length ? modifierPreview.text : (gmCurrentRoll.source || 'Manual GM roll'))}</div>
     `;
     animateGMLocalRollTotal(Number(gmCurrentRoll.raw || 0), Number(gmCurrentRoll.total || 0));
   }

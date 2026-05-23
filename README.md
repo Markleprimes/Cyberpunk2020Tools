@@ -11,6 +11,7 @@ Main features:
 - player dossier page
 - GM / referee console
 - animated roll system with presets
+- per-character dossier theme / setting
 - inventory, reputation, wallet, physical data, and damage tracking
 - Netrunner breach protocol minigame
 - `.txt` and `.zip` character import / export
@@ -88,6 +89,40 @@ Recommended dossier zip contents:
 
 Exports are zip-based.
 
+## Recent Updates
+
+### 2026-05-22 to 2026-05-23
+
+- Firebase Google login was added to the launcher, dossier, and GM pages.
+- Launcher access is no longer forced-login. Users can choose:
+  - `LOG IN WITH GOOGLE`
+  - `ENTER WITHOUT LOGIN`
+- Homepage now includes a full-width `SAVED CHARACTERS` section for signed-in users.
+- Dossier now supports account-backed `SAVE` and `LOAD FROM SAVE`.
+- GM local NPC tabs now persist to the signed-in account.
+- Dossier and GM headers now show the current signed-in user state.
+- Dossier `USER` tag now opens auth actions, including sign-out confirmation.
+- GM character flow was pushed further into dossier-style tabs instead of the older monitor-first layout.
+- Remote players and local NPCs now use a more unified tab language on the GM page.
+- `DEATH SAVE` was added as a manual physical stat and can now be added to the roll pool from the dossier.
+- Dossier inventory was overhauled:
+  - compact item cards
+  - hover info panel
+  - fixed item detail modal
+  - separate `active` and `passive` item attributes
+- Active item attributes now apply directly to dossier values.
+- Passive item attributes can be used as roll modifiers or dice queue helpers.
+- Roll HUD modifier preview was cleaned up and now shows a real breakdown tooltip.
+- The breach minigame was rebalanced:
+  - checkpoint-based route logic
+  - GM timer-controlled remote breach
+  - timer-aware board generation
+- Dossier theme switching is now saved per character.
+- Current dossier settings include:
+  - `Night City`
+  - `European Economy Community`
+- `European Economy Community` uses the `EuroTheatre` dossier header and a colder blue/navy skin.
+
 ### Character Format
 
 ```txt
@@ -101,6 +136,10 @@ stats: {
 
 career: {
   "Solo"
+}
+
+setting: {
+  "Night City"
 }
 
 careerSkill: {
@@ -129,6 +168,7 @@ physicalBody: {
   bodylevel=0
   weight=0
   stunpoint=0
+  deathsave=0
 }
 
 armor: {
@@ -152,16 +192,20 @@ damage: {
 
 ### Item Format
 
+Current item save format uses separate `active` and `passive` blocks.
+
+Notes:
+
+- `active` attributes auto-apply to the dossier
+- `passive` attributes are meant for roll interaction
+- legacy flat item files can still load through compatibility parsing
+
 ```txt
 weapon: {
   weapon1:{
     name="Medium Pistol",
-    Type="Handgun",
-    Accuracy=+1,
-    Damage="2d6+3",
-    Ammo=12,
-    Range=50m,
-    Cost=250eb,
+    active:{ Head Armor="2" },
+    passive:{ Accuracy="1", Damage="2d6+3", Ammo="12" },
     info:{ "Standard sidearm." }
   }
 }
@@ -169,9 +213,8 @@ weapon: {
 cyberware: {
   cyberware1:{
     name="Amplified Hearing",
-    Type="Sensory",
-    Cost=600eb,
-    Awareness=+2,
+    active:{ Awareness="2", Body Level="1" },
+    passive:{ Initiative="1", Detect="2" },
     info:{ "Boosted hearing in loud environments." }
   }
 }
@@ -179,10 +222,8 @@ cyberware: {
 buff: {
   buff1:{
     name="Combat Stim",
-    Type="Drug",
-    Duration="3 turns",
-    REF=+1,
-    BodyLevel=+1,
+    active:{ REF="1", Body Level="1" },
+    passive:{ Handgun="1" },
     info:{ "Short burst combat enhancer." }
   }
 }
@@ -207,6 +248,7 @@ Current GM flow:
 - connected players appear as character tabs
 - local NPCs can be created or imported as their own tabs
 - local NPC tabs now save to the signed-in account
+- right-click tab actions are used for quick facedown / initiative staging
 
 ## NPC / Random Generation
 

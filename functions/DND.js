@@ -21,6 +21,7 @@ let specialSkillEditState = null;
 let aimHitWeapons = [];
 let dossierHoverAudio = null;
 let dossierHoveredButton = null;
+let activeRollPickTooltipTarget = null;
 let rollCinemaFrame = null;
 let rollCinemaNumberTimer = null;
 let rollCinemaCountTimer = null;
@@ -77,7 +78,7 @@ const STAT_COLORS = {
   BODY: 'var(--stat-core)',
   EMP: 'var(--stat-core)'
 };
-const CHARACTER_KEYS = new Set(['name', 'stats', 'career', 'careerskill', 'specialskill', 'specialskills', 'reputation', 'wallet', 'physicalbody', 'body', 'stunpoint', 'armor', 'damage']);
+const CHARACTER_KEYS = new Set(['name', 'stats', 'career', 'setting', 'settingtheme', 'theme', 'careerskill', 'specialskill', 'specialskills', 'reputation', 'wallet', 'physicalbody', 'body', 'stunpoint', 'armor', 'damage']);
 const INVENTORY_ORDER = ['weapon', 'cyberware', 'miscellaneous', 'buff'];
 const DEFAULT_STATS = ['REF', 'INT', 'COOL', 'ATTR', 'TECH', 'LUCK', 'EMPT'];
 const BOOT_RAW_KEY = 'cp2020_boot_raw_character';
@@ -117,10 +118,10 @@ const DOSSIER_THEME_CONFIGS = {
   },
   'european-community': {
     key: 'european-community',
-    label: 'European Community',
-    edition: '// CHARACTER DOSSIER // EUROPEAN COMMUNITY //',
-    uplink: 'EUROPEAN COMMUNITY UPLINK',
-    boot: 'European Community uplink stabilizing...',
+    label: 'European Economy Community',
+    edition: '// CHARACTER DOSSIER // EUROTHEATRE //',
+    uplink: 'EUROTHEATRE UPLINK',
+    boot: 'EuroTheatre uplink stabilizing...',
     tickerA: 'Cold-route traffic is pulsing through the dossier feed. Keep the lines clean and the exits cleaner.',
     tickerB: 'Corporate blue noise is creeping across the glass. That usually means someone important is listening.'
   }
@@ -333,7 +334,7 @@ function normalizeDossierThemeKey(value) {
   const clean = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (!clean) return 'night-city';
   if (clean === 'night-city' || clean === 'nightcity') return 'night-city';
-  if (['european-community', 'europeancommunity', 'ec', 'europe'].includes(clean)) return 'european-community';
+  if (['european-community', 'europeancommunity', 'european-economy-community', 'europeaneconomycommunity', 'eec', 'ec', 'europe', 'eurotheatre', 'euro-theatre'].includes(clean)) return 'european-community';
   return DOSSIER_THEME_CONFIGS[clean] ? clean : 'night-city';
 }
 
@@ -538,6 +539,7 @@ bindFilePicker('item-file-input', (file) => readItemFile(file));
 bindFilePicker('banner-image-input', (file) => readBannerImage(file));
 
 bindBackdropClose('inventory-editor-modal', () => closeInventoryEditor());
+bindBackdropClose('inventory-detail-modal', () => closeInventoryDetailModal());
 bindBackdropClose('special-skill-editor-modal', () => closeSpecialSkillEditor());
 bindBackdropClose('aim-hit-modal', () => closeAimHitModal());
 bindBackdropClose('new-char-modal', () => closeNewCharacterModal());
@@ -612,18 +614,31 @@ function getCurrentCharacterProfile() {
   const inventoryDetailed = [];
   Object.keys(inventory || {}).forEach((category) => {
     (inventory[category] || []).forEach((item) => {
+      const activeEntries = typeof window.getInventoryAttributeEntries === 'function'
+        ? window.getInventoryAttributeEntries(item, 'active')
+        : [];
+      const passiveEntries = typeof window.getInventoryAttributeEntries === 'function'
+        ? window.getInventoryAttributeEntries(item, 'passive')
+        : [];
+      const fieldMap = typeof window.getInventoryFlattenedFieldMap === 'function'
+        ? window.getInventoryFlattenedFieldMap(item)
+        : (item.fields || {});
       inventoryItems.push({
         type: humanizeLabel(category),
         name: item.name || humanizeLabel(item.id || category),
         description: Array.isArray(item.info) && item.info.length
           ? item.info.join(' | ')
-          : '--'
+          : '--',
+        activeCount: activeEntries.length,
+        passiveCount: passiveEntries.length
       });
       inventoryDetailed.push({
         category,
         id: item.id || buildInventoryId(category),
         name: item.name || humanizeLabel(item.id || category),
-        fields: Object.entries(item.fields || {}).map(([label, value]) => ({ label, value })),
+        fields: Object.entries(fieldMap).map(([label, value]) => ({ label, value })),
+        active: activeEntries.map((entry) => ({ label: entry.label, value: entry.value })),
+        passive: passiveEntries.map((entry) => ({ label: entry.label, value: entry.value })),
         info: [...(item.info || [])]
       });
     });
@@ -665,7 +680,8 @@ function getCurrentCharacterProfile() {
     physical: {
       bodyLevel: effectivePhysical.bodyLevel,
       weight: effectivePhysical.weight,
-      stun: effectivePhysical.stun
+      stun: effectivePhysical.stun,
+      deathSave: effectivePhysical.deathSave
     },
     inventory: inventoryItems,
     inventoryDetailed,
@@ -832,6 +848,13 @@ function resolveInventoryArmorTarget(label) {
     if (clean.includes(limbKey) && (clean.includes('sp') || clean.includes('armor') || clean.includes('armour'))) return limb;
   }
   return '';
+}
+
+function getInventoryActiveEntriesCompat(item) {
+  if (typeof window.getInventoryAttributeEntries === 'function') {
+    return window.getInventoryAttributeEntries(item, 'active');
+  }
+  return Object.entries(item?.fields || {}).map(([label, value]) => ({ label, value }));
 }
 
 function parseDiceFormula(value) {
@@ -1015,17 +1038,15 @@ function getActiveInventoryFieldDescriptors() {
   const activeDescriptors = [];
   Object.entries(inventory || {}).forEach(([category, items]) => {
     (items || []).forEach((item) => {
-      Object.entries(item?.fields || {}).forEach(([label, value]) => {
+      getInventoryActiveEntriesCompat(item).forEach(({ label, value }) => {
         const descriptor = getInventoryFieldDescriptor(label, value);
-        const autoApplied = isInventoryDescriptorAutoApplied(descriptor);
-        if (!autoApplied && !isInventoryFieldEffectActive(item.id, label)) return;
         if (!['effect', 'armor_sp'].includes(descriptor.kind)) return;
         activeDescriptors.push({
           ...descriptor,
           itemId: item.id,
           itemName: item.name || humanizeLabel(item.id || category),
           category,
-          autoApplied
+          autoApplied: true
         });
       });
     });
@@ -1037,7 +1058,7 @@ function getInventoryDerivedState() {
   const state = {
     stats: {},
     skills: {},
-    physical: { bodyLevel: 0, weight: 0, stun: 0 },
+    physical: { bodyLevel: 0, weight: 0, stun: 0, deathSave: 0 },
     resources: { reputation: 0, wallet: 0 },
     armor: {},
     effects: []
@@ -1101,7 +1122,7 @@ function getEffectivePhysicalValues() {
     bodyLevel: Math.max(0, Math.min(4, bodyLevelVal + (derived.bodyLevel || 0))),
     weight: Math.max(0, weightVal + (derived.weight || 0)),
     stun: Math.max(0, stunVal + (derived.stun || 0)),
-    deathSave: Math.max(0, deathSaveVal)
+    deathSave: Math.max(0, deathSaveVal + (derived.deathSave || 0))
   };
 }
 
@@ -1116,7 +1137,10 @@ function getEffectiveArmorBonus(limb) {
 function toggleInventoryFieldEffect(itemId, fieldLabel) {
   const found = findInventoryItemById(itemId);
   if (!found?.item) return;
-  const descriptor = getInventoryFieldDescriptor(fieldLabel, found.item.fields?.[fieldLabel]);
+  const fieldMap = typeof window.getInventoryFlattenedFieldMap === 'function'
+    ? window.getInventoryFlattenedFieldMap(found.item)
+    : (found.item.fields || {});
+  const descriptor = getInventoryFieldDescriptor(fieldLabel, fieldMap?.[fieldLabel]);
   if (!['effect', 'armor_sp'].includes(descriptor.kind)) return;
   if (isInventoryDescriptorAutoApplied(descriptor)) return;
   const nextState = !isInventoryFieldEffectActive(itemId, fieldLabel);
@@ -1283,6 +1307,9 @@ function startCombatSummaryWatch(roomId) {
 }
 
 function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellaneous') {
+  if (typeof window.normalizeInventoryItemPayload === 'function') {
+    return window.normalizeInventoryItemPayload(payload, fallbackCategory);
+  }
   const category = sanitizeInventoryCategory(payload?.category || fallbackCategory);
   const fields = {};
   (payload?.fields || []).forEach((field) => {
@@ -1296,6 +1323,8 @@ function rebuildInventoryItemFromPayload(payload, fallbackCategory = 'miscellane
       id: String(payload?.id || buildInventoryId(category)).trim() || buildInventoryId(category),
       name: String(payload?.name || 'Item').trim() || 'Item',
       fields,
+      active: [],
+      passive: [],
       info: Array.isArray(payload?.info) ? payload.info.map((line) => String(line || '').trim()).filter(Boolean) : []
     }
   };
@@ -1583,6 +1612,26 @@ function playDossierHoverSound() {
   dossierHoverAudio.play().catch(() => {});
 }
 
+function moveRollPickTooltip(event) {
+  const tooltip = document.getElementById('roll-pick-tooltip');
+  if (!tooltip || !event) return;
+  tooltip.style.left = `${event.clientX + 14}px`;
+  tooltip.style.top = `${event.clientY + 16}px`;
+}
+
+function showRollPickTooltip(target, event) {
+  const tooltip = document.getElementById('roll-pick-tooltip');
+  if (!tooltip || !target) return;
+  activeRollPickTooltipTarget = target;
+  tooltip.classList.add('show');
+  moveRollPickTooltip(event);
+}
+
+function hideRollPickTooltip() {
+  activeRollPickTooltipTarget = null;
+  document.getElementById('roll-pick-tooltip')?.classList.remove('show');
+}
+
 document.addEventListener('mouseover', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
@@ -1597,6 +1646,31 @@ document.addEventListener('mouseout', (event) => {
   if (!button) return;
   if (button === dossierHoveredButton && !button.contains(event.relatedTarget)) {
     dossierHoveredButton = null;
+  }
+});
+
+document.addEventListener('mouseover', (event) => {
+  const rollPick = event.target.closest('[data-roll-pick="true"]');
+  if (!rollPick) return;
+  if (rollPick === activeRollPickTooltipTarget) return;
+  showRollPickTooltip(rollPick, event);
+});
+
+document.addEventListener('mousemove', (event) => {
+  if (!activeRollPickTooltipTarget) return;
+  const rollPick = event.target.closest('[data-roll-pick="true"]');
+  if (!rollPick) {
+    hideRollPickTooltip();
+    return;
+  }
+  moveRollPickTooltip(event);
+});
+
+document.addEventListener('mouseout', (event) => {
+  const rollPick = event.target.closest('[data-roll-pick="true"]');
+  if (!rollPick) return;
+  if (rollPick === activeRollPickTooltipTarget && !rollPick.contains(event.relatedTarget)) {
+    hideRollPickTooltip();
   }
 });
 

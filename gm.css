@@ -238,6 +238,27 @@ body::before{
 .gm-roll-total.animating{color:var(--accent-y);text-shadow:0 0 18px rgba(255,177,74,.28)}
 .gm-roll-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.08em;color:var(--accent-g)}
 .gm-roll-modifier-copy{margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:.06em;line-height:1.5;color:var(--text-dim);word-break:break-word}
+.gm-roll-modifier-preview{position:relative;cursor:help;color:var(--accent-y)}
+.gm-roll-modifier-preview:hover::after{
+  content:attr(data-preview-detail);
+  position:absolute;
+  left:0;
+  top:calc(100% + 8px);
+  min-width:220px;
+  max-width:320px;
+  padding:8px 10px;
+  border:1px solid var(--gm-border);
+  background:rgba(10,4,8,.96);
+  box-shadow:0 10px 24px rgba(0,0,0,.42);
+  color:var(--gm-text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:.62rem;
+  letter-spacing:.05em;
+  line-height:1.55;
+  white-space:pre-wrap;
+  z-index:40;
+  pointer-events:none;
+}
 .gm-roll-empty{margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--text-dim);letter-spacing:.08em}
 .gm-roll-lab-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:16px}
 .gm-roll-config,.gm-roll-display{border:1px solid rgba(255,77,109,.14);background:rgba(255,77,109,.04);padding:14px}

@@ -117,6 +117,7 @@ function renderSheet(data) {
   renderPhysicalBody();
 
   if (typeof clearInventoryFieldEffects === 'function') clearInventoryFieldEffects();
+  if (typeof closeInventoryDetailModal === 'function') closeInventoryDetailModal();
   inventory = {};
   mergeInventory(data.inventory || {});
   renderInventory();
@@ -158,7 +159,7 @@ function renderStats() {
     card.className = `stat-item${debuff ? ' debuffed' : ''}`;
     card.innerHTML = `
       <div class="stat-label">${k}</div>
-      <div class="stat-value pickable" id="sv-${k}" style="color:${col};text-shadow:var(--stat-core-glow)" title="${rollTitle}" onclick="${rollAction}">${effective}${(debuff && effective !== v) || isLuckSpent ? `<span style="font-size:.55em;opacity:.6"> (${v})</span>` : ''}</div>
+        <div class="stat-value pickable" data-roll-pick="true" id="sv-${k}" style="color:${col};text-shadow:var(--stat-core-glow)" onclick="${rollAction}">${effective}${(debuff && effective !== v) || isLuckSpent ? `<span style="font-size:.55em;opacity:.6"> (${v})</span>` : ''}</div>
       <div class="stat-debuff-tag" id="sdt-${k}">${debuff ? debuff.label : isLuckSpent ? `-${v - effective} (COMBAT)` : ''}</div>
       <div class="stat-controls">
         <button class="ctrl-btn" onclick="changeStat('${k}',1)">+</button>
@@ -252,7 +253,7 @@ function renderSkills() {
     const row = document.createElement('div');
     row.className = 'skill-row';
     row.innerHTML = `
-      <div class="skill-main" title="Add ${skill.name} to roll" onclick="addRollModifier('SKILL','${skill.name.replace(/'/g, "\\'")}',${effectiveValue})">
+      <div class="skill-main" data-roll-pick="true" onclick="addRollModifier('SKILL','${skill.name.replace(/'/g, "\\'")}',${effectiveValue})">
         <span class="skill-name">${skill.name}</span>
         <div class="skill-bar-wrap"><div class="skill-bar" style="width:${pct}%"></div></div>
         <span class="skill-val pickable">${effectiveValue}${effectiveValue !== (skill.value || 0) ? `<span style="font-size:.55em;opacity:.6"> (${skill.value || 0})</span>` : ''}</span>
@@ -286,7 +287,7 @@ function renderSpecialSkills() {
   }
   list.innerHTML = sheetSpecialSkills.map((skill, idx) => `
     <div class="special-skill-row">
-      <div class="special-skill-main" title="Add ${escapeHtml(skill.name)} to roll" onclick="addRollModifier('SPECIAL','${escapeJsString(skill.name)}',${parseInt(skill.value, 10) || 0})">
+      <div class="special-skill-main" data-roll-pick="true" onclick="addRollModifier('SPECIAL','${escapeJsString(skill.name)}',${parseInt(skill.value, 10) || 0})">
         <div class="special-skill-name">${escapeHtml(skill.name)}</div>
         <div class="special-skill-meta">${escapeHtml(skill.tiedSkill || 'UNLINKED')} // VALUE ${parseInt(skill.value, 10) || 0}</div>
         <div class="special-skill-desc">${escapeHtml(skill.description || 'No description.')}</div>
@@ -469,6 +470,13 @@ function addEffectiveBodyLevelModifier() {
     ? getEffectivePhysicalValues()
     : { bodyLevel: bodyLevelVal };
   addRollModifier('PHYSICAL', 'Body Level', effective.bodyLevel);
+}
+
+function addEffectiveDeathSaveModifier() {
+  const effective = typeof getEffectivePhysicalValues === 'function'
+    ? getEffectivePhysicalValues()
+    : { deathSave: deathSaveVal };
+  addRollModifier('PHYSICAL', 'Death Save', effective.deathSave);
 }
 
 function changeBS(which, delta) {
