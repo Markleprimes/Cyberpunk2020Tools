@@ -79,7 +79,7 @@ const STAT_COLORS = {
   EMP: 'var(--stat-core)'
 };
 const CHARACTER_KEYS = new Set(['name', 'stats', 'career', 'setting', 'settingtheme', 'theme', 'careerskill', 'specialskill', 'specialskills', 'reputation', 'wallet', 'physicalbody', 'body', 'stunpoint', 'armor', 'damage']);
-const INVENTORY_ORDER = ['weapon', 'cyberware', 'miscellaneous', 'buff'];
+const INVENTORY_ORDER = ['weapon', 'cyberware', 'cloth_appearance', 'miscellaneous', 'buff'];
 const DEFAULT_STATS = ['REF', 'INT', 'COOL', 'ATTR', 'TECH', 'LUCK', 'EMPT'];
 const BOOT_RAW_KEY = 'cp2020_boot_raw_character';
 const BOOT_DATA_KEY = 'cp2020_boot_character_data';

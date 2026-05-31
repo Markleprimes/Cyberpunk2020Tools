@@ -1,5 +1,13 @@
 function sanitizeInventoryCategory(value) {
-  return String(value || 'miscellaneous').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w.-]/g, '') || 'miscellaneous';
+  const clean = String(value || 'miscellaneous')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^\w.-]/g, '') || 'miscellaneous';
+  if (['clothappearance', 'cloth_appearance', 'clothing', 'clothes', 'appearance', 'apparel', 'clothingappearance'].includes(clean)) {
+    return 'cloth_appearance';
+  }
+  return clean;
 }
 
 function buildInventoryId(category) {
@@ -109,6 +117,12 @@ function getInventoryFlattenedFieldMap(item) {
   return buildInventoryFieldMap(item || {});
 }
 
+function getInventoryCategoryLabel(category) {
+  const clean = sanitizeInventoryCategory(category);
+  if (clean === 'cloth_appearance') return 'Cloth/Appearance';
+  return humanizeLabel(clean);
+}
+
 function toggleInventoryCustomType() {
   const select = document.getElementById('inventory-item-type');
   const wrap = document.getElementById('inventory-custom-type-wrap');
@@ -171,7 +185,7 @@ function openInventoryEditor(category = '', idx = -1) {
     : normalizeInventoryItemPayload({ category: 'weapon', name: '', active: [], passive: [], info: [] }, 'weapon').item;
   document.getElementById('inventory-editor-title').textContent = isEditing ? 'EDIT ITEM' : 'ADD ITEM';
   document.getElementById('inventory-item-name').value = item.name || '';
-  const knownTypes = ['weapon', 'cyberware', 'miscellaneous', 'buff'];
+  const knownTypes = ['weapon', 'cyberware', 'cloth_appearance', 'miscellaneous', 'buff'];
   const itemType = isEditing ? sanitizeInventoryCategory(category) : 'weapon';
   document.getElementById('inventory-item-type').value = knownTypes.includes(itemType) ? itemType : 'custom';
   document.getElementById('inventory-custom-type').value = knownTypes.includes(itemType) ? '' : itemType;
@@ -452,7 +466,7 @@ function getInventoryItemRecord(category, itemId) {
 function buildInventoryHoverHtml(category, item) {
   return `
     <div class="inventory-hover-title">${escapeHtml(item.name || humanizeLabel(item.id || category))}</div>
-    <div class="inventory-hover-type">${escapeHtml(humanizeLabel(category))}</div>
+    <div class="inventory-hover-type">${escapeHtml(getInventoryCategoryLabel(category))}</div>
     <div class="inventory-hover-copy">${escapeHtml((item.info || []).join(' ') || 'No description logged.')}</div>
     <div class="inventory-hover-meta">
       <span>${(item.active || []).length} ACTIVE</span>
@@ -527,7 +541,7 @@ function openInventoryDetailModal(category, itemId) {
   modal.dataset.category = record.category;
   modal.dataset.itemId = item.id || '';
   document.getElementById('inventory-detail-name').textContent = item.name || 'Item';
-  document.getElementById('inventory-detail-type').textContent = humanizeLabel(record.category);
+  document.getElementById('inventory-detail-type').textContent = getInventoryCategoryLabel(record.category);
   document.getElementById('inventory-detail-copy').textContent = (item.info || []).join(' ') || 'No description logged.';
   document.getElementById('inventory-detail-active').innerHTML = renderInventoryDetailAttributes(item.active || [], 'active', item.id || '');
   document.getElementById('inventory-detail-passive').innerHTML = renderInventoryDetailAttributes(item.passive || [], 'passive', item.id || '');
@@ -575,7 +589,7 @@ function renderInventory() {
     return `
       <div class="inventory-category">
         <div class="inventory-category-title">
-          <span>${escapeHtml(humanizeLabel(category))}</span>
+          <span>${escapeHtml(getInventoryCategoryLabel(category))}</span>
           <span class="inventory-category-count">${items.length} ITEM${items.length === 1 ? '' : 'S'}</span>
         </div>
         <div class="inventory-card-grid">
@@ -592,7 +606,7 @@ function renderInventory() {
                     <span class="inventory-card-tag inventory-card-tag-passive">${(item.passive || []).length}P</span>
                   </div>
                 </div>
-                <div class="inventory-card-type">${escapeHtml(humanizeLabel(category))}</div>
+                <div class="inventory-card-type">${escapeHtml(getInventoryCategoryLabel(category))}</div>
               </article>
             `).join('')}
           </div>
